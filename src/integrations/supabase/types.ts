@@ -28,6 +28,7 @@ export type Database = {
           lang: string
           location: string
           observations: string
+          photo_urls: string[]
           reference: string
           signature_name: string
           status: string
@@ -50,6 +51,7 @@ export type Database = {
           lang?: string
           location?: string
           observations?: string
+          photo_urls?: string[]
           reference?: string
           signature_name?: string
           status?: string
@@ -72,6 +74,7 @@ export type Database = {
           lang?: string
           location?: string
           observations?: string
+          photo_urls?: string[]
           reference?: string
           signature_name?: string
           status?: string
