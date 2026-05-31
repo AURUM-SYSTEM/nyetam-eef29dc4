@@ -6,6 +6,8 @@ import {
   updateQueueItem,
   getAudio,
   deleteAudio,
+  getPhoto,
+  deletePhoto,
   blobToBase64,
   subscribeQueue,
   type QueueItem,
@@ -107,6 +109,42 @@ export function useSyncEngine() {
           .single();
 
         if (error) throw error;
+
+        // Upload photos (if any) to storage and patch the document
+        const photoIds = item.photoIds ?? [];
+        if (photoIds.length > 0) {
+          toast.loading("🖼️ Envoi des photos…", { id: toastId });
+          const urls: string[] = [];
+          for (const pid of photoIds) {
+            const photo = await getPhoto(pid);
+            if (!photo) continue;
+            const ext = (photo.mimeType.split("/")[1] || "jpg").replace("jpeg", "jpg");
+            const path = `${userId}/${data.id}/${pid}.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from("recensement-photos")
+              .upload(path, photo.blob, {
+                contentType: photo.mimeType,
+                upsert: true,
+              });
+            if (upErr) {
+              console.error("Photo upload failed", upErr);
+              continue;
+            }
+            const { data: pub } = supabase.storage
+              .from("recensement-photos")
+              .getPublicUrl(path);
+            urls.push(pub.publicUrl);
+          }
+          if (urls.length > 0) {
+            await supabase
+              .from("documents")
+              .update({ photo_urls: urls })
+              .eq("id", data.id);
+          }
+          for (const pid of photoIds) {
+            try { await deletePhoto(pid); } catch {}
+          }
+        }
 
         await updateQueueItem(item.id, {
           status: "synced",
