@@ -10,7 +10,7 @@ import { useI18n } from "@/i18n";
 
 type DocRow = {
   id: string;
-  type: "rapport" | "pv";
+  type: "rapport" | "pv" | "recensement";
   title: string;
   status: string;
   created_at: string;
@@ -155,7 +155,7 @@ function HomePage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-                      {d.type === "rapport" ? t("doc.type_rapport") : t("doc.type_pv")}
+                      {d.type === "rapport" ? t("doc.type_rapport") : d.type === "pv" ? t("doc.type_pv") : "Recensement"}
                     </span>
                     {d.status === "draft" && (
                       <span className="text-[10px] uppercase text-muted-foreground">{t("home.draft")}</span>
