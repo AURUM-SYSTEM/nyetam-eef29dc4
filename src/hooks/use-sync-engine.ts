@@ -230,5 +230,5 @@ export function useSyncEngine() {
 
       unsub();
     };
-  }, [transcribe, generate]);
+  }, [transcribe, generate, queryClient]);
 }
