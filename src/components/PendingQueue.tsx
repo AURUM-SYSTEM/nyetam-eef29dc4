@@ -9,12 +9,12 @@ import {
 import { Clock, Loader2, AlertTriangle, RefreshCw, Trash2, FileAudio, FileText } from "lucide-react";
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: "En attente",
-  uploading: "Envoi…",
-  transcribing: "Transcription…",
-  generating: "Génération…",
-  error: "Erreur",
-  synced: "OK",
+  pending: "🎤 Audio reçu",
+  uploading: "📤 Envoi…",
+  transcribing: "📝 Transcription…",
+  generating: "🤖 Génération…",
+  error: "⚠️ Erreur",
+  synced: "📄 Prêt",
 };
 
 function StatusBadge({ s }: { s: QueueItem["status"] }) {
