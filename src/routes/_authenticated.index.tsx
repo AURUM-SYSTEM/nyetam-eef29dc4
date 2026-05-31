@@ -47,6 +47,9 @@ function HomePage() {
     queryKey: ["documents"],
     queryFn: fetchDocuments,
     staleTime: 10_000,
+    enabled: online,
+    retry: false,
+    refetchOnWindowFocus: online,
   });
 
   async function remove(id: string) {
