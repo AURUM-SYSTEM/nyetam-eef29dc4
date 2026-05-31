@@ -123,11 +123,12 @@ function HomePage() {
           {docs && <span className="text-xs text-muted-foreground">{docs.length}</span>}
         </div>
 
-        {docs === null && (
+        {isLoading && !docs && (
           <div className="space-y-2">
             {[0,1,2].map(i => <div key={i} className="h-20 animate-pulse rounded-xl bg-card" />)}
           </div>
         )}
+
 
         {docs && docs.length === 0 && (
           <div className="glass-card rounded-2xl p-8 text-center">
