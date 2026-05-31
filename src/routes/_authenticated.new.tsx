@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, FileText, Gavel, ChevronRight } from "lucide-react";
+import { ArrowLeft, FileText, Gavel, ChevronRight, Users } from "lucide-react";
 import { useI18n } from "@/i18n";
 
 export const Route = createFileRoute("/_authenticated/new")({
@@ -12,11 +12,8 @@ function NewDocPage() {
   const { t } = useI18n();
 
   function pick(type: "rapport" | "pv") {
-  navigate({
-    to: "/record/$type",
-    params: { type },
-  });
-}
+    navigate({ to: "/record/$type", params: { type } });
+  }
 
   return (
     <div className="px-5 pt-8 pb-32">
@@ -55,6 +52,22 @@ function NewDocPage() {
           <div className="flex-1">
             <div className="font-display text-xl">{t("new.pv")}</div>
             <div className="text-xs text-muted-foreground">{t("new.pvDesc")}</div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground transition group-hover:text-gold" />
+        </button>
+
+        <button
+          onClick={() => navigate({ to: "/recensement" })}
+          className="glass-card group flex w-full items-center gap-4 rounded-2xl p-5 text-left transition hover:border-gold/40"
+        >
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-accent gold-border">
+            <Users className="h-7 w-7 text-gold" />
+          </div>
+          <div className="flex-1">
+            <div className="font-display text-xl">Recensement ONG</div>
+            <div className="text-xs text-muted-foreground">
+              Fiche bénéficiaire avec photos, audio terrain et observations
+            </div>
           </div>
           <ChevronRight className="h-5 w-5 text-muted-foreground transition group-hover:text-gold" />
         </button>
