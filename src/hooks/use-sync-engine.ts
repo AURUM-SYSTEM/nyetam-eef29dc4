@@ -52,8 +52,10 @@ export function useSyncEngine() {
           toast.loading("📝 Texte reçu — préparation…", { id: toastId });
         }
 
-        // ÉTAPE 2 — 📝 Transcription
-        if (item.audioId && !transcript) {
+        // ÉTAPE 2 — 📝 Transcription (transcribes audio if present;
+        // when structured transcript already exists (recensement), audio
+        // transcription is appended).
+        if (item.audioId) {
           await updateQueueItem(item.id, { status: "transcribing" });
           toast.loading("📝 Transcription en cours…", { id: toastId });
 
@@ -66,7 +68,9 @@ export function useSyncEngine() {
           });
 
           if (!t || !t.text) throw new Error("Transcription invalide ou vide");
-          transcript = t.text;
+          transcript = transcript
+            ? `${transcript}\n\n--- ${lang === "en" ? "Field audio transcription" : "Transcription audio terrain"} ---\n${t.text}`
+            : t.text;
           await updateQueueItem(item.id, { transcript });
         }
 
