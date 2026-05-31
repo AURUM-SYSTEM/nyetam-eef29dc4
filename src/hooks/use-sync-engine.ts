@@ -25,12 +25,8 @@ export function useSyncEngine() {
     let cancelled = false;
 
     async function processOne(item: QueueItem) {
+      const toastId = `sync-${item.id}`;
       try {
-        console.log("🟢 SYNC ITEM START", item.id);
-        console.log("TYPE =", item.type);
-        console.log("HAS AUDIO =", !!item.audioId);
-        console.log("HAS TRANSCRIPT =", !!item.transcript);
-
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -40,97 +36,58 @@ export function useSyncEngine() {
         }
 
         const userId = item.userId ?? session.user.id;
-
         const profile = getCachedProfile();
-
-        const lang =
-          item.meta?.lang ?? profile?.preferred_lang ?? "fr";
-
-        const country =
-          item.meta?.country ?? profile?.country ?? "";
-
-        const profession =
-          item.meta?.profession ?? profile?.profession ?? "";
+        const lang = item.meta?.lang ?? profile?.preferred_lang ?? "fr";
+        const country = item.meta?.country ?? profile?.country ?? "";
+        const profession = item.meta?.profession ?? profile?.profession ?? "";
 
         let transcript = item.transcript ?? "";
 
-        // 🔥 TRANSCRIPTION
+        // ÉTAPE 1 — 🎤 Audio reçu
         if (item.audioId && !transcript) {
-          console.log("🎙️ START TRANSCRIPTION");
+          toast.loading("🎤 Audio reçu — préparation…", { id: toastId });
+        } else {
+          toast.loading("📝 Texte reçu — préparation…", { id: toastId });
+        }
 
-          await updateQueueItem(item.id, {
-            status: "transcribing",
-          });
+        // ÉTAPE 2 — 📝 Transcription
+        if (item.audioId && !transcript) {
+          await updateQueueItem(item.id, { status: "transcribing" });
+          toast.loading("📝 Transcription en cours…", { id: toastId });
 
           const audio = await getAudio(item.audioId);
-
-          if (!audio) {
-            throw new Error("Audio introuvable");
-          }
+          if (!audio) throw new Error("Audio introuvable");
 
           const audioBase64 = await blobToBase64(audio.blob);
-
           const t = await transcribe({
-            data: {
-              audioBase64,
-              mimeType: audio.mimeType,
-              lang,
-            },
+            data: { audioBase64, mimeType: audio.mimeType, lang },
           });
 
-          console.log("🧪 TRANSCRIBE RESPONSE =", t);
-
-          if (!t || !t.text) {
-            throw new Error("Transcription invalide ou vide");
-          }
-
+          if (!t || !t.text) throw new Error("Transcription invalide ou vide");
           transcript = t.text;
-
-          console.log("📝 TRANSCRIPTION OK", transcript);
-
-          await updateQueueItem(item.id, {
-            transcript,
-          });
+          await updateQueueItem(item.id, { transcript });
         }
 
-        if (!transcript.trim()) {
-          throw new Error("Aucun texte à traiter");
-        }
+        if (!transcript.trim()) throw new Error("Aucun texte à traiter");
 
-        // 🔥 GENERATION
-        console.log("⚙️ START GENERATION");
-
-        await updateQueueItem(item.id, {
-          status: "generating",
-        });
+        // ÉTAPE 3 — 🤖 Génération
+        await updateQueueItem(item.id, { status: "generating" });
+        toast.loading("🤖 Génération du document…", { id: toastId });
 
         const result = await generate({
-          data: {
-            transcript,
-            type: item.type,
-            lang,
-            country,
-            profession,
-          },
+          data: { transcript, type: item.type, lang, country, profession },
         });
 
-        console.log("🧪 GENERATE RESPONSE =", result);
+        if (!result || !result.title) throw new Error("Génération invalide");
 
-        if (!result || !result.title) {
-          throw new Error("Génération invalide");
-        }
-
-        console.log("📄 GENERATION OK", result.title);
-
-        // 🔥 SUPABASE INSERT
+        // Insertion Supabase
         const { data, error } = await supabase
           .from("documents")
           .insert({
             user_id: userId,
             type: item.type,
             title: result.title ?? "Sans titre",
-            transcript:
-              result.cleanedTranscript ?? transcript,
+            transcript: result.cleanedTranscript ?? transcript,
             introduction: result.introduction ?? "",
             faits: result.faits ?? "",
             declarations: result.declarations ?? "",
@@ -141,9 +98,7 @@ export function useSyncEngine() {
             location: item.meta?.location ?? "",
             reference: item.meta?.reference ?? "",
             signature_name:
-              item.meta?.signatureName ??
-              item.meta?.agentName ??
-              "",
+              item.meta?.signatureName ?? item.meta?.agentName ?? "",
             doc_date: item.meta?.docDate ?? null,
             doc_time: item.meta?.docTime ?? null,
             lang,
@@ -151,12 +106,7 @@ export function useSyncEngine() {
           .select("id")
           .single();
 
-        if (error) {
-          console.error("❌ SUPABASE ERROR =", error);
-          throw error;
-        }
-
-        console.log("💾 SUPABASE OK", data.id);
+        if (error) throw error;
 
         await updateQueueItem(item.id, {
           status: "synced",
@@ -168,23 +118,22 @@ export function useSyncEngine() {
         if (item.audioId) {
           try {
             await deleteAudio(item.audioId);
-          } catch (err) {
-            console.warn("⚠️ DELETE AUDIO FAILED", err);
-          }
+          } catch {}
         }
 
-        toast.success(`Synchronisé : ${result.title}`);
+        // ÉTAPE 4 — 📄 Document prêt
+        queryClient.invalidateQueries({ queryKey: ["documents"] });
+        toast.success(`📄 Document prêt — ${result.title}`, { id: toastId });
       } catch (e: any) {
         console.error("❌ ITEM FAILED =", e);
-
         await updateQueueItem(item.id, {
           status: "error",
           errorMsg: e?.message ?? "Erreur inconnue",
         });
-
-        toast.error(e?.message ?? "Erreur sync");
+        toast.error(`Échec : ${e?.message ?? "Erreur inconnue"}`, { id: toastId });
       }
     }
+
 
     async function runPass() {
       if (running.current) {
