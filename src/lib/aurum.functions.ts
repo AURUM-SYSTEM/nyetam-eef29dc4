@@ -147,10 +147,10 @@ export const cleanTranscript = createServerFn({ method: "POST" })
   .handler(async ({ data }) => ({ text: await cleanRawTranscript(data.text, data.lang ?? "fr") }));
 
 export const generateDocument = createServerFn({ method: "POST" })
-  .inputValidator((d: { transcript: string; type: "rapport" | "pv"; lang?: "fr" | "en"; country?: string; profession?: string }) =>
+  .inputValidator((d: { transcript: string; type: "rapport" | "pv" | "recensement"; lang?: "fr" | "en"; country?: string; profession?: string }) =>
     z.object({
       transcript: z.string().min(1).max(50000),
-      type: z.enum(["rapport", "pv"]),
+      type: z.enum(["rapport", "pv", "recensement"]),
       lang: LangSchema.optional(),
       country: z.string().max(80).optional(),
       profession: z.string().max(120).optional(),
@@ -162,57 +162,63 @@ export const generateDocument = createServerFn({ method: "POST" })
     const profession = data.profession ?? "";
     const cleanedTranscript = await cleanRawTranscript(data.transcript, lang);
     const style = detectStyle(country, profession);
-    const guidance = styleGuidance(style, lang);
+    const guidance = data.type === "recensement"
+      ? (lang === "en"
+          ? "Use a humanitarian FIELD CENSUS / BENEFICIARY REGISTRATION style: neutral, factual, structured, no opinions."
+          : "Style RECENSEMENT TERRAIN / FICHE BÉNÉFICIAIRE humanitaire : neutre, factuel, structuré, sans opinion personnelle.")
+      : styleGuidance(style, lang);
 
     const typeLabel = lang === "en"
-      ? (data.type === "rapport" ? "REPORT" : "MINUTES")
-      : (data.type === "rapport" ? "RAPPORT" : "PROCÈS-VERBAL");
+      ? (data.type === "rapport" ? "REPORT" : data.type === "pv" ? "MINUTES" : "FIELD CENSUS RECORD")
+      : (data.type === "rapport" ? "RAPPORT" : data.type === "pv" ? "PROCÈS-VERBAL" : "FICHE DE RECENSEMENT");
 
     const contextLine = lang === "en"
       ? `Author context — Country: ${country || "n/a"}, Profession: ${profession || "n/a"}.`
       : `Contexte de l'auteur — Pays : ${country || "n/c"}, Fonction : ${profession || "n/c"}.`;
 
     const system = lang === "en"
-      ? `You are a legal and administrative assistant producing official ${typeLabel} documents from field audio transcripts. ${contextLine} ${guidance} Write in formal, precise, factual English. Strictly synthetic, NON-narrative. Structure rigorously. Respond STRICTLY in valid JSON.`
-      : `Tu es un assistant juridique et administratif spécialisé dans la rédaction de ${typeLabel}s officiels à partir de retranscriptions audio terrain. ${contextLine} ${guidance} Tu rédiges en français formel, précis, factuel. Style strictement synthétique, NON-narratif. Tu structures rigoureusement le contenu. Réponds STRICTEMENT en JSON valide.`;
+      ? `You are an assistant producing official ${typeLabel} documents from field data. ${contextLine} ${guidance} Write in formal, precise, factual English. Strictly synthetic, NON-narrative. Structure rigorously. Respond STRICTLY in valid JSON.`
+      : `Tu es un assistant spécialisé dans la rédaction de ${typeLabel} officiels à partir de données terrain. ${contextLine} ${guidance} Tu rédiges en français formel, précis, factuel. Style strictement synthétique, NON-narratif. Tu structures rigoureusement le contenu. Réponds STRICTEMENT en JSON valide.`;
 
-    const user = lang === "en"
-      ? `Produce a structured ${typeLabel}.
-
-Return EXCLUSIVELY a JSON object with these keys:
-{
+    const schema = data.type === "recensement"
+      ? (lang === "en"
+          ? `{
+  "title": "Short title including subject/ID (max 80 chars)",
+  "introduction": "CONTEXT: location, date, mission scope, agent",
+  "faits": "IDENTIFICATION: subject name/ID, status, household, key demographics",
+  "declarations": "STATEMENTS COLLECTED from the subject or community",
+  "observations": "FIELD OBSERVATIONS: living conditions, needs observed, vulnerabilities",
+  "conclusion": "ASSESSMENT & RECOMMENDED FOLLOW-UP: priority level, suggested aid, next steps"
+}`
+          : `{
+  "title": "Titre court incluant le nom/ID du sujet (max 80 caractères)",
+  "introduction": "CONTEXTE : lieu, date, cadre de la mission, agent",
+  "faits": "IDENTIFICATION : nom/ID du sujet, statut, composition du foyer, données démographiques clés",
+  "declarations": "DÉCLARATIONS RECUEILLIES auprès du sujet ou de la communauté",
+  "observations": "OBSERVATIONS TERRAIN : conditions de vie, besoins constatés, vulnérabilités",
+  "conclusion": "ÉVALUATION & SUIVI RECOMMANDÉ : niveau de priorité, aide suggérée, prochaines étapes"
+}`)
+      : (lang === "en"
+          ? `{
   "title": "Short descriptive title (max 80 chars)",
   "introduction": "CONTEXT: presumed date, location, parties involved, scope of the mission",
   "faits": "FACTS OBSERVED: chronological and objective enumeration of facts",
   "declarations": "STATEMENTS COLLECTED: declarations made by the persons mentioned",
   "observations": "OBSERVATIONS: technical or operational remarks, anomalies, points requiring attention",
   "conclusion": "CONCLUSION: synthesis, findings and recommended follow-up"
-}
-
-Plain text only, no markdown. If information is missing, indicate it soberly.
-
-TRANSCRIPTION:
-"""
-${cleanedTranscript}
-"""`
-      : `Génère un ${typeLabel} structuré.
-
-Retourne EXCLUSIVEMENT un objet JSON avec ces clés :
-{
+}`
+          : `{
   "title": "Titre court et descriptif (max 80 caractères)",
   "introduction": "CONTEXTE : date présumée, lieu, parties prenantes, objet de la mission",
   "faits": "FAITS CONSTATÉS : énumération chronologique et objective des faits",
   "declarations": "DÉCLARATIONS RECUEILLIES : déclarations des personnes mentionnées",
   "observations": "OBSERVATIONS : remarques techniques ou opérationnelles, anomalies, points d'attention",
   "conclusion": "CONCLUSION : synthèse, constatations et suites recommandées"
-}
+}`);
 
-Texte brut uniquement, pas de markdown. Si une information manque, indique-le sobrement.
-
-RETRANSCRIPTION :
-"""
-${cleanedTranscript}
-"""`;
+    const user = lang === "en"
+      ? `Produce a structured ${typeLabel}.\n\nReturn EXCLUSIVELY a JSON object with these keys:\n${schema}\n\nPlain text only, no markdown. If information is missing, indicate it soberly.\n\nFIELD DATA:\n"""\n${cleanedTranscript}\n"""`
+      : `Génère un ${typeLabel} structuré.\n\nRetourne EXCLUSIVEMENT un objet JSON avec ces clés :\n${schema}\n\nTexte brut uniquement, pas de markdown. Si une information manque, indique-le sobrement.\n\nDONNÉES TERRAIN :\n"""\n${cleanedTranscript}\n"""`;
 
     const content = await callGateway(
       [

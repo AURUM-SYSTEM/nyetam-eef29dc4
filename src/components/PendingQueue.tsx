@@ -79,7 +79,7 @@ export function PendingQueue() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-                    {it.type === "rapport" ? "Rapport" : "PV"}
+                    {it.type === "rapport" ? "Rapport" : it.type === "pv" ? "PV" : "Recensement"}
                   </span>
                   <StatusBadge s={it.status} />
                 </div>

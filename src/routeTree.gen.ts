@@ -15,6 +15,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated.settings'
+import { Route as AuthenticatedRecensementRouteImport } from './routes/_authenticated.recensement'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated.profile'
 import { Route as AuthenticatedNewRouteImport } from './routes/_authenticated.new'
 import { Route as AuthenticatedRecordTypeRouteImport } from './routes/_authenticated.record.$type'
@@ -49,6 +50,12 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedRecensementRoute =
+  AuthenticatedRecensementRouteImport.update({
+    id: '/recensement',
+    path: '/recensement',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -77,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/new': typeof AuthenticatedNewRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/recensement': typeof AuthenticatedRecensementRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/document/$id': typeof AuthenticatedDocumentIdRoute
   '/record/$type': typeof AuthenticatedRecordTypeRoute
@@ -87,6 +95,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/new': typeof AuthenticatedNewRoute
   '/profile': typeof AuthenticatedProfileRoute
+  '/recensement': typeof AuthenticatedRecensementRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/': typeof AuthenticatedIndexRoute
   '/document/$id': typeof AuthenticatedDocumentIdRoute
@@ -100,6 +109,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/_authenticated/new': typeof AuthenticatedNewRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
+  '/_authenticated/recensement': typeof AuthenticatedRecensementRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/document/$id': typeof AuthenticatedDocumentIdRoute
@@ -114,6 +124,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/new'
     | '/profile'
+    | '/recensement'
     | '/settings'
     | '/document/$id'
     | '/record/$type'
@@ -124,6 +135,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/new'
     | '/profile'
+    | '/recensement'
     | '/settings'
     | '/'
     | '/document/$id'
@@ -136,6 +148,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/_authenticated/new'
     | '/_authenticated/profile'
+    | '/_authenticated/recensement'
     | '/_authenticated/settings'
     | '/_authenticated/'
     | '/_authenticated/document/$id'
@@ -193,6 +206,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/recensement': {
+      id: '/_authenticated/recensement'
+      path: '/recensement'
+      fullPath: '/recensement'
+      preLoaderRoute: typeof AuthenticatedRecensementRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/profile': {
       id: '/_authenticated/profile'
       path: '/profile'
@@ -227,6 +247,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedNewRoute: typeof AuthenticatedNewRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
+  AuthenticatedRecensementRoute: typeof AuthenticatedRecensementRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedDocumentIdRoute: typeof AuthenticatedDocumentIdRoute
@@ -236,6 +257,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedNewRoute: AuthenticatedNewRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
+  AuthenticatedRecensementRoute: AuthenticatedRecensementRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedDocumentIdRoute: AuthenticatedDocumentIdRoute,
@@ -255,13 +277,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

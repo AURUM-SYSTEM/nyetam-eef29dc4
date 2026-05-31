@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/document/$id")({
 
 type Doc = {
   id: string;
-  type: "rapport" | "pv";
+  type: "rapport" | "pv" | "recensement";
   title: string;
   transcript: string;
   introduction: string;
@@ -29,7 +29,14 @@ type Doc = {
   reference: string;
   signature_name: string;
   lang: string;
+  photo_urls: string[] | null;
 };
+
+function typeLabel(type: Doc["type"], t: (k: string) => string) {
+  if (type === "rapport") return t("doc.type_rapport");
+  if (type === "pv") return t("doc.type_pv");
+  return "Recensement";
+}
 
 function DocPage() {
   const { id } = useParams({ from: "/_authenticated/document/$id" });
@@ -160,7 +167,7 @@ function DocPage() {
       {/* Header */}
       <header className="mt-6">
         <span className="rounded bg-accent px-2 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-          {doc.type === "rapport" ? t("doc.type_rapport") : t("doc.type_pv")}
+          {typeLabel(doc.type, t)}
         </span>
         {editing ? (
           <input
@@ -194,7 +201,7 @@ function DocPage() {
             <Row label={t("doc.time")} value={timeDisplay} />
             <Row label={t("doc.agent")} value={doc.agent_name || "—"} />
             <Row label={t("doc.location")} value={doc.location || "—"} />
-            <Row label={t("doc.type")} value={doc.type === "rapport" ? t("doc.type_rapport") : t("doc.type_pv")} />
+            <Row label={t("doc.type")} value={typeLabel(doc.type, t)} />
             <Row label={t("doc.ref")} value={doc.reference || "—"} />
           </dl>
         )}
@@ -217,6 +224,19 @@ function DocPage() {
             )}
           </section>
         ))}
+
+        {doc.photo_urls && doc.photo_urls.length > 0 && (
+          <section className="glass-card rounded-xl p-4">
+            <h2 className="mb-3 font-display text-base uppercase tracking-wider text-gold">Photos terrain</h2>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {doc.photo_urls.map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-border">
+                  <img src={url} alt={`Photo ${i + 1}`} loading="lazy" className="h-full w-full object-cover transition hover:scale-105" />
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Signature */}
         <section className="glass-card rounded-xl p-4">

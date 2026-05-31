@@ -1,7 +1,9 @@
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "aurum-offline";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
+
+export type DocType = "rapport" | "pv" | "recensement";
 
 export type QueueStatus =
   | "pending"
@@ -19,6 +21,14 @@ export type AudioRecord = {
   createdAt: number;
 };
 
+export type PhotoRecord = {
+  id: string;
+  blob: Blob;
+  mimeType: string;
+  name: string;
+  createdAt: number;
+};
+
 export type QueueMeta = {
   agentName?: string;
   location?: string;
@@ -29,13 +39,18 @@ export type QueueMeta = {
   lang?: "fr" | "en";
   country?: string;
   profession?: string;
+  // Recensement-specific
+  subjectName?: string;
+  subjectStatus?: string;
+  observation?: string;
 };
 
 export type QueueItem = {
   id: string;
-  type: "rapport" | "pv";
+  type: DocType;
   audioId?: string;
   transcript?: string;
+  photoIds?: string[];
   status: QueueStatus;
   remoteDocId?: string;
   errorMsg?: string;
@@ -63,6 +78,9 @@ function getDB() {
           s.createIndex("status", "status");
           s.createIndex("createdAt", "createdAt");
         }
+        if (!db.objectStoreNames.contains("photos")) {
+          db.createObjectStore("photos", { keyPath: "id" });
+        }
       },
     });
   }
@@ -88,6 +106,23 @@ export async function getAudio(id: string): Promise<AudioRecord | undefined> {
 export async function deleteAudio(id: string) {
   const db = await getDB();
   await db.delete("audios", id);
+}
+
+export async function savePhoto(blob: Blob, mimeType: string, name: string) {
+  const db = await getDB();
+  const rec: PhotoRecord = { id: rid(), blob, mimeType, name, createdAt: Date.now() };
+  await db.put("photos", rec);
+  return rec.id;
+}
+
+export async function getPhoto(id: string): Promise<PhotoRecord | undefined> {
+  const db = await getDB();
+  return db.get("photos", id);
+}
+
+export async function deletePhoto(id: string) {
+  const db = await getDB();
+  await db.delete("photos", id);
 }
 
 export async function enqueue(
@@ -123,6 +158,11 @@ export async function deleteQueueItem(id: string) {
   await db.delete("queue", id);
   if (item?.audioId) {
     try { await db.delete("audios", item.audioId); } catch {}
+  }
+  if (item?.photoIds?.length) {
+    for (const pid of item.photoIds) {
+      try { await db.delete("photos", pid); } catch {}
+    }
   }
   notify();
 }
