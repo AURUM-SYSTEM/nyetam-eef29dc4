@@ -111,15 +111,20 @@ function AuthBridge({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function SyncEngineMount() {
+  useSyncEngine();
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  useSyncEngine();
   useEffect(() => { applyTheme(getTheme()); }, []);
   return (
     <I18nProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <AuthBridge>
+            <SyncEngineMount />
             <div className="mx-auto max-w-xl min-h-screen">
               <div className="fixed top-3 right-3 z-50">
                 <SyncStatus />
