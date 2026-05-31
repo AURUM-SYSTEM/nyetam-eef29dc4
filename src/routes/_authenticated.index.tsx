@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { FileText, Plus, Mic, Trash2, ChevronRight, CloudOff, Settings, Info, User } from "lucide-react";
 import { toast } from "sonner";
@@ -27,29 +27,42 @@ export const Route = createFileRoute("/_authenticated/")({
   }),
 });
 
+async function fetchDocuments(): Promise<DocRow[]> {
+  const { data, error } = await supabase
+    .from("documents")
+    .select("id,type,title,status,created_at,reference")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return (data ?? []) as DocRow[];
+}
+
 function HomePage() {
-  const [docs, setDocs] = useState<DocRow[] | null>(null);
   const navigate = useNavigate();
   const online = useOnline();
   const { t, lang } = useI18n();
+  const queryClient = useQueryClient();
 
-  async function load() {
-    const { data, error } = await supabase
-      .from("documents")
-      .select("id,type,title,status,created_at,reference")
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) { toast.error(error.message); return; }
-    setDocs(data as DocRow[]);
-  }
-
-  useEffect(() => { void load(); }, []);
+  const { data: docs, isLoading } = useQuery({
+    queryKey: ["documents"],
+    queryFn: fetchDocuments,
+    staleTime: 10_000,
+  });
 
   async function remove(id: string) {
+    // Optimistic update
+    queryClient.setQueryData<DocRow[]>(["documents"], (prev) =>
+      prev ? prev.filter((d) => d.id !== id) : prev,
+    );
     const { error } = await supabase.from("documents").delete().eq("id", id);
-    if (error) toast.error(error.message);
-    else { toast.success(t("common.delete")); void load(); }
+    if (error) {
+      toast.error(error.message);
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+    } else {
+      toast.success(t("common.delete"));
+    }
   }
+
 
   return (
     <div className="px-5 pt-8 pb-32">
