@@ -5,21 +5,27 @@ import {
   Mic,
   Square,
   Camera,
+  ImagePlus,
   X,
   CloudOff,
   Loader2,
   Users,
+  RotateCcw,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   saveAudio,
   savePhoto,
   enqueue,
+  blobToBase64,
   type QueueMeta,
 } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
+import { useServerFn } from "@tanstack/react-start";
+import { transcribeAudio } from "@/lib/aurum.functions";
 
 export const Route = createFileRoute("/_authenticated/recensement")({
   component: RecensementPage,
