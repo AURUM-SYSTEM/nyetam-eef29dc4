@@ -135,13 +135,22 @@ function DocPage() {
     ? doc.doc_time.slice(0, 5)
     : new Date(doc.created_at).toLocaleTimeString(dateFmt, { hour: "2-digit", minute: "2-digit" });
 
-  const sections: Array<{ key: keyof Doc; label: string }> = [
-    { key: "introduction", label: t("doc.context") },
-    { key: "faits", label: t("doc.facts") },
-    { key: "declarations", label: t("doc.declarations") },
-    { key: "observations", label: t("doc.observations") },
-    { key: "conclusion", label: t("doc.conclusion") },
-  ];
+  const isRecensement = doc.type === "recensement";
+  const sections: Array<{ key: keyof Doc; label: string }> = isRecensement
+    ? [
+        { key: "introduction", label: "Contexte de la mission" },
+        { key: "faits", label: "Identification du bénéficiaire" },
+        { key: "declarations", label: "Déclarations recueillies" },
+        { key: "observations", label: "Observations terrain" },
+        { key: "conclusion", label: "Évaluation & suivi recommandé" },
+      ]
+    : [
+        { key: "introduction", label: t("doc.context") },
+        { key: "faits", label: t("doc.facts") },
+        { key: "declarations", label: t("doc.declarations") },
+        { key: "observations", label: t("doc.observations") },
+        { key: "conclusion", label: t("doc.conclusion") },
+      ];
 
   return (
     <div className="px-5 pt-8 pb-40">
@@ -224,6 +233,17 @@ function DocPage() {
             )}
           </section>
         ))}
+
+        {doc.transcript && doc.transcript.trim().length > 0 && (
+          <section className="glass-card rounded-xl p-4">
+            <h2 className="mb-2 font-display text-base uppercase tracking-wider text-gold">
+              Transcription audio
+            </h2>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">
+              {doc.transcript}
+            </p>
+          </section>
+        )}
 
         {doc.photo_urls && doc.photo_urls.length > 0 && (
           <section className="glass-card rounded-xl p-4">
