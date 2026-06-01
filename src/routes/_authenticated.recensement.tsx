@@ -47,6 +47,7 @@ function RecensementPage() {
   const navigate = useNavigate();
   const online = useOnline();
   const { lang } = useI18n();
+  const transcribe = useServerFn(transcribeAudio);
 
   // Form fields
   const now = new Date();
@@ -60,12 +61,14 @@ function RecensementPage() {
 
   // Photos
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
   // Audio
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
