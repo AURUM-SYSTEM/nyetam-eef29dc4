@@ -328,26 +328,41 @@ function RecensementPage() {
 
       {/* Photos */}
       <section className="mt-4 glass-card rounded-2xl p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xs uppercase tracking-widest text-gold-soft">Photos ({photos.length}/10)</h2>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs hover:border-gold/40"
-          >
-            <Camera className="h-3.5 w-3.5" /> Ajouter
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => cameraInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs hover:border-gold/40"
+            >
+              <Camera className="h-3.5 w-3.5" /> Caméra
+            </button>
+            <button
+              onClick={() => galleryInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs hover:border-gold/40"
+            >
+              <ImagePlus className="h-3.5 w-3.5" /> Galerie
+            </button>
+          </div>
           <input
-            ref={fileInputRef}
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={e => { addPhotos(e.target.files); e.target.value = ""; }}
+            className="hidden"
+          />
+          <input
+            ref={galleryInputRef}
             type="file"
             accept="image/*"
             multiple
-            capture="environment"
             onChange={e => { addPhotos(e.target.files); e.target.value = ""; }}
             className="hidden"
           />
         </div>
         {photos.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Aucune photo. Appuyez sur Ajouter pour utiliser l'appareil photo.</p>
+          <p className="text-xs text-muted-foreground">Aucune photo. Appuyez sur Caméra ou Galerie pour en ajouter.</p>
         ) : (
           <div className="grid grid-cols-3 gap-2">
             {photos.map(p => (
@@ -366,34 +381,52 @@ function RecensementPage() {
         )}
       </section>
 
-      {/* Audio */}
+      {/* Audio — Dictée vocale voice-first */}
       <section className="mt-4 glass-card rounded-2xl p-4">
-        <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">Audio terrain (optionnel)</h2>
+        <h2 className="mb-1 text-xs uppercase tracking-widest text-gold-soft">Dictée vocale</h2>
+        <p className="mb-3 text-[11px] text-muted-foreground">
+          Parlez : votre voix est transcrite et injectée automatiquement dans l'observation. Vous pourrez corriger ou compléter ensuite.
+        </p>
         <div className="flex items-center gap-4">
           <button
             onClick={recording ? stopRecording : startRecording}
-            disabled={saving}
+            disabled={saving || transcribing}
             className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition ${
               recording ? "bg-destructive pulse-rec" : "btn-gold"
             } disabled:opacity-40`}
+            aria-label={recording ? "Arrêter" : "Démarrer la dictée"}
           >
             {recording ? <Square className="h-5 w-5 fill-current" /> : <Mic className="h-6 w-6" />}
           </button>
           <div className="min-w-0 flex-1">
             <div className="font-display text-2xl tabular-nums">{mm}:{ss}</div>
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
-              {recording ? "Enregistrement…" : audioBlob ? "Audio enregistré ✓" : "Appuyez pour enregistrer"}
+            <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground">
+              {recording && <><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-destructive" /> Enregistrement…</>}
+              {!recording && transcribing && <><Loader2 className="h-3 w-3 animate-spin text-gold" /> Transcription…</>}
+              {!recording && !transcribing && audioBlob && <>Audio prêt (offline)</>}
+              {!recording && !transcribing && !audioBlob && <>Appuyez pour dicter</>}
             </div>
           </div>
-          {audioBlob && !recording && (
+          {!recording && !transcribing && (elapsed > 0 || audioBlob) && (
             <button
-              onClick={() => setAudioBlob(null)}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive"
+              onClick={reRecord}
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              aria-label="Réenregistrer"
             >
-              Effacer
+              <RotateCcw className="h-3.5 w-3.5" /> Refaire
             </button>
           )}
         </div>
+        {!online && audioBlob && (
+          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-amber-300">
+            <CloudOff className="h-3 w-3" /> Audio stocké localement, transcription au retour réseau.
+          </p>
+        )}
+        {!recording && !transcribing && observation.trim().length > 0 && (
+          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-gold-soft">
+            <Sparkles className="h-3 w-3" /> Texte injecté — modifiez-le librement ci-dessus.
+          </p>
+        )}
       </section>
 
       <button
