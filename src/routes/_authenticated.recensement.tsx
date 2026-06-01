@@ -147,6 +147,41 @@ function RecensementPage() {
     streamRef.current = null;
     setRecording(false);
     setAudioBlob(blob);
+
+    // Voice-first: auto-transcrire & injecter dans Observation
+    if (!blob || blob.size === 0) return;
+    if (!online) {
+      toast.info("Hors ligne — l'audio sera transcrit à la reconnexion");
+      return;
+    }
+    setTranscribing(true);
+    const toastId = `tx-${Date.now()}`;
+    toast.loading("📝 Transcription en cours…", { id: toastId });
+    try {
+      const audioBase64 = await blobToBase64(blob);
+      const t = await transcribe({
+        data: { audioBase64, mimeType: blob.type || "audio/webm", lang },
+      });
+      const text = (t?.text ?? "").trim();
+      if (!text) {
+        toast.error("Audio inaudible ou vide", { id: toastId });
+        return;
+      }
+      setObservation(prev => (prev.trim() ? `${prev.trim()}\n\n${text}` : text));
+      // Audio injecté dans observation → on n'a plus besoin de le renvoyer
+      setAudioBlob(null);
+      toast.success("✅ Texte transcrit ajouté à l'observation", { id: toastId });
+    } catch (e: any) {
+      toast.error(`Échec transcription : ${e?.message ?? "erreur"}`, { id: toastId });
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  async function reRecord() {
+    setAudioBlob(null);
+    setElapsed(0);
+    await startRecording();
   }
 
   function buildMeta(): QueueMeta {
