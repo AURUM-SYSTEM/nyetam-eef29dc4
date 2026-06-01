@@ -332,25 +332,30 @@ function RecensementPage() {
           <h2 className="text-xs uppercase tracking-widest text-gold-soft">Photos ({photos.length}/10)</h2>
           <div className="flex items-center gap-1.5">
             <button
+              type="button"
               onClick={() => cameraInputRef.current?.click()}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs hover:border-gold/40"
             >
               <Camera className="h-3.5 w-3.5" /> Caméra
             </button>
             <button
+              type="button"
               onClick={() => galleryInputRef.current?.click()}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs hover:border-gold/40"
             >
               <ImagePlus className="h-3.5 w-3.5" /> Galerie
             </button>
           </div>
+          {/* Inputs visuellement masqués mais focusables (mobile-safe) */}
           <input
             ref={cameraInputRef}
             type="file"
             accept="image/*"
             capture="environment"
             onChange={e => { addPhotos(e.target.files); e.target.value = ""; }}
-            className="hidden"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
           />
           <input
             ref={galleryInputRef}
@@ -358,7 +363,9 @@ function RecensementPage() {
             accept="image/*"
             multiple
             onChange={e => { addPhotos(e.target.files); e.target.value = ""; }}
-            className="hidden"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
           />
         </div>
         {photos.length === 0 ? (
