@@ -234,6 +234,17 @@ function DocPage() {
           </section>
         ))}
 
+        {doc.transcript && doc.transcript.trim().length > 0 && (
+          <section className="glass-card rounded-xl p-4">
+            <h2 className="mb-2 font-display text-base uppercase tracking-wider text-gold">
+              Transcription audio
+            </h2>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">
+              {doc.transcript}
+            </p>
+          </section>
+        )}
+
         {doc.photo_urls && doc.photo_urls.length > 0 && (
           <section className="glass-card rounded-xl p-4">
             <h2 className="mb-3 font-display text-base uppercase tracking-wider text-gold">Photos terrain</h2>
