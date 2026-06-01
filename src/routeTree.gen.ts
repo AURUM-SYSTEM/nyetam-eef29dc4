@@ -15,6 +15,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated.settings'
+import { Route as AuthenticatedRecensementsRouteImport } from './routes/_authenticated.recensements'
 import { Route as AuthenticatedRecensementRouteImport } from './routes/_authenticated.recensement'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated.profile'
 import { Route as AuthenticatedNewRouteImport } from './routes/_authenticated.new'
@@ -50,6 +51,12 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedRecensementsRoute =
+  AuthenticatedRecensementsRouteImport.update({
+    id: '/recensements',
+    path: '/recensements',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRecensementRoute =
   AuthenticatedRecensementRouteImport.update({
     id: '/recensement',
@@ -85,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/new': typeof AuthenticatedNewRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/recensement': typeof AuthenticatedRecensementRoute
+  '/recensements': typeof AuthenticatedRecensementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/document/$id': typeof AuthenticatedDocumentIdRoute
   '/record/$type': typeof AuthenticatedRecordTypeRoute
@@ -96,6 +104,7 @@ export interface FileRoutesByTo {
   '/new': typeof AuthenticatedNewRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/recensement': typeof AuthenticatedRecensementRoute
+  '/recensements': typeof AuthenticatedRecensementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/': typeof AuthenticatedIndexRoute
   '/document/$id': typeof AuthenticatedDocumentIdRoute
@@ -110,6 +119,7 @@ export interface FileRoutesById {
   '/_authenticated/new': typeof AuthenticatedNewRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/recensement': typeof AuthenticatedRecensementRoute
+  '/_authenticated/recensements': typeof AuthenticatedRecensementsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/document/$id': typeof AuthenticatedDocumentIdRoute
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/profile'
     | '/recensement'
+    | '/recensements'
     | '/settings'
     | '/document/$id'
     | '/record/$type'
@@ -136,6 +147,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/profile'
     | '/recensement'
+    | '/recensements'
     | '/settings'
     | '/'
     | '/document/$id'
@@ -149,6 +161,7 @@ export interface FileRouteTypes {
     | '/_authenticated/new'
     | '/_authenticated/profile'
     | '/_authenticated/recensement'
+    | '/_authenticated/recensements'
     | '/_authenticated/settings'
     | '/_authenticated/'
     | '/_authenticated/document/$id'
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/recensements': {
+      id: '/_authenticated/recensements'
+      path: '/recensements'
+      fullPath: '/recensements'
+      preLoaderRoute: typeof AuthenticatedRecensementsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/recensement': {
       id: '/_authenticated/recensement'
       path: '/recensement'
@@ -248,6 +268,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedNewRoute: typeof AuthenticatedNewRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRecensementRoute: typeof AuthenticatedRecensementRoute
+  AuthenticatedRecensementsRoute: typeof AuthenticatedRecensementsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedDocumentIdRoute: typeof AuthenticatedDocumentIdRoute
@@ -258,6 +279,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedNewRoute: AuthenticatedNewRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRecensementRoute: AuthenticatedRecensementRoute,
+  AuthenticatedRecensementsRoute: AuthenticatedRecensementsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedDocumentIdRoute: AuthenticatedDocumentIdRoute,
