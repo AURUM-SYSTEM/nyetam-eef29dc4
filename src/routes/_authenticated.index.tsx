@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Plus, Mic, Trash2, ChevronRight, CloudOff, Settings, Info, User } from "lucide-react";
+import { FileText, Plus, Mic, Trash2, ChevronRight, CloudOff, Settings, Info, User, Users } from "lucide-react";
 import { toast } from "sonner";
 import { PendingQueue } from "@/components/PendingQueue";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -73,6 +73,9 @@ function HomePage() {
       <div className="mb-6 flex items-center justify-between gap-2">
         <LanguageSwitcher compact />
         <div className="flex items-center gap-1">
+          <Link to="/recensements" aria-label="Recensements" className="rounded-lg border border-border bg-card/50 p-2 text-muted-foreground hover:text-foreground">
+            <Users className="h-4 w-4" />
+          </Link>
           <Link to="/profile" aria-label="Profil" className="rounded-lg border border-border bg-card/50 p-2 text-muted-foreground hover:text-foreground">
             <User className="h-4 w-4" />
           </Link>
