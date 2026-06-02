@@ -23,6 +23,8 @@ function AboutPage() {
         <ArrowLeft className="h-4 w-4" /> {t("common.back")}
       </Link>
 
+      <PilotSection />
+
       <header className="mt-8 text-center">
         <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-gold to-gold-soft shadow-[var(--shadow-gold)]">
           <span className="font-display text-3xl text-background">A</span>
