@@ -235,11 +235,29 @@ export function PilotSection() {
     return <AdminPanel />;
   }
 
+  const enterAdmin = () => {
+    try {
+      localStorage.setItem(ROLE_KEY, "admin");
+    } catch {}
+    window.location.href = "/?admin=true";
+  };
+
   return (
-    <div className="glass-card rounded-2xl p-6">
-      {state === "new_user" && <NewUserView onJoin={handleJoin} />}
-      {state === "active_user" && <ActiveUserView diffDays={diffDays} />}
-      {state === "returning_user" && <ReturningUserView onContinue={handleContinue} />}
+    <div className="space-y-3">
+      <div className="glass-card rounded-2xl p-6">
+        {state === "new_user" && <NewUserView onJoin={handleJoin} />}
+        {state === "active_user" && <ActiveUserView diffDays={diffDays} />}
+        {state === "returning_user" && <ReturningUserView onContinue={handleContinue} />}
+      </div>
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={enterAdmin}
+          className="text-[10px] uppercase tracking-widest text-muted-foreground/60 hover:text-gold transition-colors"
+        >
+          · Mode administrateur ·
+        </button>
+      </div>
     </div>
   );
 }
