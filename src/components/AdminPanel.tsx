@@ -31,10 +31,10 @@ export function AdminPanel() {
         <button
           type="button"
           onClick={handleExit}
-          className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"
-          title="Quitter le mode admin"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-400/20"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-3.5 w-3.5" />
+          Quitter le mode admin
         </button>
       </div>
 
