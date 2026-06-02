@@ -90,7 +90,13 @@ function LoginPage() {
         </form>
       </div>
 
-      <p className="mt-6 text-center text-sm text-muted-foreground">
+      <Link to="/about" className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-sm text-gold transition hover:bg-gold/10">
+        <Sparkles className="h-4 w-4" />
+        Programme pilote gratuit — 30 jours
+        <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+
+      <p className="mt-4 text-center text-sm text-muted-foreground">
         {t("auth.no_account")} <Link to="/register" className="text-gold hover:underline">{t("auth.signup_cta")}</Link>
       </p>
     </div>
