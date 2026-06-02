@@ -1,5 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { MessageCircle, ArrowRight, Sparkles, CheckCircle2, ChevronRight } from "lucide-react";
+import { AdminPanel } from "@/components/AdminPanel";
+
+const ROLE_KEY = "aurum_role";
+
+function detectAdmin(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const search = window.location.search || "";
+    if (search.includes("admin=true")) {
+      localStorage.setItem(ROLE_KEY, "admin");
+      return true;
+    }
+    return localStorage.getItem(ROLE_KEY) === "admin";
+  } catch {
+    return false;
+  }
+}
 
 const DEVICE_ID_KEY = "aurum_device_id";
 const PILOT_STARTED_KEY = "aurum_pilot_started";
@@ -179,10 +196,16 @@ export function PilotSection() {
     }
   }, []);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+
   useEffect(() => {
-    getOrCreateDeviceId();
-    markVisit();
-    refresh();
+    const admin = detectAdmin();
+    setIsAdmin(admin);
+    if (!admin) {
+      getOrCreateDeviceId();
+      markVisit();
+      refresh();
+    }
     setMounted(true);
   }, [refresh]);
 
@@ -206,6 +229,10 @@ export function PilotSection() {
         <div className="mt-4 h-12 w-full rounded bg-muted" />
       </div>
     );
+  }
+
+  if (isAdmin) {
+    return <AdminPanel />;
   }
 
   return (
