@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Phone, Linkedin, MapPin, User, Mail } from "lucide-react";
+import { ArrowLeft, Phone, Linkedin, MapPin, User } from "lucide-react";
 import { useI18n } from "@/i18n";
+import { PilotSection } from "@/components/PilotSection";
 
 export const Route = createFileRoute("/about")({
   component: AboutPage,
