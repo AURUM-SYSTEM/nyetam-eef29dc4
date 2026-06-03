@@ -19,7 +19,6 @@ import { Route as AuthenticatedRecensementsRouteImport } from './routes/_authent
 import { Route as AuthenticatedRecensementRouteImport } from './routes/_authenticated.recensement'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated.profile'
 import { Route as AuthenticatedNewRouteImport } from './routes/_authenticated.new'
-import { Route as AuthenticatedRecordTypeRouteImport } from './routes/_authenticated.record.$type'
 import { Route as AuthenticatedDocumentIdRouteImport } from './routes/_authenticated.document.$id'
 
 const RegisterRoute = RegisterRouteImport.update({
@@ -73,11 +72,6 @@ const AuthenticatedNewRoute = AuthenticatedNewRouteImport.update({
   path: '/new',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedRecordTypeRoute = AuthenticatedRecordTypeRouteImport.update({
-  id: '/record/$type',
-  path: '/record/$type',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedDocumentIdRoute = AuthenticatedDocumentIdRouteImport.update({
   id: '/document/$id',
   path: '/document/$id',
@@ -95,7 +89,6 @@ export interface FileRoutesByFullPath {
   '/recensements': typeof AuthenticatedRecensementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/document/$id': typeof AuthenticatedDocumentIdRoute
-  '/record/$type': typeof AuthenticatedRecordTypeRoute
 }
 export interface FileRoutesByTo {
   '/about': typeof AboutRoute
@@ -108,7 +101,6 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/': typeof AuthenticatedIndexRoute
   '/document/$id': typeof AuthenticatedDocumentIdRoute
-  '/record/$type': typeof AuthenticatedRecordTypeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -123,7 +115,6 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/document/$id': typeof AuthenticatedDocumentIdRoute
-  '/_authenticated/record/$type': typeof AuthenticatedRecordTypeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -138,7 +129,6 @@ export interface FileRouteTypes {
     | '/recensements'
     | '/settings'
     | '/document/$id'
-    | '/record/$type'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/about'
@@ -151,7 +141,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/'
     | '/document/$id'
-    | '/record/$type'
   id:
     | '__root__'
     | '/_authenticated'
@@ -165,7 +154,6 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/'
     | '/_authenticated/document/$id'
-    | '/_authenticated/record/$type'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -247,13 +235,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/record/$type': {
-      id: '/_authenticated/record/$type'
-      path: '/record/$type'
-      fullPath: '/record/$type'
-      preLoaderRoute: typeof AuthenticatedRecordTypeRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/document/$id': {
       id: '/_authenticated/document/$id'
       path: '/document/$id'
@@ -272,7 +253,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedDocumentIdRoute: typeof AuthenticatedDocumentIdRoute
-  AuthenticatedRecordTypeRoute: typeof AuthenticatedRecordTypeRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -283,7 +263,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedDocumentIdRoute: AuthenticatedDocumentIdRoute,
-  AuthenticatedRecordTypeRoute: AuthenticatedRecordTypeRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
