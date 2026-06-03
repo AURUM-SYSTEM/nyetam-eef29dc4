@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff } from "lucide-react";
+import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { saveAudio, enqueue, type QueueMeta } from "@/lib/offline-store";
+import { saveAudio, enqueue, type QueueMeta, type DocType, type GpsLocation } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
+import { captureGps } from "@/lib/geo";
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
   if (typeof navigator === "undefined") return { os: "other", browser: "other" };
@@ -87,14 +88,18 @@ function pickMimeType(): string {
   return "";
 }
 
-export const Route = createFileRoute("/_authenticated/record/$type")({
-  component: RecordPage,
-  head: () => ({ meta: [{ title: "Enregistrement — AURUM" }] }),
-});
+const VALID_TYPES = new Set<DocType>(["rapport", "pv", "mission_terrain", "enquete", "auto"]);
+const TYPE_LABELS: Record<string, string> = {
+  auto: "Détection automatique",
+  mission_terrain: "Mission terrain",
+  rapport: "Mission terrain",
+  pv: "Procès-verbal",
+  enquete: "Enquête",
+};
 
 function RecordPage() {
   const { type } = useParams({ from: "/_authenticated/record/$type" });
-  const docType = (type === "pv" ? "pv" : "rapport") as "rapport" | "pv";
+  const docType: DocType = (VALID_TYPES.has(type as DocType) ? (type as DocType) : "auto");
   const navigate = useNavigate();
   const online = useOnline();
   const { t, lang } = useI18n();
@@ -114,6 +119,8 @@ function RecordPage() {
   const [location, setLocation] = useState("");
   const [docDate, setDocDate] = useState(now.toISOString().slice(0, 10));
   const [docTime, setDocTime] = useState(now.toTimeString().slice(0, 5));
+  const [gps, setGps] = useState<GpsLocation | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
