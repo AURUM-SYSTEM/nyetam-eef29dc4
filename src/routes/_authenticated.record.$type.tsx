@@ -290,7 +290,7 @@ function RecordPage() {
       </Link>
       <header className="mt-6">
         <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-          {t("record.step")} — {docType === "rapport" ? t("doc.type_rapport") : t("doc.type_pv")}
+          {t("record.step")} — {TYPE_LABELS[docType] ?? "Document"}
         </p>
         <h1 className="mt-2 font-display text-3xl">{t("record.title")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -322,6 +322,19 @@ function RecordPage() {
             <input value={location} onChange={e => setLocation(e.target.value)} placeholder={t("record.meta_location_ph")}
               className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
           </label>
+          <div className="col-span-2">
+            <button
+              type="button"
+              onClick={handleCaptureGps}
+              disabled={gpsLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {gpsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
+              {gps
+                ? `GPS capturé : ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}`
+                : "Capturer ma position GPS"}
+            </button>
+          </div>
           <label className="block">
             <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">{t("record.meta_date")}</span>
             <input type="date" value={docDate} onChange={e => setDocDate(e.target.value)}
@@ -334,6 +347,7 @@ function RecordPage() {
           </label>
         </div>
       </section>
+
 
       {!supported && !manual && (
         <div className="mt-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
