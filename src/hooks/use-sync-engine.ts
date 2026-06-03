@@ -76,22 +76,72 @@ export function useSyncEngine() {
 
         if (!transcript.trim()) throw new Error("Aucun texte à traiter");
 
-        // ÉTAPE 3 — 🤖 Génération
+        // ÉTAPE 2.5 — 📍 Résolution de localisation (GPS → reverse geocode)
+        const gps = item.meta?.gps;
+        let resolvedLocation: {
+          lat?: number; lng?: number; city?: string; country?: string;
+          source: "gps" | "text" | "none";
+        } = { source: "none" };
+        let locationLabel = item.meta?.location ?? "";
+
+        if (gps && typeof gps.lat === "number" && typeof gps.lng === "number") {
+          try {
+            const rg = await reverseGeocode({ data: { lat: gps.lat, lng: gps.lng } });
+            resolvedLocation = {
+              lat: gps.lat, lng: gps.lng,
+              city: rg.city || undefined,
+              country: rg.country || undefined,
+              source: "gps",
+            };
+            const parts = [rg.city, rg.country].filter(Boolean).join(", ");
+            locationLabel = parts ? `${parts} (GPS)` : `${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)} (GPS)`;
+          } catch {
+            resolvedLocation = { lat: gps.lat, lng: gps.lng, source: "gps" };
+            locationLabel = `${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)} (GPS)`;
+          }
+        } else if (item.meta?.location?.trim()) {
+          resolvedLocation = { city: item.meta.location.trim(), source: "text" };
+        }
+
+        // ÉTAPE 3 — 🤖 Génération (auto-détection si demandée)
         await updateQueueItem(item.id, { status: "generating" });
         toast.loading("🤖 Génération du document…", { id: toastId });
 
+        const requestedType = item.type === "auto" ? undefined : item.type;
+        const autoDetect = item.meta?.autoDetect === true || item.type === "auto";
+
         const result = await generate({
-          data: { transcript, type: item.type, lang, country, profession },
+          data: {
+            transcript,
+            type: requestedType,
+            autoDetect,
+            lang,
+            country,
+            profession,
+            location: resolvedLocation.source === "none" ? undefined : resolvedLocation,
+          },
         });
 
         if (!result || !result.title) throw new Error("Génération invalide");
+
+        // ÉTAPE 3.5 — 💡 Suggestions métier (non bloquant)
+        let suggestions: string[] = [];
+        try {
+          const sugg = await suggestImprovements({
+            data: { missionType: result.missionType, sections: result.sections, lang },
+          });
+          suggestions = sugg.suggestions ?? [];
+        } catch (e) {
+          console.warn("suggestImprovements failed", e);
+        }
 
         // Insertion Supabase
         const { data, error } = await supabase
           .from("documents")
           .insert({
             user_id: userId,
-            type: item.type,
+            type: result.missionType,
+            mission_type: result.missionType,
             title: result.title ?? "Sans titre",
             transcript: result.cleanedTranscript ?? transcript,
             introduction: result.introduction ?? "",
@@ -101,7 +151,9 @@ export function useSyncEngine() {
             conclusion: result.conclusion ?? "",
             status: "ready",
             agent_name: item.meta?.agentName ?? "",
-            location: item.meta?.location ?? "",
+            location: locationLabel,
+            location_data: resolvedLocation as unknown as Record<string, unknown>,
+            suggestions,
             reference: item.meta?.reference ?? "",
             signature_name:
               item.meta?.signatureName ?? item.meta?.agentName ?? "",
@@ -134,7 +186,6 @@ export function useSyncEngine() {
               console.error("Photo upload failed", upErr);
               continue;
             }
-            // Store storage path; signed URLs are generated at display time.
             paths.push(path);
           }
           if (paths.length > 0) {
