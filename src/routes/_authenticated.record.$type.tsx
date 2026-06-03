@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff } from "lucide-react";
+import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { saveAudio, enqueue, type QueueMeta } from "@/lib/offline-store";
+import { saveAudio, enqueue, type QueueMeta, type DocType, type GpsLocation } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
+import { captureGps } from "@/lib/geo";
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
   if (typeof navigator === "undefined") return { os: "other", browser: "other" };
@@ -92,9 +93,20 @@ export const Route = createFileRoute("/_authenticated/record/$type")({
   head: () => ({ meta: [{ title: "Enregistrement — AURUM" }] }),
 });
 
+
+
+const VALID_TYPES = new Set<DocType>(["rapport", "pv", "mission_terrain", "enquete", "auto"]);
+const TYPE_LABELS: Record<string, string> = {
+  auto: "Détection automatique",
+  mission_terrain: "Mission terrain",
+  rapport: "Mission terrain",
+  pv: "Procès-verbal",
+  enquete: "Enquête",
+};
+
 function RecordPage() {
   const { type } = useParams({ from: "/_authenticated/record/$type" });
-  const docType = (type === "pv" ? "pv" : "rapport") as "rapport" | "pv";
+  const docType: DocType = (VALID_TYPES.has(type as DocType) ? (type as DocType) : "auto");
   const navigate = useNavigate();
   const online = useOnline();
   const { t, lang } = useI18n();
@@ -114,6 +126,8 @@ function RecordPage() {
   const [location, setLocation] = useState("");
   const [docDate, setDocDate] = useState(now.toISOString().slice(0, 10));
   const [docTime, setDocTime] = useState(now.toTimeString().slice(0, 5));
+  const [gps, setGps] = useState<GpsLocation | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -159,8 +173,20 @@ function RecordPage() {
       reference: generateReference(),
       signatureName: p.signature || agentName.trim() || p.name,
       lang,
+      gps: gps ?? undefined,
+      autoDetect: docType === "auto",
     };
   }
+
+  async function handleCaptureGps() {
+    setGpsLoading(true);
+    try {
+      const g = await captureGps();
+      if (!g) toast.error("Position GPS indisponible");
+      else { setGps(g); toast.success("Position GPS capturée"); }
+    } finally { setGpsLoading(false); }
+  }
+
 
   async function ensureMicAccess(): Promise<MediaStream | null> {
     if (!secureOk) { toast.error("HTTPS requis"); return null; }
@@ -264,7 +290,7 @@ function RecordPage() {
       </Link>
       <header className="mt-6">
         <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-          {t("record.step")} — {docType === "rapport" ? t("doc.type_rapport") : t("doc.type_pv")}
+          {t("record.step")} — {TYPE_LABELS[docType] ?? "Document"}
         </p>
         <h1 className="mt-2 font-display text-3xl">{t("record.title")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -296,6 +322,19 @@ function RecordPage() {
             <input value={location} onChange={e => setLocation(e.target.value)} placeholder={t("record.meta_location_ph")}
               className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
           </label>
+          <div className="col-span-2">
+            <button
+              type="button"
+              onClick={handleCaptureGps}
+              disabled={gpsLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {gpsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
+              {gps
+                ? `GPS capturé : ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}`
+                : "Capturer ma position GPS"}
+            </button>
+          </div>
           <label className="block">
             <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">{t("record.meta_date")}</span>
             <input type="date" value={docDate} onChange={e => setDocDate(e.target.value)}
@@ -308,6 +347,7 @@ function RecordPage() {
           </label>
         </div>
       </section>
+
 
       {!supported && !manual && (
         <div className="mt-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">

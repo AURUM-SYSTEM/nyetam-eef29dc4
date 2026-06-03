@@ -27,11 +27,14 @@ export type Database = {
           introduction: string
           lang: string
           location: string
+          location_data: Json | null
+          mission_type: string | null
           observations: string
           photo_urls: string[]
           reference: string
           signature_name: string
           status: string
+          suggestions: string[]
           title: string
           transcript: string
           type: string
@@ -50,11 +53,14 @@ export type Database = {
           introduction?: string
           lang?: string
           location?: string
+          location_data?: Json | null
+          mission_type?: string | null
           observations?: string
           photo_urls?: string[]
           reference?: string
           signature_name?: string
           status?: string
+          suggestions?: string[]
           title?: string
           transcript?: string
           type: string
@@ -73,11 +79,14 @@ export type Database = {
           introduction?: string
           lang?: string
           location?: string
+          location_data?: Json | null
+          mission_type?: string | null
           observations?: string
           photo_urls?: string[]
           reference?: string
           signature_name?: string
           status?: string
+          suggestions?: string[]
           title?: string
           transcript?: string
           type?: string

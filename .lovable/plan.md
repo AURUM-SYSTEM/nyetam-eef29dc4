@@ -1,81 +1,71 @@
-# Plan — AURUM SYSTEM : Comptes utilisateurs & personnalisation
+## Plan — AURUM Intelligent Reporting Engine
 
-La plupart des points (1 nettoyage IA, 4 structure admin, 5 édition manuelle, 6 multilingue, 7 PDF pro) sont **déjà implémentés** dans les itérations précédentes. Ce plan se concentre sur ce qui manque réellement : **authentification, isolation des données par utilisateur, et personnalisation intelligente**.
+### 1. Mission type detection + 4 fixed templates
 
-## 1. Authentification (Lovable Cloud)
+**File:** `src/lib/aurum.functions.ts`
 
-- Activer email/password + Google (via le broker Lovable)
-- Désactiver la confirmation email (UX terrain rapide) — *à confirmer*
-- Pages : `/login`, `/register`, `/profile` (enrichir l'existant)
-- Layout `_authenticated` qui protège toutes les routes app
-- Listener `onAuthStateChange` au root pour invalider le cache
+- Extend `type` enum: keep backward compat by adding `"mission_terrain"` and `"enquete"`. Map legacy `"rapport"` → `"mission_terrain"`.
+- New helper `detectMissionType(text)` using French/English keywords:
+  - `recensement|census|registration` → `recensement`
+  - `réunion|reunion|pv|meeting|procès-verbal` → `pv`
+  - `enquête|enquete|survey|investigation` → `enquete`
+  - `mission|terrain|visite|field|activité` or default → `mission_terrain`
+- Replace `generateDocument` schemas with 4 strict templates matching the spec:
+  - **MISSION TERRAIN**: Contexte, Objectifs, Activités, Constats, Difficultés, Recommandations, Conclusion
+  - **PV RÉUNION**: Participants, Points discutés, Décisions, Actions, Conclusion
+  - **RECENSEMENT**: Zone, Méthodologie, Données, Résultats, Observations, Conclusion
+  - **ENQUÊTE**: Contexte, Objectif, Méthodologie, Résultats, Analyse, Conclusion
+- Strict prompt rules: never invent data; use `"Non spécifié dans les données fournies"` for missing info.
+- Add new server fn `suggestImprovements({ doc, type, lang })` → returns `string[]` (3–5 bullet suggestions specific to template type). No mutation of the report.
+- Add optional `autoDetect: boolean` and `location?: { city?, country?, lat?, lng? }` to `generateDocument` input.
 
-## 2. Table `profiles`
+### 2. Document schema adjustments
 
-Migration Supabase :
-- `id` (uuid, FK `auth.users` ON DELETE CASCADE)
-- `full_name`, `email`, `country`, `profession`, `preferred_lang` (fr|en)
-- RLS : chaque utilisateur ne lit/écrit que son profil
-- Trigger `handle_new_user` : crée le profil à l'inscription avec les métadonnées du signup
+Current DB columns (`introduction|faits|declarations|observations|conclusion`) are kept as a generic 5-slot store. To avoid a migration, map each template's sections into these existing columns (concatenate extras into `observations`). Title prefix shows detected type (e.g. `[Mission Terrain] …`).
 
-## 3. Isolation des documents par utilisateur
+Alternative (cleaner): add `sections jsonb` and `mission_type text` columns to `documents` table via migration, and `suggestions text[]`. Recommended.
 
-Migration sur `documents` :
-- Ajouter `user_id uuid NOT NULL` (FK `auth.users`)
-- Remplacer les policies publiques par des policies `auth.uid() = user_id`
-- *Note* : les documents existants sans user_id seront supprimés (aucun utilisateur jusqu'ici)
+### 3. GPS auto-capture
 
-Adapter `aurum.functions.ts` :
-- `saveDocument`, `updateDocument`, `listDocuments`, `getDocument` passent par `requireSupabaseAuth`
-- Le `user_id` est injecté côté serveur depuis `context.userId`
+**Files:** `src/lib/geo.ts` (new), `src/routes/_authenticated.new.tsx`, `src/routes/_authenticated.record.$type.tsx`, `src/hooks/use-sync-engine.ts`
 
-## 4. Personnalisation IA selon profil
+- `captureLocation()`: tries `navigator.geolocation.getCurrentPosition` (10s timeout). On success, reverse-geocode via free Nominatim API (`https://nominatim.openstreetmap.org/reverse?...&format=json`, requires UA header) to get city/country.
+- Store `{ lat, lng, city, country, source: 'gps'|'text'|'none' }` in queue item `meta.location` (existing field becomes structured) and pass through to `generateDocument`.
+- In template intro, server fn injects: `Lieu : {city}, {country} (GPS)\nCoordonnées : {lat}, {lng}` or fallback `Lieu : Non spécifié`.
+- Text fallback: regex/keyword scan for known city patterns done inside the AI prompt (model instructed to extract a `location` field if found).
 
-Étendre les prompts `generateDocument` et `cleanRawTranscript` :
-- Recevoir `country`, `profession`, `lang` du profil utilisateur
-- Règles de style :
-  - Cameroun / pays francophones → style administratif FR (PV gendarmerie/police)
-  - Anglophones → "incident report" format
-  - ONG / humanitaire → "field report" style
-  - Médical → rapport clinique synthétique
-- Sélection automatique du template selon `profession`
+### 4. Post-generation suggestions UI
 
-## 5. UX
+**Files:** `src/routes/_authenticated.document.$id.tsx`, `src/components/SuggestionsPanel.tsx` (new), DB migration for `suggestions` column.
 
-- Sélecteur de langue dans Register pré-rempli depuis navigator
-- Profil affiche pays/métier/langue éditables
-- Indicateur utilisateur dans le header (avatar + nom)
-- Bouton "Déconnexion"
+- After `generateDocument` returns, sync engine calls `suggestImprovements` and stores result in `documents.suggestions`.
+- Document detail page renders a separate `<SuggestionsPanel suggestions={...} />` card under the report — never inline. Clear heading: "💡 Suggestions d'amélioration".
+- Suggestions excluded from PDF export.
 
-## Détails techniques
+### 5. Migration
 
-**Fichiers à créer :**
-- `src/routes/login.tsx`, `src/routes/register.tsx`
-- `src/routes/_authenticated.tsx` (layout guard)
-- Déplacer routes app sous `_authenticated/` : `index.tsx`, `new.tsx`, `record.$type.tsx`, `document.$id.tsx`, `profile.tsx`, `settings.tsx`
-- `src/hooks/use-auth.ts` (session + profil)
-- `src/lib/profile.functions.ts` (server fn `getMyProfile`, `updateMyProfile`)
+```sql
+ALTER TABLE public.documents
+  ADD COLUMN IF NOT EXISTS mission_type text,
+  ADD COLUMN IF NOT EXISTS suggestions text[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS location jsonb;
+```
+(GRANTs already exist on the table.)
 
-**Fichiers à modifier :**
-- `src/routes/__root.tsx` : context auth + onAuthStateChange
-- `src/router.tsx` : context auth
-- `src/lib/aurum.functions.ts` : middleware auth + user_id + personnalisation
-- `src/hooks/use-sync-engine.ts` : attacher user_id à la sync
-- `src/lib/offline-store.ts` : stocker user_id dans la queue
-- `src/components/SyncStatus.tsx` : ajouter avatar + logout
-- `src/i18n/fr.json` / `en.json` : clés auth
+### 6. Out of scope / unchanged
 
-**Migrations :**
-1. Créer `profiles` + trigger `handle_new_user` + RLS
-2. Ajouter `user_id` à `documents` + remplacer policies + supprimer rows orphelines
+- Photo signed-URL pipeline (already fixed)
+- Auth, offline queue plumbing, audio transcription
+- PDF rendering (only template field mapping changes)
 
-**Auth config :** email/password + Google via `supabase--configure_social_auth`.
+### Technical notes
 
-## Hors scope (déjà fait)
+- Keyword detection runs client-side (cheap, deterministic) before `generateDocument`; AI is only told the chosen `type`, never asked to pick.
+- Nominatim has a 1 req/sec rate limit and requires a custom User-Agent → call from a server fn `reverseGeocode(lat,lng)` not the browser.
+- Backward compat: existing documents with `type='rapport'` continue to render via fallback mapping.
 
-- ✅ Nettoyage IA après transcription (`cleanRawTranscript`)
-- ✅ Structure administrative des rapports (intro/faits/déclarations/observations/conclusion)
-- ✅ Édition manuelle avant PDF
-- ✅ Multilingue FR/EN
-- ✅ PDF pro avec logo et mise en page
-- ✅ Design GovTech mobile-first
+### Questions before I build
+
+1. **DB migration** — OK to add `mission_type`, `suggestions`, `location` columns? (Cleaner than overloading existing fields.)
+2. **Legacy `rapport` type** — keep as alias for `mission_terrain`, or hard-rename in UI selector?
+3. **Auto-detect override** — should the "Nouveau document" UI still let the user pick a type manually, or be fully auto?

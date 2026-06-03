@@ -3,7 +3,13 @@ import { openDB, type IDBPDatabase } from "idb";
 const DB_NAME = "aurum-offline";
 const DB_VERSION = 4;
 
-export type DocType = "rapport" | "pv" | "recensement";
+export type DocType =
+  | "rapport"
+  | "pv"
+  | "recensement"
+  | "mission_terrain"
+  | "enquete"
+  | "auto";
 
 export type QueueStatus =
   | "pending"
@@ -29,6 +35,13 @@ export type PhotoRecord = {
   createdAt: number;
 };
 
+export type GpsLocation = {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  capturedAt?: number;
+};
+
 export type QueueMeta = {
   agentName?: string;
   location?: string;
@@ -39,6 +52,8 @@ export type QueueMeta = {
   lang?: "fr" | "en";
   country?: string;
   profession?: string;
+  gps?: GpsLocation;
+  autoDetect?: boolean;
   // Recensement-specific
   subjectName?: string;
   subjectStatus?: string;
