@@ -93,9 +93,35 @@ function DocPage() {
     else navigate({ to: "/" });
   }
 
-  function download() {
+  async function download() {
     if (!doc) return;
-    exportDocumentPdf(doc);
+    const paths = doc.photo_urls ?? [];
+    const photo_data_urls: string[] = [];
+    for (const p of paths) {
+      try {
+        let url = p;
+        if (!/^https?:\/\//i.test(p)) {
+          const { data, error } = await supabase.storage
+            .from("recensement-photos")
+            .createSignedUrl(p, 3600);
+          if (error || !data) continue;
+          url = data.signedUrl;
+        }
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result as string);
+          r.onerror = () => reject(r.error);
+          r.readAsDataURL(blob);
+        });
+        photo_data_urls.push(dataUrl);
+      } catch {
+        // skip failed image
+      }
+    }
+    exportDocumentPdf({ ...doc, photo_data_urls });
     toast.success(t("doc.pdf_ok"));
   }
 
