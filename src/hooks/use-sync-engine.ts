@@ -118,7 +118,7 @@ export function useSyncEngine() {
         const photoIds = item.photoIds ?? [];
         if (photoIds.length > 0) {
           toast.loading("🖼️ Envoi des photos…", { id: toastId });
-          const urls: string[] = [];
+          const paths: string[] = [];
           for (const pid of photoIds) {
             const photo = await getPhoto(pid);
             if (!photo) continue;
@@ -134,15 +134,13 @@ export function useSyncEngine() {
               console.error("Photo upload failed", upErr);
               continue;
             }
-            const { data: pub } = supabase.storage
-              .from("recensement-photos")
-              .getPublicUrl(path);
-            urls.push(pub.publicUrl);
+            // Store storage path; signed URLs are generated at display time.
+            paths.push(path);
           }
-          if (urls.length > 0) {
+          if (paths.length > 0) {
             await supabase
               .from("documents")
-              .update({ photo_urls: urls })
+              .update({ photo_urls: paths })
               .eq("id", data.id);
           }
           for (const pid of photoIds) {
