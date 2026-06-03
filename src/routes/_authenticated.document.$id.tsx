@@ -246,16 +246,7 @@ function DocPage() {
         )}
 
         {doc.photo_urls && doc.photo_urls.length > 0 && (
-          <section className="glass-card rounded-xl p-4">
-            <h2 className="mb-3 font-display text-base uppercase tracking-wider text-gold">Photos terrain</h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {doc.photo_urls.map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-border">
-                  <img src={url} alt={`Photo ${i + 1}`} loading="lazy" className="h-full w-full object-cover transition hover:scale-105" />
-                </a>
-              ))}
-            </div>
-          </section>
+          <PhotosSection paths={doc.photo_urls} />
         )}
 
         {/* Signature */}
@@ -320,5 +311,42 @@ function MetaInput({ label, value, onChange, type = "text", full = false }: {
         className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
       />
     </label>
+  );
+}
+
+function PhotosSection({ paths }: { paths: string[] }) {
+  const [urls, setUrls] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const resolved = await Promise.all(
+        paths.map(async (p) => {
+          if (/^https?:\/\//i.test(p)) return p; // legacy public URL
+          const { data, error } = await supabase.storage
+            .from("recensement-photos")
+            .createSignedUrl(p, 60 * 60);
+          if (error || !data) return "";
+          return data.signedUrl;
+        }),
+      );
+      if (!cancelled) setUrls(resolved.filter(Boolean));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [paths]);
+
+  if (urls.length === 0) return null;
+  return (
+    <section className="glass-card rounded-xl p-4">
+      <h2 className="mb-3 font-display text-base uppercase tracking-wider text-gold">Photos terrain</h2>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {urls.map((url, i) => (
+          <a key={i} href={url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg border border-border">
+            <img src={url} alt={`Photo ${i + 1}`} loading="lazy" className="h-full w-full object-cover transition hover:scale-105" />
+          </a>
+        ))}
+      </div>
+    </section>
   );
 }
