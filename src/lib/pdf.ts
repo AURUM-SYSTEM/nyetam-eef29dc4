@@ -233,7 +233,48 @@ export function exportDocumentPdf(doc: DocForPdf) {
       ensureSpace(15);
       pdf.text(line, margin, y);
       y += 14;
+  }
+
+  // Photos (pre-resolved data URLs only; no async work here)
+  const photos = doc.photo_data_urls?.filter(Boolean) ?? [];
+  if (photos.length > 0) {
+    ensureSpace(40);
+    pdf.setFont("times", "bold");
+    pdf.setFontSize(12);
+    pdf.setTextColor(120, 95, 30);
+    const heading = doc.lang === "en" ? "PHOTOS" : "PHOTOS";
+    pdf.text(heading, margin, y);
+    pdf.setDrawColor(201, 168, 76);
+    pdf.setLineWidth(0.6);
+    pdf.line(margin, y + 3, margin + pdf.getTextWidth(heading), y + 3);
+    y += 14;
+
+    const gap = 8;
+    const cols = 2;
+    const cellW = (contentWidth - gap * (cols - 1)) / cols;
+    const cellH = cellW * 0.75;
+    let col = 0;
+    let rowX = margin;
+    for (const dataUrl of photos) {
+      if (col === 0) ensureSpace(cellH + gap);
+      const x = margin + col * (cellW + gap);
+      try {
+        const fmt = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+        pdf.addImage(dataUrl, fmt, x, y, cellW, cellH, undefined, "FAST");
+      } catch (e) {
+        pdf.setDrawColor(220, 220, 220);
+        pdf.rect(x, y, cellW, cellH);
+      }
+      col++;
+      if (col >= cols) {
+        col = 0;
+        y += cellH + gap;
+      }
     }
+    if (col !== 0) y += cellH + gap;
+    y += 8;
+    rowX;
+  }
     y += 12;
   }
 
