@@ -152,7 +152,7 @@ export function useSyncEngine() {
             status: "ready",
             agent_name: item.meta?.agentName ?? "",
             location: locationLabel,
-            location_data: resolvedLocation as unknown as Record<string, unknown>,
+            location_data: resolvedLocation as any,
             suggestions,
             reference: item.meta?.reference ?? "",
             signature_name:
@@ -160,7 +160,7 @@ export function useSyncEngine() {
             doc_date: item.meta?.docDate ?? null,
             doc_time: item.meta?.docTime ?? null,
             lang,
-          })
+          } as any)
           .select("id")
           .single();
 
