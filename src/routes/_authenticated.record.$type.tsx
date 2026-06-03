@@ -88,6 +88,13 @@ function pickMimeType(): string {
   return "";
 }
 
+export const Route = createFileRoute("/_authenticated/record/$type")({
+  component: RecordPage,
+  head: () => ({ meta: [{ title: "Enregistrement — AURUM" }] }),
+});
+
+
+
 const VALID_TYPES = new Set<DocType>(["rapport", "pv", "mission_terrain", "enquete", "auto"]);
 const TYPE_LABELS: Record<string, string> = {
   auto: "Détection automatique",
@@ -166,8 +173,20 @@ function RecordPage() {
       reference: generateReference(),
       signatureName: p.signature || agentName.trim() || p.name,
       lang,
+      gps: gps ?? undefined,
+      autoDetect: docType === "auto",
     };
   }
+
+  async function handleCaptureGps() {
+    setGpsLoading(true);
+    try {
+      const g = await captureGps();
+      if (!g) toast.error("Position GPS indisponible");
+      else { setGps(g); toast.success("Position GPS capturée"); }
+    } finally { setGpsLoading(false); }
+  }
+
 
   async function ensureMicAccess(): Promise<MediaStream | null> {
     if (!secureOk) { toast.error("HTTPS requis"); return null; }
