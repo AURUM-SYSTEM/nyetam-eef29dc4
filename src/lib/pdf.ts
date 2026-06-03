@@ -82,6 +82,8 @@ export type DocForPdf = {
   reference?: string;
   signature_name?: string;
   lang?: string;
+  /** Data URLs (base64) for photos. Must be pre-resolved before calling export. */
+  photo_data_urls?: string[];
 };
 
 export function exportDocumentPdf(doc: DocForPdf) {
