@@ -12,7 +12,7 @@ import {
   subscribeQueue,
   type QueueItem,
 } from "@/lib/offline-store";
-import { transcribeAudio, generateDocument } from "@/lib/aurum.functions";
+import { transcribeAudio, generateDocument, reverseGeocode, suggestImprovements } from "@/lib/aurum.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { getCachedProfile } from "@/hooks/use-auth";
