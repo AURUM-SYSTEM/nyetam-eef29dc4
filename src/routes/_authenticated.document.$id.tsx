@@ -5,15 +5,19 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { exportDocumentPdf } from "@/lib/pdf";
 import { useI18n } from "@/i18n";
+import { SuggestionsPanel } from "@/components/SuggestionsPanel";
 
 export const Route = createFileRoute("/_authenticated/document/$id")({
   component: DocPage,
   head: () => ({ meta: [{ title: "Document — AURUM" }] }),
 });
 
+type MissionType = "mission_terrain" | "pv" | "recensement" | "enquete";
+
 type Doc = {
   id: string;
-  type: "rapport" | "pv" | "recensement";
+  type: string;
+  mission_type: string | null;
   title: string;
   transcript: string;
   introduction: string;
@@ -30,13 +34,53 @@ type Doc = {
   signature_name: string;
   lang: string;
   photo_urls: string[] | null;
+  suggestions: string[] | null;
+  location_data: { lat?: number; lng?: number; city?: string; country?: string; source?: string } | null;
 };
 
-function typeLabel(type: Doc["type"], t: (k: string) => string) {
-  if (type === "rapport") return t("doc.type_rapport");
-  if (type === "pv") return t("doc.type_pv");
-  return "Recensement";
+const MISSION_LABEL: Record<MissionType, string> = {
+  mission_terrain: "Mission terrain",
+  pv: "Procès-verbal",
+  recensement: "Recensement",
+  enquete: "Enquête",
+};
+
+function resolveMissionType(d: { type: string; mission_type: string | null }): MissionType {
+  const v = (d.mission_type || d.type || "").toLowerCase();
+  if (v === "pv" || v === "recensement" || v === "enquete" || v === "mission_terrain") return v;
+  return "mission_terrain";
 }
+
+const SECTION_LABELS: Record<MissionType, Array<{ key: "introduction" | "faits" | "declarations" | "observations" | "conclusion"; label: string }>> = {
+  mission_terrain: [
+    { key: "introduction", label: "Contexte" },
+    { key: "faits", label: "Objectifs & Activités" },
+    { key: "declarations", label: "Constats clés" },
+    { key: "observations", label: "Difficultés & Recommandations" },
+    { key: "conclusion", label: "Conclusion" },
+  ],
+  pv: [
+    { key: "introduction", label: "Participants" },
+    { key: "faits", label: "Points discutés" },
+    { key: "declarations", label: "Décisions prises" },
+    { key: "observations", label: "Actions à entreprendre" },
+    { key: "conclusion", label: "Conclusion" },
+  ],
+  recensement: [
+    { key: "introduction", label: "Zone / Localisation" },
+    { key: "faits", label: "Méthodologie" },
+    { key: "declarations", label: "Données collectées" },
+    { key: "observations", label: "Résultats & Observations" },
+    { key: "conclusion", label: "Conclusion" },
+  ],
+  enquete: [
+    { key: "introduction", label: "Contexte de l'enquête" },
+    { key: "faits", label: "Objectif" },
+    { key: "declarations", label: "Méthodologie" },
+    { key: "observations", label: "Résultats & Analyse" },
+    { key: "conclusion", label: "Conclusion" },
+  ],
+};
 
 function DocPage() {
   const { id } = useParams({ from: "/_authenticated/document/$id" });
