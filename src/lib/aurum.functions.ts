@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { buildMetierContext } from "./role-context";
+
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
@@ -310,6 +312,8 @@ export const generateDocument = createServerFn({ method: "POST" })
     lang?: "fr" | "en";
     country?: string;
     profession?: string;
+    sector?: string;
+    role?: string;
     location?: LocationInput;
   }) =>
     z.object({
@@ -319,6 +323,8 @@ export const generateDocument = createServerFn({ method: "POST" })
       lang: LangSchema.optional(),
       country: z.string().max(80).optional(),
       profession: z.string().max(120).optional(),
+      sector: z.string().max(60).optional(),
+      role: z.string().max(60).optional(),
       location: z.object({
         lat: z.number().min(-90).max(90).optional(),
         lng: z.number().min(-180).max(180).optional(),
@@ -328,6 +334,7 @@ export const generateDocument = createServerFn({ method: "POST" })
       }).optional(),
     }).parse(d),
   )
+
   .handler(async ({ data }) => {
     const lang = data.lang ?? "fr";
     const country = data.country ?? "";
@@ -383,9 +390,12 @@ export const generateDocument = createServerFn({ method: "POST" })
           ? `No location detected upstream. If the transcript mentions a city/region, use it; otherwise write "${missingTag}".`
           : `Aucun lieu détecté en amont. Si la transcription cite une ville/zone, utilise-la ; sinon écris « ${missingTag} ».`);
 
+    const metierContext = buildMetierContext(data.sector, data.role, lang);
+
     const system = lang === "en"
-      ? `You are an NGO field reporting assistant producing official ${tLabel} documents. ${contextLine}\n${strictRules}\nRespond STRICTLY with a valid JSON object matching the given schema.`
-      : `Tu es un assistant de reporting terrain pour ONG produisant des ${tLabel} officiels. ${contextLine}\n${strictRules}\nRéponds STRICTEMENT par un objet JSON valide conforme au schéma fourni.`;
+      ? `You are an NGO field reporting assistant producing official ${tLabel} documents. ${contextLine}\n\n${metierContext}\n\n${strictRules}\nRespond STRICTLY with a valid JSON object matching the given schema.`
+      : `Tu es un assistant de reporting terrain pour ONG produisant des ${tLabel} officiels. ${contextLine}\n\n${metierContext}\n\n${strictRules}\nRéponds STRICTEMENT par un objet JSON valide conforme au schéma fourni.`;
+
 
     const user = lang === "en"
       ? `Produce a ${tLabel}.\n\n${locationHint}\n\nReturn EXCLUSIVELY a JSON object with these exact keys (and no others):\n${JSON.stringify(schemaObj, null, 2)}\n\nAlso include a "title" key: short descriptive title (max 80 chars).\n\nFIELD DATA:\n"""\n${cleanedTranscript}\n"""`
