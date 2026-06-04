@@ -268,7 +268,7 @@ function DocPage() {
             <Row label={t("doc.time")} value={timeDisplay} />
             <Row label={t("doc.agent")} value={doc.agent_name || "—"} />
             <Row label={t("doc.location")} value={doc.location || "—"} />
-            <Row label={t("doc.type")} value={typeLabel(doc.type, t)} />
+            <Row label={t("doc.type")} value={MISSION_LABEL[resolveMissionType(doc)]} />
             <Row label={t("doc.ref")} value={doc.reference || "—"} />
           </dl>
         )}
