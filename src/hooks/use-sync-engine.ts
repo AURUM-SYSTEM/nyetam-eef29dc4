@@ -43,6 +43,9 @@ export function useSyncEngine() {
         const lang = item.meta?.lang ?? profile?.preferred_lang ?? "fr";
         const country = item.meta?.country ?? profile?.country ?? "";
         const profession = item.meta?.profession ?? profile?.profession ?? "";
+        const sector = (profile as any)?.secteur_activite ?? "ong_humanitaire";
+        const role = (profile as any)?.role_metier ?? "agent_terrain";
+
 
         let transcript = item.transcript ?? "";
 
@@ -119,9 +122,12 @@ export function useSyncEngine() {
             lang,
             country,
             profession,
+            sector,
+            role,
             location: resolvedLocation.source === "none" ? undefined : resolvedLocation,
           },
         });
+
 
         if (!result || !result.title) throw new Error("Génération invalide");
 
@@ -129,8 +135,9 @@ export function useSyncEngine() {
         let suggestions: string[] = [];
         try {
           const sugg = await suggestImprovements({
-            data: { missionType: result.missionType, sections: result.sections, lang },
+            data: { missionType: result.missionType, sections: result.sections, lang, sector, role },
           });
+
           suggestions = sugg.suggestions ?? [];
         } catch (e) {
           console.warn("suggestImprovements failed", e);
