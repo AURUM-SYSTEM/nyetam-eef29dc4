@@ -6,13 +6,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { exportDocumentPdf } from "@/lib/pdf";
 import { useI18n } from "@/i18n";
 import { SuggestionsPanel } from "@/components/SuggestionsPanel";
+import { MISSION_LABEL, resolveMissionType, normalizeDocumentType, type DocumentType } from "@/lib/document-types";
 
 export const Route = createFileRoute("/_authenticated/document/$id")({
   component: DocPage,
   head: () => ({ meta: [{ title: "Document — AURUM" }] }),
 });
 
-type MissionType = "mission_terrain" | "pv" | "recensement" | "enquete";
+type MissionType = DocumentType;
 
 type Doc = {
   id: string;
@@ -38,21 +39,8 @@ type Doc = {
   location_data: { lat?: number; lng?: number; city?: string; country?: string; source?: string } | null;
 };
 
-const MISSION_LABEL: Record<MissionType, string> = {
-  mission_terrain: "Mission terrain",
-  pv: "Procès-verbal",
-  recensement: "Recensement",
-  enquete: "Enquête",
-};
-
-function resolveMissionType(d: { type: string; mission_type: string | null }): MissionType {
-  const v = (d.mission_type || d.type || "").toLowerCase();
-  if (v === "pv" || v === "recensement" || v === "enquete" || v === "mission_terrain") return v;
-  return "mission_terrain";
-}
-
 const SECTION_LABELS: Record<MissionType, Array<{ key: "introduction" | "faits" | "declarations" | "observations" | "conclusion"; label: string }>> = {
-  mission_terrain: [
+  rapport: [
     { key: "introduction", label: "Contexte" },
     { key: "faits", label: "Objectifs & Activités" },
     { key: "declarations", label: "Constats clés" },
@@ -165,7 +153,7 @@ function DocPage() {
         // skip failed image
       }
     }
-    exportDocumentPdf({ ...doc, photo_data_urls });
+    exportDocumentPdf({ ...doc, type: normalizeDocumentType(doc.type), photo_data_urls });
     toast.success(t("doc.pdf_ok"));
   }
 
@@ -246,7 +234,7 @@ function DocPage() {
       {/* Header */}
       <header className="mt-6">
         <span className="rounded bg-accent px-2 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-          {typeLabel(doc.type, t)}
+          {MISSION_LABEL[resolveMissionType(doc)]}
         </span>
         {editing ? (
           <input
@@ -280,7 +268,7 @@ function DocPage() {
             <Row label={t("doc.time")} value={timeDisplay} />
             <Row label={t("doc.agent")} value={doc.agent_name || "—"} />
             <Row label={t("doc.location")} value={doc.location || "—"} />
-            <Row label={t("doc.type")} value={typeLabel(doc.type, t)} />
+            <Row label={t("doc.type")} value={MISSION_LABEL[resolveMissionType(doc)]} />
             <Row label={t("doc.ref")} value={doc.reference || "—"} />
           </dl>
         )}
@@ -325,6 +313,10 @@ function DocPage() {
           <p className="text-sm text-muted-foreground">{t("doc.signed_by")} : <span className="text-foreground">{doc.signature_name || doc.agent_name || "—"}</span></p>
           <div className="mt-3 h-20 rounded-md border border-dashed border-border/60" />
         </section>
+
+        {doc.suggestions && doc.suggestions.length > 0 && (
+          <SuggestionsPanel suggestions={doc.suggestions} lang={doc.lang} />
+        )}
       </div>
 
       {/* Sticky action bar */}

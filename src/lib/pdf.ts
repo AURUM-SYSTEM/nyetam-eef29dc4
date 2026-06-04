@@ -67,7 +67,7 @@ const EN: Labels = {
 };
 
 export type DocForPdf = {
-  type: "rapport" | "pv" | "recensement";
+  type: "rapport" | "pv" | "recensement" | "enquete";
   title: string;
   introduction: string;
   faits: string;
@@ -233,16 +233,18 @@ export function exportDocumentPdf(doc: DocForPdf) {
       ensureSpace(15);
       pdf.text(line, margin, y);
       y += 14;
+    }
+    y += 12;
   }
 
-  // Photos (pre-resolved data URLs only; no async work here)
+  // Photos (pre-resolved data URLs only; no async work here) — rendered ONCE
   const photos = doc.photo_data_urls?.filter(Boolean) ?? [];
   if (photos.length > 0) {
     ensureSpace(40);
     pdf.setFont("times", "bold");
     pdf.setFontSize(12);
     pdf.setTextColor(120, 95, 30);
-    const heading = doc.lang === "en" ? "PHOTOS" : "PHOTOS";
+    const heading = "PHOTOS";
     pdf.text(heading, margin, y);
     pdf.setDrawColor(201, 168, 76);
     pdf.setLineWidth(0.6);
@@ -254,14 +256,13 @@ export function exportDocumentPdf(doc: DocForPdf) {
     const cellW = (contentWidth - gap * (cols - 1)) / cols;
     const cellH = cellW * 0.75;
     let col = 0;
-    let rowX = margin;
     for (const dataUrl of photos) {
       if (col === 0) ensureSpace(cellH + gap);
       const x = margin + col * (cellW + gap);
       try {
         const fmt = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
         pdf.addImage(dataUrl, fmt, x, y, cellW, cellH, undefined, "FAST");
-      } catch (e) {
+      } catch {
         pdf.setDrawColor(220, 220, 220);
         pdf.rect(x, y, cellW, cellH);
       }
@@ -273,9 +274,6 @@ export function exportDocumentPdf(doc: DocForPdf) {
     }
     if (col !== 0) y += cellH + gap;
     y += 8;
-    rowX;
-  }
-    y += 12;
   }
 
   // Signature block

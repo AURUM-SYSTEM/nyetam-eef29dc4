@@ -16,6 +16,7 @@ import { transcribeAudio, generateDocument, reverseGeocode, suggestImprovements 
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { getCachedProfile } from "@/hooks/use-auth";
+import { normalizeDocumentType } from "@/lib/document-types";
 
 export function useSyncEngine() {
   const transcribe = useServerFn(transcribeAudio);
@@ -136,11 +137,16 @@ export function useSyncEngine() {
         }
 
         // Insertion Supabase
+        // Normalize the DB `type` column — the check constraint only
+        // accepts rapport | pv | recensement | enquete. `missionType`
+        // may be `mission_terrain` (legacy) which must collapse to `rapport`.
+        const dbType = normalizeDocumentType(result.missionType);
+
         const { data, error } = await supabase
           .from("documents")
           .insert({
             user_id: userId,
-            type: result.missionType,
+            type: dbType,
             mission_type: result.missionType,
             title: result.title ?? "Sans titre",
             transcript: result.cleanedTranscript ?? transcript,
