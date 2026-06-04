@@ -40,7 +40,7 @@ type Doc = {
 };
 
 const SECTION_LABELS: Record<MissionType, Array<{ key: "introduction" | "faits" | "declarations" | "observations" | "conclusion"; label: string }>> = {
-  mission_terrain: [
+  rapport: [
     { key: "introduction", label: "Contexte" },
     { key: "faits", label: "Objectifs & Activités" },
     { key: "declarations", label: "Constats clés" },
