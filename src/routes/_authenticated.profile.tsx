@@ -6,6 +6,9 @@ import { getProfile, saveProfile, type AurumProfile } from "@/lib/profile-store"
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { COUNTRIES } from "@/lib/countries";
+import { SECTORS } from "@/lib/sector-context";
+import { ROLES } from "@/lib/role-context";
+
 
 export const Route = createFileRoute("/_authenticated/profile")({
   component: ProfilePage,
@@ -21,7 +24,10 @@ function ProfilePage() {
   const [country, setCountry] = useState("");
   const [profession, setProfession] = useState("");
   const [preferredLang, setPreferredLang] = useState<"fr" | "en">(lang);
+  const [secteur, setSecteur] = useState<string>("ong_humanitaire");
+  const [roleMetier, setRoleMetier] = useState<string>("agent_terrain");
   const [busy, setBusy] = useState(false);
+
 
   useEffect(() => { setLocal(getProfile()); }, []);
   useEffect(() => {
@@ -30,6 +36,8 @@ function ProfilePage() {
       setCountry(profile.country);
       setProfession(profile.profession);
       setPreferredLang(profile.preferred_lang);
+      setSecteur(profile.secteur_activite || "ong_humanitaire");
+      setRoleMetier(profile.role_metier || "agent_terrain");
     }
   }, [profile]);
 
@@ -38,7 +46,9 @@ function ProfilePage() {
     setBusy(true);
     const updated = await updateProfile({
       full_name: fullName, country, profession, preferred_lang: preferredLang,
-    });
+      secteur_activite: secteur, role_metier: roleMetier,
+    } as any);
+
     saveProfile(local);
     setBusy(false);
     if (!updated) { toast.error("Erreur lors de l'enregistrement"); return; }
