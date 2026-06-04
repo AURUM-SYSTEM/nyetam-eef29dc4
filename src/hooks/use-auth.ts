@@ -9,6 +9,9 @@ export type AurumUserProfile = {
   country: string;
   profession: string;
   preferred_lang: "fr" | "en";
+  secteur_activite: string;
+  role_metier: string;
+
 };
 
 const PROFILE_CACHE_KEY = "aurum.user.profile";
