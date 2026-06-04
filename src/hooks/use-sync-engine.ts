@@ -16,6 +16,7 @@ import { transcribeAudio, generateDocument, reverseGeocode, suggestImprovements 
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { getCachedProfile } from "@/hooks/use-auth";
+import { normalizeDocumentType } from "@/lib/document-types";
 
 export function useSyncEngine() {
   const transcribe = useServerFn(transcribeAudio);
