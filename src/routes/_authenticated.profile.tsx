@@ -96,6 +96,31 @@ function ProfilePage() {
         <Field label={t("profile.role")} value={profession} onChange={setProfession} />
 
         <label className="block">
+          <span className="mb-1 block text-xs uppercase tracking-widest text-muted-foreground">
+            {lang === "en" ? "Sector of activity" : "Secteur d'activité"}
+          </span>
+          <select value={secteur} onChange={e => setSecteur(e.target.value)}
+            className="w-full rounded-xl border border-border bg-input/50 px-4 py-3 text-sm outline-none focus:border-gold">
+            {SECTORS.map(s => (
+              <option key={s.key} value={s.key}>{lang === "en" ? s.en : s.fr}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-xs uppercase tracking-widest text-muted-foreground">
+            {lang === "en" ? "Field role" : "Rôle métier"}
+          </span>
+          <select value={roleMetier} onChange={e => setRoleMetier(e.target.value)}
+            className="w-full rounded-xl border border-border bg-input/50 px-4 py-3 text-sm outline-none focus:border-gold">
+            {ROLES.map(r => (
+              <option key={r.key} value={r.key}>{lang === "en" ? r.en : r.fr}</option>
+            ))}
+          </select>
+        </label>
+
+
+        <label className="block">
           <span className="mb-1 block text-xs uppercase tracking-widest text-muted-foreground">{t("profile.preferred_lang")}</span>
           <div className="grid grid-cols-2 gap-2">
             {(["fr","en"] as const).map(l => (
