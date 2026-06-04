@@ -313,6 +313,10 @@ function DocPage() {
           <p className="text-sm text-muted-foreground">{t("doc.signed_by")} : <span className="text-foreground">{doc.signature_name || doc.agent_name || "—"}</span></p>
           <div className="mt-3 h-20 rounded-md border border-dashed border-border/60" />
         </section>
+
+        {doc.suggestions && doc.suggestions.length > 0 && (
+          <SuggestionsPanel suggestions={doc.suggestions} lang={doc.lang} />
+        )}
       </div>
 
       {/* Sticky action bar */}
