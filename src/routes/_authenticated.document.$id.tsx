@@ -153,7 +153,7 @@ function DocPage() {
         // skip failed image
       }
     }
-    exportDocumentPdf({ ...doc, photo_data_urls });
+    exportDocumentPdf({ ...doc, type: normalizeDocumentType(doc.type), photo_data_urls });
     toast.success(t("doc.pdf_ok"));
   }
 
