@@ -137,11 +137,16 @@ export function useSyncEngine() {
         }
 
         // Insertion Supabase
+        // Normalize the DB `type` column — the check constraint only
+        // accepts rapport | pv | recensement | enquete. `missionType`
+        // may be `mission_terrain` (legacy) which must collapse to `rapport`.
+        const dbType = normalizeDocumentType(result.missionType);
+
         const { data, error } = await supabase
           .from("documents")
           .insert({
             user_id: userId,
-            type: result.missionType,
+            type: dbType,
             mission_type: result.missionType,
             title: result.title ?? "Sans titre",
             transcript: result.cleanedTranscript ?? transcript,
