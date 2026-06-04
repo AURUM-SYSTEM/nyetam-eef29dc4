@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchProfile(userId: string): Promise<AurumUserProfile | null> {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, email, country, profession, preferred_lang")
+      .select("id, full_name, email, country, profession, preferred_lang, secteur_activite, role_metier")
       .eq("id", userId)
       .maybeSingle();
     if (error || !data) return null;
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from("profiles")
         .update(patch)
         .eq("id", session.user.id)
-        .select("id, full_name, email, country, profession, preferred_lang")
+        .select("id, full_name, email, country, profession, preferred_lang, secteur_activite, role_metier")
         .single();
       if (error || !data) return null;
       const p = { ...data, preferred_lang: (data.preferred_lang === "en" ? "en" : "fr") } as AurumUserProfile;
