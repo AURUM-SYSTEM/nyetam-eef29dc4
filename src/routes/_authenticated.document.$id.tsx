@@ -234,7 +234,7 @@ function DocPage() {
       {/* Header */}
       <header className="mt-6">
         <span className="rounded bg-accent px-2 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-          {typeLabel(doc.type, t)}
+          {MISSION_LABEL[resolveMissionType(doc)]}
         </span>
         {editing ? (
           <input
