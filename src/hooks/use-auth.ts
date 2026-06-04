@@ -64,7 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("id", userId)
       .maybeSingle();
     if (error || !data) return null;
-    const p = { ...data, preferred_lang: (data.preferred_lang === "en" ? "en" : "fr") } as AurumUserProfile;
+    const p = {
+      ...data,
+      preferred_lang: (data.preferred_lang === "en" ? "en" : "fr"),
+      secteur_activite: (data as any).secteur_activite || "ong_humanitaire",
+      role_metier: (data as any).role_metier || "agent_terrain",
+    } as AurumUserProfile;
+
     setProfile(p);
     setCachedProfile(p);
     return p;
@@ -112,7 +118,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .select("id, full_name, email, country, profession, preferred_lang, secteur_activite, role_metier")
         .single();
       if (error || !data) return null;
-      const p = { ...data, preferred_lang: (data.preferred_lang === "en" ? "en" : "fr") } as AurumUserProfile;
+      const p = {
+        ...data,
+        preferred_lang: (data.preferred_lang === "en" ? "en" : "fr"),
+        secteur_activite: (data as any).secteur_activite || "ong_humanitaire",
+        role_metier: (data as any).role_metier || "agent_terrain",
+      } as AurumUserProfile;
+
       setProfile(p);
       setCachedProfile(p);
       return p;
