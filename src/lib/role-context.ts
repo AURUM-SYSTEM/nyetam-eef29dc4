@@ -1,5 +1,7 @@
 // Couche métier — rôles figés.
 // AUCUNE extension sans demande explicite.
+import { getSectorContext, getSectorLabel } from "./sector-context";
+
 
 export type RoleKey = "agent_terrain" | "superviseur" | "enqueteur" | "coordinateur" | "chef_projet";
 
@@ -51,8 +53,6 @@ export function buildMetierContext(
   role: string | null | undefined,
   lang: "fr" | "en",
 ): string {
-  // import lazy pour éviter cycle
-  const { getSectorContext, getSectorLabel } = require("./sector-context") as typeof import("./sector-context");
   const header = lang === "en"
     ? `Author business context — Sector: ${getSectorLabel(sector, lang)} | Role: ${getRoleLabel(role, lang)}.`
     : `Contexte métier de l'auteur — Secteur : ${getSectorLabel(sector, lang)} | Rôle : ${getRoleLabel(role, lang)}.`;
