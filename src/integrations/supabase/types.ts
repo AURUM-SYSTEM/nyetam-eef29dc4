@@ -104,6 +104,8 @@ export type Database = {
           id: string
           preferred_lang: string
           profession: string
+          role_metier: string
+          secteur_activite: string
           updated_at: string
         }
         Insert: {
@@ -114,6 +116,8 @@ export type Database = {
           id: string
           preferred_lang?: string
           profession?: string
+          role_metier?: string
+          secteur_activite?: string
           updated_at?: string
         }
         Update: {
@@ -124,6 +128,8 @@ export type Database = {
           id?: string
           preferred_lang?: string
           profession?: string
+          role_metier?: string
+          secteur_activite?: string
           updated_at?: string
         }
         Relationships: []
