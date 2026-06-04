@@ -448,15 +448,20 @@ export const suggestImprovements = createServerFn({ method: "POST" })
     missionType: "mission_terrain" | "pv" | "recensement" | "enquete";
     sections: Record<string, string>;
     lang?: "fr" | "en";
+    sector?: string;
+    role?: string;
   }) =>
     z.object({
       missionType: z.enum(["mission_terrain", "pv", "recensement", "enquete"]),
       sections: z.record(z.string(), z.string()).refine((r) => Object.keys(r).length <= 20),
       lang: LangSchema.optional(),
+      sector: z.string().max(60).optional(),
+      role: z.string().max(60).optional(),
     }).parse(d),
   )
   .handler(async ({ data }) => {
     const lang = data.lang ?? "fr";
+
     const typeHints: Record<MissionType, { fr: string[]; en: string[] }> = {
       mission_terrain: {
         fr: ["nombre de bénéficiaires", "localisation exacte", "durée de l'intervention", "matériel déployé"],
@@ -478,8 +483,9 @@ export const suggestImprovements = createServerFn({ method: "POST" })
     const hints = typeHints[data.missionType][lang].join(", ");
 
     const sys = lang === "en"
-      ? `You analyse an NGO field report and produce 3 to 5 concrete improvement suggestions. Each suggestion is one short sentence (max 18 words), actionable, focused on what's missing or unclear. NEVER rewrite the report itself. Respond as a JSON object {"suggestions": string[]}.`
-      : `Tu analyses un rapport terrain ONG et tu produis 3 à 5 suggestions d'amélioration concrètes. Chaque suggestion est une phrase courte (max 18 mots), actionnable, ciblée sur ce qui manque ou ce qui est flou. Ne réécris JAMAIS le rapport. Réponds par un objet JSON {"suggestions": string[]}.`;
+      ? `You analyse an NGO field report and produce 3 to 5 concrete improvement suggestions. Each suggestion is one short sentence (max 18 words), actionable, focused on what's missing or unclear. NEVER rewrite the report itself. Respond as a JSON object {"suggestions": string[]}.\n\n${buildMetierContext(data.sector, data.role, lang)}`
+      : `Tu analyses un rapport terrain ONG et tu produis 3 à 5 suggestions d'amélioration concrètes. Chaque suggestion est une phrase courte (max 18 mots), actionnable, ciblée sur ce qui manque ou ce qui est flou. Ne réécris JAMAIS le rapport. Réponds par un objet JSON {"suggestions": string[]}.\n\n${buildMetierContext(data.sector, data.role, lang)}`;
+
 
     const body = Object.entries(data.sections)
       .map(([k, v]) => `### ${k}\n${v}`)
