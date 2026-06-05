@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "@/i18n";
-import { Smartphone, X, Share, MoreVertical, Download } from "lucide-react";
+import { Smartphone, X, Share, MoreVertical } from "lucide-react";
 
 const DISMISS_KEY = "aurum.install_guide_dismissed";
 
