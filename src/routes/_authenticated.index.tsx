@@ -107,6 +107,8 @@ function HomePage() {
         </div>
       )}
 
+      <InstallGuide />
+
       <button
         onClick={() => navigate({ to: "/new" })}
         className="group relative w-full overflow-hidden rounded-2xl btn-gold px-6 py-5 text-left"
