@@ -21,7 +21,8 @@
     "no": "No",
     "online": "Online",
     "offline": "Offline",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "close": "Close"
   },
   "auth": {
     "signin_title": "Sign in",
@@ -149,5 +150,12 @@
     "whatsapp": "WhatsApp",
     "linkedin": "LinkedIn",
     "contact": "Contact"
+  },
+  "install": {
+    "title": "Install AURUM on your phone",
+    "sub": "Quick access to your reports, even offline.",
+    "ios_steps": "Tap Share, then \"Add to Home Screen\".",
+    "android_steps": "Tap the 3 dots at the top, then \"Add to Home Screen\".",
+    "note": "An icon will be added. The app works offline."
   }
 }

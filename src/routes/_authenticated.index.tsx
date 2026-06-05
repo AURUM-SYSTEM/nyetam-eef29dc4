@@ -5,6 +5,7 @@ import { FileText, Plus, Mic, Trash2, ChevronRight, CloudOff, Settings, Info, Us
 import { toast } from "sonner";
 import { PendingQueue } from "@/components/PendingQueue";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { InstallGuide } from "@/components/InstallGuide";
 import { useOnline } from "@/hooks/use-online";
 import { useI18n } from "@/i18n";
 
@@ -105,6 +106,8 @@ function HomePage() {
           </div>
         </div>
       )}
+
+      <InstallGuide />
 
       <button
         onClick={() => navigate({ to: "/new" })}
