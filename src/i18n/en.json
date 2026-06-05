@@ -21,7 +21,8 @@
     "no": "No",
     "online": "Online",
     "offline": "Offline",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "close": "Close"
   },
   "auth": {
     "signin_title": "Sign in",

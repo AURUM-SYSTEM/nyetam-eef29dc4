@@ -21,7 +21,8 @@
     "no": "Non",
     "online": "En ligne",
     "offline": "Hors ligne",
-    "logout": "Déconnexion"
+    "logout": "Déconnexion",
+    "close": "Fermer"
   },
   "auth": {
     "signin_title": "Connexion",
