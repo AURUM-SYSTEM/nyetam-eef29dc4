@@ -74,7 +74,12 @@ export type QueueItem = {
   userId?: string;
   createdAt: number;
   updatedAt: number;
+  /** Number of times sync has failed. Used for exponential backoff. */
+  retryCount?: number;
+  /** Earliest timestamp (ms) at which this item may be retried. */
+  nextRetryAt?: number;
 };
+
 
 let _db: Promise<IDBPDatabase> | null = null;
 
