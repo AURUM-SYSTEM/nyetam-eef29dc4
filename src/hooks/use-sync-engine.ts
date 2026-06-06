@@ -325,6 +325,13 @@ export function useSyncEngine() {
 
     window.addEventListener("online", onOnline);
 
+    // Manual trigger — dispatch `new CustomEvent("aurum:sync-now")` from anywhere
+    const onManualSync = () => {
+      console.log("🖐️ MANUAL SYNC TRIGGERED");
+      void runPass();
+    };
+    window.addEventListener("aurum:sync-now", onManualSync);
+
     const interval = setInterval(() => {
       void runPass();
     }, 30000);
@@ -338,12 +345,11 @@ export function useSyncEngine() {
 
     return () => {
       cancelled = true;
-
       window.removeEventListener("online", onOnline);
-
+      window.removeEventListener("aurum:sync-now", onManualSync);
       clearInterval(interval);
-
       unsub();
     };
+
   }, [transcribe, generate, queryClient]);
 }
