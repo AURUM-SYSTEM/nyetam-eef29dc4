@@ -64,15 +64,24 @@ export function SyncStatus() {
   }[state];
 
   const { Icon } = cfg;
+  const triggerSync = () => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("aurum:sync-now"));
+    }
+  };
   return (
-    <div
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] uppercase tracking-widest ${cfg.cls}`}
-      title={cfg.title}
+    <button
+      type="button"
+      onClick={triggerSync}
+      disabled={state === "offline"}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] uppercase tracking-widest transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 ${cfg.cls}`}
+      title={state === "offline" ? cfg.title : `${cfg.title} — cliquer pour synchroniser maintenant`}
       aria-live="polite"
     >
       <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
       <Icon className={`h-3 w-3 ${cfg.spin ? "animate-spin" : ""}`} />
       {cfg.label}
-    </div>
+    </button>
   );
 }
+
