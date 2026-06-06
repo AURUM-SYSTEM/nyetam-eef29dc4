@@ -276,13 +276,16 @@ export function useSyncEngine() {
 
         console.log("📦 QUEUE LENGTH =", pending.length);
 
+        const now = Date.now();
         const toProcess = pending.filter(
           (i) =>
             i.status === "pending" ||
             i.status === "uploading" ||
             i.status === "transcribing" ||
-            i.status === "generating"
+            i.status === "generating" ||
+            (i.status === "error" && (i.nextRetryAt ?? 0) <= now)
         );
+
 
         console.log(
           "📋 TO PROCESS =",
