@@ -230,13 +230,18 @@ export function useSyncEngine() {
         toast.success(`📄 Document prêt — ${result.title}`, { id: toastId });
       } catch (e: any) {
         console.error("❌ ITEM FAILED =", e);
+        const retryCount = (item.retryCount ?? 0) + 1;
+        // Exponential backoff: 5s, 10s, 20s, 40s, ... capped at 5 min
+        const delayMs = Math.min(5_000 * 2 ** (retryCount - 1), 5 * 60_000);
         await updateQueueItem(item.id, {
           status: "error",
           errorMsg: e?.message ?? "Erreur inconnue",
+          retryCount,
+          nextRetryAt: Date.now() + delayMs,
         });
-        toast.error(`Échec : ${e?.message ?? "Erreur inconnue"}`, { id: toastId });
+        toast.error(`Échec : ${e?.message ?? "Erreur inconnue"} — nouvelle tentative dans ${Math.round(delayMs / 1000)}s`, { id: toastId });
       }
-    }
+
 
 
     async function runPass() {
