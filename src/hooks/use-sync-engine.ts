@@ -241,6 +241,9 @@ export function useSyncEngine() {
         });
         toast.error(`Échec : ${e?.message ?? "Erreur inconnue"} — nouvelle tentative dans ${Math.round(delayMs / 1000)}s`, { id: toastId });
       }
+    }
+
+
 
 
 
