@@ -57,7 +57,8 @@ export function PendingQueue() {
   if (items.length === 0) return null;
 
   async function retry(id: string) {
-    await updateQueueItem(id, { status: "pending", errorMsg: undefined });
+    await updateQueueItem(id, { status: "pending", errorMsg: undefined, retryCount: 0, nextRetryAt: 0 });
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("aurum:sync-now"));
   }
   async function remove(id: string) {
     await deleteQueueItem(id);
@@ -79,7 +80,7 @@ export function PendingQueue() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-                    {it.type === "rapport" ? "Rapport" : it.type === "pv" ? "PV" : "Recensement"}
+                    {({ rapport: "Rapport", mission_terrain: "Mission", pv: "PV", enquete: "Enquête", recensement: "Recensement", auto: "Auto" } as Record<string, string>)[it.type] ?? it.type}
                   </span>
                   <StatusBadge s={it.status} />
                 </div>

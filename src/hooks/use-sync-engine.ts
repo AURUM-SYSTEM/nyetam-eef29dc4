@@ -231,6 +231,17 @@ export function useSyncEngine() {
       } catch (e: any) {
         console.error("❌ ITEM FAILED =", e);
         const retryCount = (item.retryCount ?? 0) + 1;
+        const MAX_RETRIES = 8;
+        if (retryCount >= MAX_RETRIES) {
+          await updateQueueItem(item.id, {
+            status: "error",
+            errorMsg: `${e?.message ?? "Erreur inconnue"} — abandonné après ${MAX_RETRIES} tentatives. Utilisez "Réessayer" pour reprendre.`,
+            retryCount,
+            nextRetryAt: Number.MAX_SAFE_INTEGER,
+          });
+          toast.error(`Échec définitif — ${e?.message ?? "Erreur inconnue"}`, { id: toastId });
+          return;
+        }
         // Exponential backoff: 5s, 10s, 20s, 40s, ... capped at 5 min
         const delayMs = Math.min(5_000 * 2 ** (retryCount - 1), 5 * 60_000);
         await updateQueueItem(item.id, {
