@@ -64,6 +64,9 @@ function HomePage() {
   });
 
   async function remove(id: string) {
+    if (typeof window !== "undefined" && !window.confirm(t("home.confirm_delete") || "Supprimer ce document ?")) {
+      return;
+    }
     // Optimistic update
     queryClient.setQueryData<DocRow[]>(["documents"], (prev) =>
       prev ? prev.filter((d) => d.id !== id) : prev,
