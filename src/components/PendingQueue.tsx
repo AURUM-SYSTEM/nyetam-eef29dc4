@@ -57,7 +57,8 @@ export function PendingQueue() {
   if (items.length === 0) return null;
 
   async function retry(id: string) {
-    await updateQueueItem(id, { status: "pending", errorMsg: undefined });
+    await updateQueueItem(id, { status: "pending", errorMsg: undefined, retryCount: 0, nextRetryAt: 0 });
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("aurum:sync-now"));
   }
   async function remove(id: string) {
     await deleteQueueItem(id);
