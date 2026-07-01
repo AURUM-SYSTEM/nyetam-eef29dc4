@@ -174,7 +174,7 @@ function HomePage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-                      {d.type === "rapport" ? t("doc.type_rapport") : d.type === "pv" ? t("doc.type_pv") : "Recensement"}
+                      {TYPE_LABELS[d.mission_type ?? ""] ?? TYPE_LABELS[d.type] ?? d.type}
                     </span>
                     {d.status === "draft" && (
                       <span className="text-[10px] uppercase text-muted-foreground">{t("home.draft")}</span>
@@ -190,7 +190,7 @@ function HomePage() {
               </Link>
               <button
                 onClick={() => remove(d.id)}
-                className="px-3 py-3 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-destructive"
+                className="px-3 py-3 text-muted-foreground transition hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
                 aria-label={t("common.delete")}
               >
                 <Trash2 className="h-4 w-4" />
