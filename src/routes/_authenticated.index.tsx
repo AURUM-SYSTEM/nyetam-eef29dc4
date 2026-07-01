@@ -41,7 +41,7 @@ export const Route = createFileRoute("/_authenticated/")({
 async function fetchDocuments(): Promise<DocRow[]> {
   const { data, error } = await supabase
     .from("documents")
-    .select("id,type,title,status,created_at,reference")
+    .select("id,type,mission_type,title,status,created_at,reference")
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw error;
