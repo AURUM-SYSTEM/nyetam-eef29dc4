@@ -11,12 +11,22 @@ import { useI18n } from "@/i18n";
 
 type DocRow = {
   id: string;
-  type: "rapport" | "pv" | "recensement";
+  type: "rapport" | "pv" | "recensement" | "enquete";
+  mission_type: string | null;
   title: string;
   status: string;
   created_at: string;
   reference: string | null;
 };
+
+const TYPE_LABELS: Record<string, string> = {
+  rapport: "Rapport",
+  mission_terrain: "Mission",
+  pv: "PV",
+  enquete: "Enquête",
+  recensement: "Recensement",
+};
+
 
 export const Route = createFileRoute("/_authenticated/")({
   component: HomePage,
