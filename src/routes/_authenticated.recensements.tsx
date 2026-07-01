@@ -4,14 +4,15 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, Users, Search, ChevronRight, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useOnline } from "@/hooks/use-online";
+import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/i18n";
 
 export const Route = createFileRoute("/_authenticated/recensements")({
-  component: RecensementsListPage,
+  component: MyRecordsPage,
   head: () => ({
     meta: [
-      { title: "Recensements — AURUM" },
-      { name: "description", content: "Liste des fiches de recensement terrain." },
+      { title: "Mes fiches — AURUM" },
+      { name: "description", content: "Vos fiches de recensement terrain." },
     ],
   }),
 });
@@ -25,41 +26,41 @@ type Row = {
   location: string | null;
 };
 
-async function fetchRecensements(): Promise<Row[]> {
+async function fetchMyRecords(userId: string): Promise<Row[]> {
   const { data, error } = await supabase
     .from("documents")
     .select("id,title,status,created_at,reference,location")
     .eq("type", "recensement")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(100);
   if (error) throw error;
   return (data ?? []) as Row[];
 }
 
-function RecensementsListPage() {
+function MyRecordsPage() {
   const online = useOnline();
+  const { user } = useAuth();
   const { lang } = useI18n();
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "ready">("all");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["recensements"],
-    queryFn: fetchRecensements,
+    queryKey: ["my-records", user?.id],
+    queryFn: () => fetchMyRecords(user!.id),
+    enabled: online && !!user?.id,
     staleTime: 10_000,
-    enabled: online,
     retry: false,
   });
 
   const filtered = useMemo(() => {
     if (!data) return [];
     const needle = q.trim().toLowerCase();
+    if (!needle) return data;
     return data.filter((r) => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (!needle) return true;
       const hay = `${r.title} ${r.reference ?? ""} ${r.location ?? ""}`.toLowerCase();
       return hay.includes(needle);
     });
-  }, [data, q, statusFilter]);
+  }, [data, q]);
 
   return (
     <div className="px-5 pt-8 pb-32">
@@ -68,48 +69,27 @@ function RecensementsListPage() {
       </Link>
 
       <header className="mt-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Recensements</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Mes fiches</p>
         <h1 className="mt-2 font-display text-3xl flex items-center gap-2">
-          <Users className="h-7 w-7 text-gold" /> Fiches terrain
+          <Users className="h-7 w-7 text-gold" /> Historique
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Toutes les fiches de recensement enregistrées, triées par date.
+          Vos fiches de recensement récentes.
         </p>
       </header>
 
-      {/* Recherche + filtres */}
-      <div className="mt-6 space-y-2">
+      <div className="mt-6">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Rechercher (identifiant, localisation, référence…)"
+            placeholder="Rechercher dans mes fiches…"
             className="w-full rounded-lg border border-border bg-input/50 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-gold"
           />
         </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          {([
-            ["all", "Tous"],
-            ["ready", "Finalisés"],
-            ["draft", "Brouillons"],
-          ] as const).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => setStatusFilter(k)}
-              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition ${
-                statusFilter === k
-                  ? "border-gold bg-gold/10 text-gold"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Liste */}
       <section className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-lg">Résultats</h2>
@@ -132,7 +112,7 @@ function RecensementsListPage() {
           <div className="glass-card rounded-2xl p-8 text-center">
             <FileText className="mx-auto h-10 w-10 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">
-              Aucun recensement trouvé.
+              Aucune fiche pour l'instant.
             </p>
             <Link
               to="/recensement"
