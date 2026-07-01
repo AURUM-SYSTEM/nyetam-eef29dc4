@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Phone, Linkedin, MapPin, User } from "lucide-react";
 import { useI18n } from "@/i18n";
-import { PilotSection } from "@/components/PilotSection";
 
 export const Route = createFileRoute("/about")({
   component: AboutPage,
@@ -23,7 +22,6 @@ function AboutPage() {
         <ArrowLeft className="h-4 w-4" /> {t("common.back")}
       </Link>
 
-      <PilotSection />
 
       <header className="mt-8 text-center">
         <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-gold to-gold-soft shadow-[var(--shadow-gold)]">
