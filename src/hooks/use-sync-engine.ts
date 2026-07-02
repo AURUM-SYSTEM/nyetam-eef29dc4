@@ -177,7 +177,11 @@ export function useSyncEngine() {
         // Normalize the DB `type` column — the check constraint only
         // accepts rapport | pv | recensement | enquete. `missionType`
         // may be `mission_terrain` (legacy) which must collapse to `rapport`.
-        const dbType = normalizeDocumentType(result.missionType);
+        // For `field_entry` (neutral capture) use the new type as-is;
+        // legacy AI-generated docs collapse mission_terrain → rapport.
+        const dbType = item.type === "field_entry"
+          ? "field_entry"
+          : normalizeDocumentType(result.missionType);
 
         const { data, error } = await supabase
           .from("documents")
@@ -185,7 +189,9 @@ export function useSyncEngine() {
             user_id: userId,
             type: dbType,
             mission_type: result.missionType,
+            module_type: item.meta?.moduleType ?? null,
             title: result.title ?? "Sans titre",
+
             transcript: result.cleanedTranscript ?? transcript,
             introduction: result.introduction ?? "",
             faits: result.faits ?? "",
