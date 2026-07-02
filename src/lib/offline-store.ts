@@ -9,7 +9,11 @@ export type DocType =
   | "recensement"
   | "mission_terrain"
   | "enquete"
+  | "field_entry"
   | "auto";
+
+export type ModuleType = "agro" | "health" | "ngo" | "generic";
+
 
 export type QueueStatus =
   | "pending"
