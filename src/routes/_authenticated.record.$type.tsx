@@ -90,16 +90,22 @@ function pickMimeType(): string {
   return "";
 }
 
+const recordSearchSchema = z.object({
+  module: z.enum(["agro", "health", "ngo", "generic"]).optional(),
+});
+
 export const Route = createFileRoute("/_authenticated/record/$type")({
   component: RecordPage,
   head: () => ({ meta: [{ title: "Enregistrement — AURUM" }] }),
+  validateSearch: recordSearchSchema,
 });
 
 
 
-const VALID_TYPES = new Set<DocType>(["rapport", "pv", "mission_terrain", "enquete", "auto"]);
+const VALID_TYPES = new Set<DocType>(["rapport", "pv", "mission_terrain", "enquete", "auto", "field_entry"]);
 const TYPE_LABELS: Record<string, string> = {
   auto: "Détection automatique",
+  field_entry: "Saisie terrain",
   mission_terrain: "Mission terrain",
   rapport: "Mission terrain",
   pv: "Procès-verbal",
@@ -108,10 +114,12 @@ const TYPE_LABELS: Record<string, string> = {
 
 function RecordPage() {
   const { type } = useParams({ from: "/_authenticated/record/$type" });
-  const docType: DocType = (VALID_TYPES.has(type as DocType) ? (type as DocType) : "auto");
+  const { module: moduleFromSearch } = useSearch({ from: "/_authenticated/record/$type" });
+  const docType: DocType = (VALID_TYPES.has(type as DocType) ? (type as DocType) : "field_entry");
   const navigate = useNavigate();
   const online = useOnline();
   const { t, lang } = useI18n();
+
 
   const [supported, setSupported] = useState(true);
   const [secureOk, setSecureOk] = useState(true);
