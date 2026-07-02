@@ -96,7 +96,7 @@ function MyRecordsPage() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Rechercher dans mes fiches…"
+            placeholder="Rechercher dans mes saisies…"
             className="w-full rounded-lg border border-border bg-input/50 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-gold"
           />
         </div>
