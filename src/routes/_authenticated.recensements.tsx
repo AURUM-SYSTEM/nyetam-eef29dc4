@@ -80,14 +80,15 @@ function MyRecordsPage() {
       </Link>
 
       <header className="mt-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Mes fiches</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Mes saisies</p>
         <h1 className="mt-2 font-display text-3xl flex items-center gap-2">
           <Users className="h-7 w-7 text-gold" /> Historique
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Vos fiches de recensement récentes.
+          Toutes vos saisies terrain récentes.
         </p>
       </header>
+
 
       <div className="mt-6">
         <div className="relative">
