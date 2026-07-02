@@ -108,40 +108,70 @@ export function useSyncEngine() {
         }
 
         // ÉTAPE 3 — 🤖 Génération (auto-détection si demandée)
+        // NEW: `field_entry` is a neutral field capture — skip AI report
+        // generation entirely. CORE will normalize it downstream. Legacy
+        // types keep the existing report pipeline for backward compat.
         await updateQueueItem(item.id, { status: "generating" });
-        toast.loading("🤖 Génération du document…", { id: toastId });
 
-        const requestedType = item.type === "auto" ? undefined : item.type;
-        const autoDetect = item.meta?.autoDetect === true || item.type === "auto";
-
-        const result = await generate({
-          data: {
-            transcript,
-            type: requestedType,
-            autoDetect,
-            lang,
-            country,
-            profession,
-            sector,
-            role,
-            location: resolvedLocation.source === "none" ? undefined : resolvedLocation,
-          },
-        });
-
-
-        if (!result || !result.title) throw new Error("Génération invalide");
-
-        // ÉTAPE 3.5 — 💡 Suggestions métier (non bloquant)
+        let result: {
+          missionType: string;
+          title: string;
+          sections?: Record<string, string>;
+          introduction: string;
+          faits: string;
+          declarations: string;
+          observations: string;
+          conclusion: string;
+          cleanedTranscript: string;
+        };
         let suggestions: string[] = [];
-        try {
-          const sugg = await suggestImprovements({
-            data: { missionType: result.missionType, sections: result.sections, lang, sector, role },
-          });
 
-          suggestions = sugg.suggestions ?? [];
-        } catch (e) {
-          console.warn("suggestImprovements failed", e);
+        if (item.type === "field_entry") {
+          toast.loading("💾 Sauvegarde de la saisie…", { id: toastId });
+          const firstLine = transcript.split(/\r?\n/).find((l) => l.trim())?.trim() ?? "";
+          const title = item.title?.trim()
+            || (firstLine ? firstLine.slice(0, 80) : `Saisie du ${new Date().toLocaleDateString(lang === "en" ? "en-GB" : "fr-FR")}`);
+          result = {
+            missionType: "field_entry",
+            title,
+            introduction: "",
+            faits: "",
+            declarations: "",
+            observations: "",
+            conclusion: "",
+            cleanedTranscript: transcript,
+          };
+        } else {
+          toast.loading("🤖 Génération du document…", { id: toastId });
+          const requestedType = item.type === "auto" ? undefined : item.type;
+          const autoDetect = item.meta?.autoDetect === true || item.type === "auto";
+          const gen = await generate({
+            data: {
+              transcript,
+              type: requestedType,
+              autoDetect,
+              lang,
+              country,
+              profession,
+              sector,
+              role,
+              location: resolvedLocation.source === "none" ? undefined : resolvedLocation,
+            },
+          });
+          if (!gen || !gen.title) throw new Error("Génération invalide");
+          result = gen;
+
+          // ÉTAPE 3.5 — 💡 Suggestions métier (non bloquant)
+          try {
+            const sugg = await suggestImprovements({
+              data: { missionType: gen.missionType, sections: gen.sections, lang, sector, role },
+            });
+            suggestions = sugg.suggestions ?? [];
+          } catch (e) {
+            console.warn("suggestImprovements failed", e);
+          }
         }
+
 
         // Insertion Supabase
         // Normalize the DB `type` column — the check constraint only
