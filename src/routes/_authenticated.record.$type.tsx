@@ -185,8 +185,10 @@ function RecordPage() {
       lang,
       gps: gps ?? undefined,
       autoDetect: docType === "auto",
+      moduleType: (moduleFromSearch as ModuleType | undefined) ?? undefined,
     };
   }
+
 
   async function handleCaptureGps() {
     setGpsLoading(true);
