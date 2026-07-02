@@ -1,107 +1,103 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, FileText, Gavel, ChevronRight, Users, Sparkles, ClipboardList } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Mic, ChevronRight } from "lucide-react";
 import { useI18n } from "@/i18n";
-import type { DocType } from "@/lib/offline-store";
+import type { ModuleType } from "@/lib/offline-store";
 
 export const Route = createFileRoute("/_authenticated/new")({
-  component: NewDocPage,
-  head: () => ({ meta: [{ title: "Nouveau document — AURUM" }] }),
+  component: NewEntryPage,
+  head: () => ({ meta: [{ title: "Nouvelle saisie — AURUM" }] }),
 });
 
-type CardDef = {
-  type: Exclude<DocType, "rapport">;
-  title: string;
-  desc: string;
-  icon: React.ComponentType<{ className?: string }>;
-  highlight?: boolean;
-};
+// Neutral field capture. Collect does NOT interpret what is being captured
+// — the optional `module_type` is metadata only, forwarded to CORE.
+const MODULES: Array<{ value: ModuleType; label: string; hint: string }> = [
+  { value: "generic", label: "Générique", hint: "Saisie neutre, sans domaine spécifique" },
+  { value: "agro", label: "Agro", hint: "Contexte agricole (futur module)" },
+  { value: "health", label: "Santé", hint: "Contexte santé (futur module)" },
+  { value: "ngo", label: "ONG", hint: "Contexte humanitaire (futur module)" },
+];
 
-function NewDocPage() {
+function NewEntryPage() {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const [moduleType, setModuleType] = useState<ModuleType | "">("");
 
-  function pick(type: CardDef["type"]) {
-    if (type === "recensement") {
-      navigate({ to: "/recensement" });
-      return;
-    }
-    navigate({ to: "/record/$type", params: { type } });
+  function start() {
+    navigate({
+      to: "/record/$type",
+      params: { type: "field_entry" },
+      search: moduleType ? { module: moduleType } : {},
+    });
   }
-
-  const cards: CardDef[] = [
-    {
-      type: "auto",
-      title: "Détection automatique",
-      desc: "AURUM détecte le type de mission depuis ce que vous dites.",
-      icon: Sparkles,
-      highlight: true,
-    },
-    {
-      type: "mission_terrain",
-      title: "Mission terrain",
-      desc: "Contexte, objectifs, activités, constats, difficultés, recommandations.",
-      icon: FileText,
-    },
-    {
-      type: "pv",
-      title: "Procès-verbal de réunion",
-      desc: "Participants, points discutés, décisions, actions à entreprendre.",
-      icon: Gavel,
-    },
-    {
-      type: "enquete",
-      title: "Enquête",
-      desc: "Contexte, objectif, méthodologie, résultats, analyse.",
-      icon: ClipboardList,
-    },
-    {
-      type: "recensement",
-      title: "Recensement ONG",
-      desc: "Fiche bénéficiaire avec photos, audio terrain et observations.",
-      icon: Users,
-    },
-  ];
 
   return (
     <div className="px-5 pt-8 pb-32">
-      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        to="/"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="h-4 w-4" /> {t("common.back")}
       </Link>
 
       <header className="mt-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{t("new.step")}</p>
-        <h1 className="mt-2 font-display text-3xl">{t("new.title")}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{t("new.subtitle")}</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+          {t("new.step")}
+        </p>
+        <h1 className="mt-2 font-display text-3xl">Nouvelle saisie</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Capturez des données terrain (audio, texte, photos). Le traitement se fera plus tard.
+        </p>
       </header>
 
-      <div className="mt-8 space-y-3">
-        {cards.map((c) => {
-          const Icon = c.icon;
-          return (
-            <button
-              key={c.type}
-              onClick={() => pick(c.type)}
-              className={`glass-card group flex w-full items-center gap-4 rounded-2xl p-5 text-left transition hover:border-gold/40 ${
-                c.highlight ? "border-gold/50 bg-gold/5" : ""
-              }`}
-            >
-              <div
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl ${
-                  c.highlight
-                    ? "bg-gradient-to-br from-gold to-gold-soft"
-                    : "bg-accent gold-border"
+      <section className="mt-8">
+        <label className="mb-2 block text-xs uppercase tracking-widest text-gold-soft">
+          Contexte (optionnel)
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {MODULES.map((m) => {
+            const selected = moduleType === m.value;
+            return (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setModuleType(selected ? "" : m.value)}
+                className={`rounded-xl border p-3 text-left text-sm transition ${
+                  selected
+                    ? "border-gold bg-gold/10 text-foreground"
+                    : "border-border bg-card/50 text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Icon className={`h-7 w-7 ${c.highlight ? "text-background" : "text-gold"}`} />
-              </div>
-              <div className="flex-1">
-                <div className="font-display text-xl">{c.title}</div>
-                <div className="text-xs text-muted-foreground">{c.desc}</div>
-              </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground transition group-hover:text-gold" />
-            </button>
-          );
-        })}
+                <div className="font-medium">{m.label}</div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">{m.hint}</div>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Ce contexte est stocké comme métadonnée. Aucun traitement métier n'est appliqué à ce stade.
+        </p>
+      </section>
+
+      <button
+        onClick={start}
+        className="group mt-8 flex w-full items-center justify-between gap-4 rounded-2xl btn-gold px-6 py-5 text-left"
+      >
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-widest opacity-70">
+            Commencer
+          </div>
+          <div className="mt-1 font-display text-2xl">Capturer maintenant</div>
+        </div>
+        <Mic className="h-10 w-10 opacity-80" />
+      </button>
+
+      <div className="mt-8 rounded-xl border border-border bg-card/40 p-4 text-xs text-muted-foreground">
+        <div className="mb-1 flex items-center gap-1.5 font-medium text-foreground">
+          <ChevronRight className="h-3.5 w-3.5" /> À savoir
+        </div>
+        Vos anciennes fiches (Mission, PV, Enquête, Recensement) restent accessibles depuis
+        l'accueil. Elles ne sont plus créées via ce menu.
       </div>
     </div>
   );
