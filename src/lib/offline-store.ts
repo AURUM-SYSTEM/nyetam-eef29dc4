@@ -58,11 +58,13 @@ export type QueueMeta = {
   profession?: string;
   gps?: GpsLocation;
   autoDetect?: boolean;
+  moduleType?: ModuleType;
   // Recensement-specific
   subjectName?: string;
   subjectStatus?: string;
   observation?: string;
 };
+
 
 export type QueueItem = {
   id: string;
