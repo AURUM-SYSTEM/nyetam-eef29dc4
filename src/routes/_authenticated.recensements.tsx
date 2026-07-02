@@ -124,13 +124,13 @@ function MyRecordsPage() {
           <div className="glass-card rounded-2xl p-8 text-center">
             <FileText className="mx-auto h-10 w-10 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">
-              Aucune fiche pour l'instant.
+              Aucune saisie pour l'instant.
             </p>
             <Link
-              to="/recensement"
+              to="/new"
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg btn-gold px-4 py-2 text-xs"
             >
-              <Users className="h-3.5 w-3.5" /> Nouvelle fiche
+              <Users className="h-3.5 w-3.5" /> Nouvelle saisie
             </Link>
           </div>
         )}
@@ -149,12 +149,13 @@ function MyRecordsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-                      Recensement
+                      {TYPE_LABEL[r.mission_type ?? ""] ?? TYPE_LABEL[r.type] ?? "Saisie"}
                     </span>
                     {r.status === "draft" && (
                       <span className="text-[10px] uppercase text-muted-foreground">Brouillon</span>
                     )}
                   </div>
+
                   <div className="mt-0.5 truncate text-sm font-medium">{r.title}</div>
                   <div className="truncate text-[11px] text-muted-foreground">
                     {new Date(r.created_at).toLocaleString(lang === "en" ? "en-GB" : "fr-FR", {
