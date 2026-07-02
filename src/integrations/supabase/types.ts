@@ -29,6 +29,7 @@ export type Database = {
           location: string
           location_data: Json | null
           mission_type: string | null
+          module_type: string | null
           observations: string
           photo_urls: string[]
           reference: string
@@ -55,6 +56,7 @@ export type Database = {
           location?: string
           location_data?: Json | null
           mission_type?: string | null
+          module_type?: string | null
           observations?: string
           photo_urls?: string[]
           reference?: string
@@ -81,6 +83,7 @@ export type Database = {
           location?: string
           location_data?: Json | null
           mission_type?: string | null
+          module_type?: string | null
           observations?: string
           photo_urls?: string[]
           reference?: string

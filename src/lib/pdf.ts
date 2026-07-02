@@ -67,7 +67,7 @@ const EN: Labels = {
 };
 
 export type DocForPdf = {
-  type: "rapport" | "pv" | "recensement" | "enquete";
+  type: "rapport" | "pv" | "recensement" | "enquete" | "field_entry";
   title: string;
   introduction: string;
   faits: string;

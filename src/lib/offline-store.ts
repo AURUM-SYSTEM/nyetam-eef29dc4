@@ -9,7 +9,11 @@ export type DocType =
   | "recensement"
   | "mission_terrain"
   | "enquete"
+  | "field_entry"
   | "auto";
+
+export type ModuleType = "agro" | "health" | "ngo" | "generic";
+
 
 export type QueueStatus =
   | "pending"
@@ -54,11 +58,13 @@ export type QueueMeta = {
   profession?: string;
   gps?: GpsLocation;
   autoDetect?: boolean;
+  moduleType?: ModuleType;
   // Recensement-specific
   subjectName?: string;
   subjectStatus?: string;
   observation?: string;
 };
+
 
 export type QueueItem = {
   id: string;

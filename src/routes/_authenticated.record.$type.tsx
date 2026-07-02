@@ -1,12 +1,14 @@
-import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { saveAudio, enqueue, type QueueMeta, type DocType, type GpsLocation } from "@/lib/offline-store";
+import { saveAudio, enqueue, type QueueMeta, type DocType, type GpsLocation, type ModuleType } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
 import { captureGps } from "@/lib/geo";
+import { z } from "zod";
+
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
   if (typeof navigator === "undefined") return { os: "other", browser: "other" };
@@ -88,16 +90,22 @@ function pickMimeType(): string {
   return "";
 }
 
+const recordSearchSchema = z.object({
+  module: z.enum(["agro", "health", "ngo", "generic"]).optional(),
+});
+
 export const Route = createFileRoute("/_authenticated/record/$type")({
   component: RecordPage,
   head: () => ({ meta: [{ title: "Enregistrement — AURUM" }] }),
+  validateSearch: recordSearchSchema,
 });
 
 
 
-const VALID_TYPES = new Set<DocType>(["rapport", "pv", "mission_terrain", "enquete", "auto"]);
+const VALID_TYPES = new Set<DocType>(["rapport", "pv", "mission_terrain", "enquete", "auto", "field_entry"]);
 const TYPE_LABELS: Record<string, string> = {
   auto: "Détection automatique",
+  field_entry: "Saisie terrain",
   mission_terrain: "Mission terrain",
   rapport: "Mission terrain",
   pv: "Procès-verbal",
@@ -106,10 +114,12 @@ const TYPE_LABELS: Record<string, string> = {
 
 function RecordPage() {
   const { type } = useParams({ from: "/_authenticated/record/$type" });
-  const docType: DocType = (VALID_TYPES.has(type as DocType) ? (type as DocType) : "auto");
+  const { module: moduleFromSearch } = useSearch({ from: "/_authenticated/record/$type" });
+  const docType: DocType = (VALID_TYPES.has(type as DocType) ? (type as DocType) : "field_entry");
   const navigate = useNavigate();
   const online = useOnline();
   const { t, lang } = useI18n();
+
 
   const [supported, setSupported] = useState(true);
   const [secureOk, setSecureOk] = useState(true);
@@ -175,8 +185,10 @@ function RecordPage() {
       lang,
       gps: gps ?? undefined,
       autoDetect: docType === "auto",
+      moduleType: (moduleFromSearch as ModuleType | undefined) ?? undefined,
     };
   }
+
 
   async function handleCaptureGps() {
     setGpsLoading(true);

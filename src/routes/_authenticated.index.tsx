@@ -11,7 +11,7 @@ import { useI18n } from "@/i18n";
 
 type DocRow = {
   id: string;
-  type: "rapport" | "pv" | "recensement" | "enquete";
+  type: "rapport" | "pv" | "recensement" | "enquete" | "field_entry";
   mission_type: string | null;
   title: string;
   status: string;
@@ -20,12 +20,14 @@ type DocRow = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  rapport: "Rapport",
+  field_entry: "Saisie",
+  rapport: "Mission",
   mission_terrain: "Mission",
   pv: "PV",
   enquete: "Enquête",
   recensement: "Recensement",
 };
+
 
 
 export const Route = createFileRoute("/_authenticated/")({

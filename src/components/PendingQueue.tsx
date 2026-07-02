@@ -80,7 +80,7 @@ export function PendingQueue() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-                    {({ rapport: "Rapport", mission_terrain: "Mission", pv: "PV", enquete: "Enquête", recensement: "Recensement", auto: "Auto" } as Record<string, string>)[it.type] ?? it.type}
+                    {({ field_entry: "Saisie", rapport: "Rapport", mission_terrain: "Mission", pv: "PV", enquete: "Enquête", recensement: "Recensement", auto: "Auto" } as Record<string, string>)[it.type] ?? it.type}
                   </span>
                   <StatusBadge s={it.status} />
                 </div>

@@ -11,14 +11,16 @@ export const Route = createFileRoute("/_authenticated/recensements")({
   component: MyRecordsPage,
   head: () => ({
     meta: [
-      { title: "Mes fiches — AURUM" },
-      { name: "description", content: "Vos fiches de recensement terrain." },
+      { title: "Mes saisies — AURUM" },
+      { name: "description", content: "Vos saisies terrain récentes." },
     ],
   }),
 });
 
 type Row = {
   id: string;
+  type: string;
+  mission_type: string | null;
   title: string;
   status: string;
   created_at: string;
@@ -29,14 +31,23 @@ type Row = {
 async function fetchMyRecords(userId: string): Promise<Row[]> {
   const { data, error } = await supabase
     .from("documents")
-    .select("id,title,status,created_at,reference,location")
-    .eq("type", "recensement")
+    .select("id,type,mission_type,title,status,created_at,reference,location")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(200);
   if (error) throw error;
   return (data ?? []) as Row[];
 }
+
+const TYPE_LABEL: Record<string, string> = {
+  field_entry: "Saisie",
+  rapport: "Mission",
+  mission_terrain: "Mission",
+  pv: "PV",
+  enquete: "Enquête",
+  recensement: "Recensement",
+};
+
 
 function MyRecordsPage() {
   const online = useOnline();
@@ -69,14 +80,15 @@ function MyRecordsPage() {
       </Link>
 
       <header className="mt-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Mes fiches</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Mes saisies</p>
         <h1 className="mt-2 font-display text-3xl flex items-center gap-2">
           <Users className="h-7 w-7 text-gold" /> Historique
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Vos fiches de recensement récentes.
+          Toutes vos saisies terrain récentes.
         </p>
       </header>
+
 
       <div className="mt-6">
         <div className="relative">
@@ -84,7 +96,7 @@ function MyRecordsPage() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Rechercher dans mes fiches…"
+            placeholder="Rechercher dans mes saisies…"
             className="w-full rounded-lg border border-border bg-input/50 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-gold"
           />
         </div>
@@ -112,13 +124,13 @@ function MyRecordsPage() {
           <div className="glass-card rounded-2xl p-8 text-center">
             <FileText className="mx-auto h-10 w-10 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">
-              Aucune fiche pour l'instant.
+              Aucune saisie pour l'instant.
             </p>
             <Link
-              to="/recensement"
+              to="/new"
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg btn-gold px-4 py-2 text-xs"
             >
-              <Users className="h-3.5 w-3.5" /> Nouvelle fiche
+              <Users className="h-3.5 w-3.5" /> Nouvelle saisie
             </Link>
           </div>
         )}
@@ -137,12 +149,13 @@ function MyRecordsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="rounded bg-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-gold-soft">
-                      Recensement
+                      {TYPE_LABEL[r.mission_type ?? ""] ?? TYPE_LABEL[r.type] ?? "Saisie"}
                     </span>
                     {r.status === "draft" && (
                       <span className="text-[10px] uppercase text-muted-foreground">Brouillon</span>
                     )}
                   </div>
+
                   <div className="mt-0.5 truncate text-sm font-medium">{r.title}</div>
                   <div className="truncate text-[11px] text-muted-foreground">
                     {new Date(r.created_at).toLocaleString(lang === "en" ? "en-GB" : "fr-FR", {
