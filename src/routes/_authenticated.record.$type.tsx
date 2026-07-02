@@ -1,12 +1,14 @@
-import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { saveAudio, enqueue, type QueueMeta, type DocType, type GpsLocation } from "@/lib/offline-store";
+import { saveAudio, enqueue, type QueueMeta, type DocType, type GpsLocation, type ModuleType } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
 import { captureGps } from "@/lib/geo";
+import { z } from "zod";
+
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
   if (typeof navigator === "undefined") return { os: "other", browser: "other" };
