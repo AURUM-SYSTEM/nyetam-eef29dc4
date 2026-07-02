@@ -11,14 +11,16 @@ export const Route = createFileRoute("/_authenticated/recensements")({
   component: MyRecordsPage,
   head: () => ({
     meta: [
-      { title: "Mes fiches — AURUM" },
-      { name: "description", content: "Vos fiches de recensement terrain." },
+      { title: "Mes saisies — AURUM" },
+      { name: "description", content: "Vos saisies terrain récentes." },
     ],
   }),
 });
 
 type Row = {
   id: string;
+  type: string;
+  mission_type: string | null;
   title: string;
   status: string;
   created_at: string;
@@ -29,14 +31,23 @@ type Row = {
 async function fetchMyRecords(userId: string): Promise<Row[]> {
   const { data, error } = await supabase
     .from("documents")
-    .select("id,title,status,created_at,reference,location")
-    .eq("type", "recensement")
+    .select("id,type,mission_type,title,status,created_at,reference,location")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(200);
   if (error) throw error;
   return (data ?? []) as Row[];
 }
+
+const TYPE_LABEL: Record<string, string> = {
+  field_entry: "Saisie",
+  rapport: "Mission",
+  mission_terrain: "Mission",
+  pv: "PV",
+  enquete: "Enquête",
+  recensement: "Recensement",
+};
+
 
 function MyRecordsPage() {
   const online = useOnline();
