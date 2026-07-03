@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -7,7 +7,8 @@ import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
 import { captureGps } from "@/lib/geo";
-import { z } from "zod";
+import { useAuth } from "@/hooks/use-auth";
+import { moduleForOrgType } from "@/lib/organization-context";
 
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
@@ -90,14 +91,9 @@ function pickMimeType(): string {
   return "";
 }
 
-const recordSearchSchema = z.object({
-  module: z.enum(["agro", "health", "ngo", "generic"]).optional(),
-});
-
 export const Route = createFileRoute("/_authenticated/record/$type")({
   component: RecordPage,
   head: () => ({ meta: [{ title: "Enregistrement — AURUM" }] }),
-  validateSearch: recordSearchSchema,
 });
 
 
@@ -114,7 +110,9 @@ const TYPE_LABELS: Record<string, string> = {
 
 function RecordPage() {
   const { type } = useParams({ from: "/_authenticated/record/$type" });
-  const { module: moduleFromSearch } = useSearch({ from: "/_authenticated/record/$type" });
+  const { profile } = useAuth();
+  const moduleFromProfile = (profile?.module_type as ModuleType | undefined)
+    ?? moduleForOrgType(profile?.organization_type);
   const docType: DocType = (VALID_TYPES.has(type as DocType) ? (type as DocType) : "field_entry");
   const navigate = useNavigate();
   const online = useOnline();
@@ -185,7 +183,7 @@ function RecordPage() {
       lang,
       gps: gps ?? undefined,
       autoDetect: docType === "auto",
-      moduleType: (moduleFromSearch as ModuleType | undefined) ?? undefined,
+      moduleType: moduleFromProfile,
     };
   }
 
