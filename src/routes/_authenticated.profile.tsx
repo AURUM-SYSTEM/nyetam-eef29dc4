@@ -119,7 +119,7 @@ function ProfilePage() {
                 ? "Automatically applied to every new field entry (module: "
                 : "Appliqué automatiquement à chaque nouvelle saisie (module : "}
               <span className="text-foreground">{moduleForOrgType(orgType)}</span>
-              {").")}
+              {")."}
             </p>
           </label>
         </section>
