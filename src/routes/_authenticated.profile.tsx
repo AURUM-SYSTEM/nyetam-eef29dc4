@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { COUNTRIES } from "@/lib/countries";
 import { SECTORS } from "@/lib/sector-context";
 import { ROLES } from "@/lib/role-context";
+import { ORGANIZATION_TYPES, moduleForOrgType, type OrganizationType } from "@/lib/organization-context";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -26,6 +27,8 @@ function ProfilePage() {
   const [preferredLang, setPreferredLang] = useState<"fr" | "en">(lang);
   const [secteur, setSecteur] = useState<string>("ong_humanitaire");
   const [roleMetier, setRoleMetier] = useState<string>("agent_terrain");
+  const [orgName, setOrgName] = useState<string>("");
+  const [orgType, setOrgType] = useState<OrganizationType>("generic");
   const [busy, setBusy] = useState(false);
 
 
@@ -38,6 +41,8 @@ function ProfilePage() {
       setPreferredLang(profile.preferred_lang);
       setSecteur(profile.secteur_activite || "ong_humanitaire");
       setRoleMetier(profile.role_metier || "agent_terrain");
+      setOrgName(profile.organization_name || "");
+      setOrgType(((profile.organization_type as OrganizationType) || "generic"));
     }
   }, [profile]);
 
@@ -47,6 +52,9 @@ function ProfilePage() {
     const updated = await updateProfile({
       full_name: fullName, country, profession, preferred_lang: preferredLang,
       secteur_activite: secteur, role_metier: roleMetier,
+      organization_name: orgName,
+      organization_type: orgType,
+      module_type: moduleForOrgType(orgType),
     } as any);
 
     saveProfile(local);
