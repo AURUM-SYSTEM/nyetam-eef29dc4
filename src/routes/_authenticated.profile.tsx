@@ -90,6 +90,40 @@ function ProfilePage() {
       </section>
 
       <form onSubmit={submit} className="mt-6 space-y-4">
+        <section className="glass-card rounded-2xl p-4 space-y-3">
+          <h2 className="text-xs uppercase tracking-widest text-gold-soft">
+            {lang === "en" ? "Organization" : "Organisation"}
+          </h2>
+          <Field
+            label={lang === "en" ? "Organization name" : "Nom de l'organisation"}
+            value={orgName}
+            onChange={setOrgName}
+          />
+          <label className="block">
+            <span className="mb-1 block text-xs uppercase tracking-widest text-muted-foreground">
+              {lang === "en" ? "Organization type" : "Type d'organisation"}
+            </span>
+            <select
+              value={orgType}
+              onChange={(e) => setOrgType(e.target.value as OrganizationType)}
+              className="w-full rounded-xl border border-border bg-input/50 px-4 py-3 text-sm outline-none focus:border-gold"
+            >
+              {ORGANIZATION_TYPES.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {lang === "en" ? o.en : o.fr}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {lang === "en"
+                ? "Automatically applied to every new field entry (module: "
+                : "Appliqué automatiquement à chaque nouvelle saisie (module : "}
+              <span className="text-foreground">{moduleForOrgType(orgType)}</span>
+              {").")}
+            </p>
+          </label>
+        </section>
+
         <Field label={t("profile.name")} value={fullName} onChange={setFullName} />
 
         <label className="block">
