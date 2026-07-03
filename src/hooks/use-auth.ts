@@ -11,7 +11,9 @@ export type AurumUserProfile = {
   preferred_lang: "fr" | "en";
   secteur_activite: string;
   role_metier: string;
-
+  organization_name: string;
+  organization_type: string;
+  module_type: string;
 };
 
 const PROFILE_CACHE_KEY = "aurum.user.profile";
