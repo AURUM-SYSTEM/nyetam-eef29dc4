@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { COUNTRIES } from "@/lib/countries";
 import { SECTORS } from "@/lib/sector-context";
 import { ROLES } from "@/lib/role-context";
+import { ORGANIZATION_TYPES, moduleForOrgType, type OrganizationType } from "@/lib/organization-context";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -26,6 +27,8 @@ function ProfilePage() {
   const [preferredLang, setPreferredLang] = useState<"fr" | "en">(lang);
   const [secteur, setSecteur] = useState<string>("ong_humanitaire");
   const [roleMetier, setRoleMetier] = useState<string>("agent_terrain");
+  const [orgName, setOrgName] = useState<string>("");
+  const [orgType, setOrgType] = useState<OrganizationType>("generic");
   const [busy, setBusy] = useState(false);
 
 
@@ -38,6 +41,8 @@ function ProfilePage() {
       setPreferredLang(profile.preferred_lang);
       setSecteur(profile.secteur_activite || "ong_humanitaire");
       setRoleMetier(profile.role_metier || "agent_terrain");
+      setOrgName(profile.organization_name || "");
+      setOrgType(((profile.organization_type as OrganizationType) || "generic"));
     }
   }, [profile]);
 
@@ -47,6 +52,9 @@ function ProfilePage() {
     const updated = await updateProfile({
       full_name: fullName, country, profession, preferred_lang: preferredLang,
       secteur_activite: secteur, role_metier: roleMetier,
+      organization_name: orgName,
+      organization_type: orgType,
+      module_type: moduleForOrgType(orgType),
     } as any);
 
     saveProfile(local);
@@ -82,6 +90,40 @@ function ProfilePage() {
       </section>
 
       <form onSubmit={submit} className="mt-6 space-y-4">
+        <section className="glass-card rounded-2xl p-4 space-y-3">
+          <h2 className="text-xs uppercase tracking-widest text-gold-soft">
+            {lang === "en" ? "Organization" : "Organisation"}
+          </h2>
+          <Field
+            label={lang === "en" ? "Organization name" : "Nom de l'organisation"}
+            value={orgName}
+            onChange={setOrgName}
+          />
+          <label className="block">
+            <span className="mb-1 block text-xs uppercase tracking-widest text-muted-foreground">
+              {lang === "en" ? "Organization type" : "Type d'organisation"}
+            </span>
+            <select
+              value={orgType}
+              onChange={(e) => setOrgType(e.target.value as OrganizationType)}
+              className="w-full rounded-xl border border-border bg-input/50 px-4 py-3 text-sm outline-none focus:border-gold"
+            >
+              {ORGANIZATION_TYPES.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {lang === "en" ? o.en : o.fr}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {lang === "en"
+                ? "Automatically applied to every new field entry (module: "
+                : "Appliqué automatiquement à chaque nouvelle saisie (module : "}
+              <span className="text-foreground">{moduleForOrgType(orgType)}</span>
+              {")."}
+            </p>
+          </label>
+        </section>
+
         <Field label={t("profile.name")} value={fullName} onChange={setFullName} />
 
         <label className="block">

@@ -105,6 +105,9 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          module_type: string
+          organization_name: string
+          organization_type: string
           preferred_lang: string
           profession: string
           role_metier: string
@@ -117,6 +120,9 @@ export type Database = {
           email?: string
           full_name?: string
           id: string
+          module_type?: string
+          organization_name?: string
+          organization_type?: string
           preferred_lang?: string
           profession?: string
           role_metier?: string
@@ -129,6 +135,9 @@ export type Database = {
           email?: string
           full_name?: string
           id?: string
+          module_type?: string
+          organization_name?: string
+          organization_type?: string
           preferred_lang?: string
           profession?: string
           role_metier?: string

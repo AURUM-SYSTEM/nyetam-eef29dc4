@@ -11,7 +11,9 @@ export type AurumUserProfile = {
   preferred_lang: "fr" | "en";
   secteur_activite: string;
   role_metier: string;
-
+  organization_name: string;
+  organization_type: string;
+  module_type: string;
 };
 
 const PROFILE_CACHE_KEY = "aurum.user.profile";
@@ -60,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchProfile(userId: string): Promise<AurumUserProfile | null> {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name, email, country, profession, preferred_lang, secteur_activite, role_metier")
+      .select("id, full_name, email, country, profession, preferred_lang, secteur_activite, role_metier, organization_name, organization_type, module_type")
       .eq("id", userId)
       .maybeSingle();
     if (error || !data) return null;
@@ -69,6 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       preferred_lang: (data.preferred_lang === "en" ? "en" : "fr"),
       secteur_activite: (data as any).secteur_activite || "ong_humanitaire",
       role_metier: (data as any).role_metier || "agent_terrain",
+      organization_name: (data as any).organization_name || "",
+      organization_type: (data as any).organization_type || "generic",
+      module_type: (data as any).module_type || "generic",
     } as AurumUserProfile;
 
     setProfile(p);
@@ -115,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from("profiles")
         .update(patch)
         .eq("id", session.user.id)
-        .select("id, full_name, email, country, profession, preferred_lang, secteur_activite, role_metier")
+        .select("id, full_name, email, country, profession, preferred_lang, secteur_activite, role_metier, organization_name, organization_type, module_type")
         .single();
       if (error || !data) return null;
       const p = {
@@ -123,6 +128,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         preferred_lang: (data.preferred_lang === "en" ? "en" : "fr"),
         secteur_activite: (data as any).secteur_activite || "ong_humanitaire",
         role_metier: (data as any).role_metier || "agent_terrain",
+        organization_name: (data as any).organization_name || "",
+        organization_type: (data as any).organization_type || "generic",
+        module_type: (data as any).module_type || "generic",
       } as AurumUserProfile;
 
       setProfile(p);
