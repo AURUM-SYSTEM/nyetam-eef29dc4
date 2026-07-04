@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
+import { Route as AuthenticatedSupervisorRouteImport } from './routes/_authenticated.supervisor'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated.settings'
 import { Route as AuthenticatedRecensementsRouteImport } from './routes/_authenticated.recensements'
 import { Route as AuthenticatedRecensementRouteImport } from './routes/_authenticated.recensement'
@@ -44,6 +45,11 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSupervisorRoute = AuthenticatedSupervisorRouteImport.update({
+  id: '/supervisor',
+  path: '/supervisor',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/recensement': typeof AuthenticatedRecensementRoute
   '/recensements': typeof AuthenticatedRecensementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/supervisor': typeof AuthenticatedSupervisorRoute
   '/document/$id': typeof AuthenticatedDocumentIdRoute
   '/record/$type': typeof AuthenticatedRecordTypeRoute
 }
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/recensement': typeof AuthenticatedRecensementRoute
   '/recensements': typeof AuthenticatedRecensementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/supervisor': typeof AuthenticatedSupervisorRoute
   '/': typeof AuthenticatedIndexRoute
   '/document/$id': typeof AuthenticatedDocumentIdRoute
   '/record/$type': typeof AuthenticatedRecordTypeRoute
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/_authenticated/recensement': typeof AuthenticatedRecensementRoute
   '/_authenticated/recensements': typeof AuthenticatedRecensementsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/supervisor': typeof AuthenticatedSupervisorRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/document/$id': typeof AuthenticatedDocumentIdRoute
   '/_authenticated/record/$type': typeof AuthenticatedRecordTypeRoute
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/recensement'
     | '/recensements'
     | '/settings'
+    | '/supervisor'
     | '/document/$id'
     | '/record/$type'
   fileRoutesByTo: FileRoutesByTo
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/recensement'
     | '/recensements'
     | '/settings'
+    | '/supervisor'
     | '/'
     | '/document/$id'
     | '/record/$type'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recensement'
     | '/_authenticated/recensements'
     | '/_authenticated/settings'
+    | '/_authenticated/supervisor'
     | '/_authenticated/'
     | '/_authenticated/document/$id'
     | '/_authenticated/record/$type'
@@ -210,6 +222,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/supervisor': {
+      id: '/_authenticated/supervisor'
+      path: '/supervisor'
+      fullPath: '/supervisor'
+      preLoaderRoute: typeof AuthenticatedSupervisorRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings': {
@@ -270,6 +289,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRecensementRoute: typeof AuthenticatedRecensementRoute
   AuthenticatedRecensementsRoute: typeof AuthenticatedRecensementsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSupervisorRoute: typeof AuthenticatedSupervisorRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedDocumentIdRoute: typeof AuthenticatedDocumentIdRoute
   AuthenticatedRecordTypeRoute: typeof AuthenticatedRecordTypeRoute
@@ -281,6 +301,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRecensementRoute: AuthenticatedRecensementRoute,
   AuthenticatedRecensementsRoute: AuthenticatedRecensementsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSupervisorRoute: AuthenticatedSupervisorRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedDocumentIdRoute: AuthenticatedDocumentIdRoute,
   AuthenticatedRecordTypeRoute: AuthenticatedRecordTypeRoute,
