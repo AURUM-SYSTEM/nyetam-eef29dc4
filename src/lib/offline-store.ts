@@ -1,3 +1,18 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// OFFLINE STORE — IndexedDB (queue, audio, photos)
+//
+// Source de vérité côté client tant qu'une saisie n'est pas `synced`.
+// Le sync engine (use-sync-engine.ts) draine cette file vers Supabase.
+//
+// Extension modules : ajouter un domaine métier = étendre `ModuleType`
+// puis mettre à jour `src/lib/organization-context.ts`. Aucun changement
+// de schéma DB n'est requis (le champ `module_type` côté `documents`
+// est un text libre, indexable, sans CHECK contraignant).
+//
+// Legacy : `DocType` conserve `rapport | pv | recensement | mission_terrain
+// | enquete` pour lire les anciens enregistrements. Les nouvelles saisies
+// utilisent `field_entry` (neutre, sans génération IA structurée).
+// ─────────────────────────────────────────────────────────────────────────────
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "aurum-offline";
