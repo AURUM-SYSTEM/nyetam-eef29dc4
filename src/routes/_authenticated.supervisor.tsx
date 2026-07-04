@@ -9,7 +9,7 @@
 // Cette page ne modifie AUCUN fichier de la partie COLLECT existante et
 // ne touche à aucune policy RLS existante (uniquement des ajouts).
 // ─────────────────────────────────────────────────────────────────────────
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   Loader2,
+  Lock,
   MapPin,
   Radio,
   Users,
@@ -39,43 +40,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 
-// Le layout racine appelle `router.invalidate()` à chaque événement d'auth
-// Supabase (y compris les rafraîchissements de token en arrière-plan), ce
-// qui relance ce `beforeLoad` très fréquemment. On mémorise donc le résultat
-// par utilisateur pour éviter de refaire l'appel réseau à chaque fois, et
-// pour ne pas bounce l'utilisateur en cas d'aléa réseau transitoire sur le RPC.
-let supervisorCheckCache: { userId: string; isSupervisor: boolean } | null = null;
-
 export const Route = createFileRoute("/_authenticated/supervisor")({
-  beforeLoad: async () => {
-    if (typeof window === "undefined") return;
-    const { data: sessionData } = await supabase.auth.getSession();
-    const user = sessionData.session?.user;
-    if (!user) return; // le layout _authenticated gère déjà la redirection login
-
-    const cached = supervisorCheckCache;
-    if (cached && cached.userId === user.id) {
-      if (!cached.isSupervisor) throw redirect({ to: "/" });
-      return;
-    }
-
-    const { data: isSupervisor, error } = await supabase.rpc("has_role", {
-      _user: user.id,
-      _role: "supervisor",
-    });
-
-    if (error) {
-      // Aléa réseau transitoire : si on avait déjà confirmé le rôle
-      // précédemment pour cet utilisateur, on ne bounce pas inutilement.
-      if (cached && cached.userId === user.id && cached.isSupervisor) return;
-      throw redirect({ to: "/" });
-    }
-
-    supervisorCheckCache = { userId: user.id, isSupervisor: !!isSupervisor };
-    if (!isSupervisor) throw redirect({ to: "/" });
-  },
   component: SupervisorDashboard,
   head: () => ({
     meta: [
@@ -122,6 +90,44 @@ function moduleLabel(m: string | null) {
 }
 function moduleColor(m: string | null) {
   return MODULE_COLORS[m ?? "generic"] ?? "var(--gold)";
+}
+
+// ── Vérification du rôle superviseur ────────────────────────────────────
+
+type RoleState =
+  | { status: "checking" }
+  | { status: "denied" }
+  | { status: "error"; message: string }
+  | { status: "authorized" };
+
+function useSupervisorRole() {
+  const { session } = useAuth();
+  const [state, setState] = useState<RoleState>({ status: "checking" });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function check() {
+      if (!session?.user) return; // le layout _authenticated gère déjà le login
+      const { data, error } = await supabase.rpc("has_role", {
+        _user: session.user.id,
+        _role: "supervisor",
+      });
+      if (cancelled) return;
+      if (error) {
+        setState({ status: "error", message: error.message });
+        return;
+      }
+      setState(data ? { status: "authorized" } : { status: "denied" });
+    }
+
+    void check();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
+
+  return state;
 }
 
 // ── Chargement des données réelles ─────────────────────────────────────
@@ -227,6 +233,48 @@ function MiniMap({ docs }: { docs: DocRow[] }) {
 // ── Page ──────────────────────────────────────────────────────────────
 
 function SupervisorDashboard() {
+  const roleState = useSupervisorRole();
+
+  if (roleState.status === "checking") {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-gold" />
+      </div>
+    );
+  }
+
+  if (roleState.status === "denied") {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
+        <Lock className="h-8 w-8 text-muted-foreground" />
+        <p className="font-display text-lg">Accès réservé aux superviseurs</p>
+        <p className="max-w-xs text-sm text-muted-foreground">
+          Ton compte n'a pas encore le rôle superviseur sur cette organisation.
+        </p>
+        <Link to="/" className="btn-gold rounded-lg px-5 py-2.5 text-sm">
+          Retour à l'accueil
+        </Link>
+      </div>
+    );
+  }
+
+  if (roleState.status === "error") {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          Erreur lors de la vérification du rôle : {roleState.message}
+        </p>
+        <Link to="/" className="text-sm text-muted-foreground underline">
+          Retour à l'accueil
+        </Link>
+      </div>
+    );
+  }
+
+  return <SupervisorDashboardContent />;
+}
+
+function SupervisorDashboardContent() {
   const { docs, profilesById, loading, error, reload } = useSupervisorData();
 
   const [moduleFilter, setModuleFilter] = useState<string>("all");
