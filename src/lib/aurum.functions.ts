@@ -440,6 +440,94 @@ export const generateDocument = createServerFn({ method: "POST" })
   });
 
 // ============================================================
+// CORE — Structuration IA générique (Phase 3 du ROADMAP)
+//
+// À la différence de `generateDocument` (pipeline legacy à 4 templates
+// fixes, écrit dans les colonnes de `documents`), cette fonction traite
+// les saisies `field_entry` de façon générique par `module_type`, et son
+// résultat est destiné à la table SÉPARÉE `core_outputs` — jamais à
+// `documents`. CORE ne réécrit jamais la source brute.
+// ============================================================
+
+const CORE_MODULE_HINTS: Record<string, { fr: string; en: string }> = {
+  agro: {
+    fr: "Contexte agricole : cultures, parcelles, rendements, coopératives, visites terrain.",
+    en: "Agricultural context: crops, plots, yields, cooperatives, field visits.",
+  },
+  health: {
+    fr: "Contexte santé : patients, campagnes, indicateurs sanitaires, structures de soin.",
+    en: "Health context: patients, campaigns, health indicators, care facilities.",
+  },
+  ngo: {
+    fr: "Contexte ONG : bénéficiaires, distributions, activités humanitaires.",
+    en: "NGO context: beneficiaries, distributions, humanitarian activities.",
+  },
+  generic: {
+    fr: "Contexte générique : capture terrain libre, sans domaine métier spécifique.",
+    en: "Generic context: free-form field capture, no specific business domain.",
+  },
+};
+
+export type CoreStructuredOutput = {
+  category: string;
+  summary: string;
+  indicators: Array<{ label: string; value: string }>;
+  tags: string[];
+};
+
+export const structureFieldEntry = createServerFn({ method: "POST" })
+  .inputValidator((d: {
+    transcript: string;
+    moduleType?: string;
+    lang?: "fr" | "en";
+  }) =>
+    z.object({
+      transcript: z.string().min(1).max(50000),
+      moduleType: z.string().max(60).optional(),
+      lang: LangSchema.optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const lang = data.lang ?? "fr";
+    const moduleType = data.moduleType && CORE_MODULE_HINTS[data.moduleType] ? data.moduleType : "generic";
+    const hint = CORE_MODULE_HINTS[moduleType][lang];
+
+    const sys = lang === "en"
+      ? `You structure raw field-capture text into exploitable data. ${hint}\nRespond STRICTLY with a JSON object: { "category": string (short, max 4 words), "summary": string (2-4 factual sentences, no invented facts), "indicators": [{ "label": string, "value": string }] (0 to 6 concrete indicators found in the text — numbers, counts, dates; do NOT invent any), "tags": string[] (1 to 5 short lowercase keywords) }. Never invent information not present in the text.`
+      : `Tu structures un texte de saisie terrain brut en données exploitables. ${hint}\nRéponds STRICTEMENT par un objet JSON : { "category": string (court, max 4 mots), "summary": string (2 à 4 phrases factuelles, aucune invention), "indicators": [{ "label": string, "value": string }] (0 à 6 indicateurs concrets trouvés dans le texte — chiffres, comptages, dates ; N'INVENTE RIEN), "tags": string[] (1 à 5 mots-clés courts en minuscules) }. N'invente jamais d'information absente du texte.`;
+
+    const content = await callGateway(
+      [
+        { role: "system", content: sys },
+        { role: "user", content: data.transcript },
+      ],
+      true,
+    );
+
+    let parsed: Partial<CoreStructuredOutput>;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const m = content.match(/\{[\s\S]*\}/);
+      parsed = m ? JSON.parse(m[0]) : {};
+    }
+
+    const result: CoreStructuredOutput = {
+      category: typeof parsed.category === "string" ? parsed.category.slice(0, 80) : (lang === "en" ? "Uncategorized" : "Non catégorisé"),
+      summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 1000) : "",
+      indicators: Array.isArray(parsed.indicators)
+        ? parsed.indicators
+            .filter((i): i is { label: string; value: string } => !!i && typeof i.label === "string" && typeof i.value === "string")
+            .slice(0, 6)
+        : [],
+      tags: Array.isArray(parsed.tags)
+        ? parsed.tags.filter((t): t is string => typeof t === "string").slice(0, 5)
+        : [],
+    };
+    return result;
+  });
+
+// ============================================================
 // Post-generation suggestions (separate, never modify the doc)
 // ============================================================
 
