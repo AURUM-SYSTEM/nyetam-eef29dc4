@@ -6,7 +6,9 @@
 //
 // Deux chemins de traitement cohabitent :
 //   • `field_entry` (nouveau, neutre) — sauvegarde brute du transcript,
-//     AUCUNE génération structurée. La normalisation sera faite par CORE.
+//     AUCUNE génération structurée. La normalisation est faite par CORE
+//     (voir bloc "CORE" plus bas — appel non bloquant, table séparée
+//     `core_outputs`, ne touche jamais aux colonnes de `documents`).
 //   • types legacy (`rapport`, `pv`, `enquete`, `recensement`) — pipeline IA
 //     complet conservé pour compatibilité ascendante. Ne PAS supprimer.
 //
@@ -27,7 +29,7 @@ import {
   subscribeQueue,
   type QueueItem,
 } from "@/lib/offline-store";
-import { transcribeAudio, generateDocument, reverseGeocode, suggestImprovements } from "@/lib/aurum.functions";
+import { transcribeAudio, generateDocument, reverseGeocode, suggestImprovements, structureFieldEntry } from "@/lib/aurum.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { getCachedProfile } from "@/hooks/use-auth";
@@ -36,6 +38,7 @@ import { normalizeDocumentType } from "@/lib/document-types";
 export function useSyncEngine() {
   const transcribe = useServerFn(transcribeAudio);
   const generate = useServerFn(generateDocument);
+  const structure = useServerFn(structureFieldEntry);
   const queryClient = useQueryClient();
   const running = useRef(false);
 
@@ -230,6 +233,31 @@ export function useSyncEngine() {
 
         if (error) throw error;
 
+        // ÉTAPE 3.6 — 🧩 CORE : structuration IA générique (non bloquant)
+        // Ne concerne que les saisies `field_entry` (les types legacy sont
+        // déjà structurés par `generateDocument` ci-dessus). Écrit UNIQUEMENT
+        // dans `core_outputs`, jamais dans `documents`. Un échec ici ne doit
+        // jamais faire échouer la synchronisation de la saisie elle-même —
+        // l'agent a déjà son document sauvegardé.
+        if (item.type === "field_entry") {
+          try {
+            const structured = await structure({
+              data: {
+                transcript: result.cleanedTranscript ?? transcript,
+                moduleType: item.meta?.moduleType ?? "generic",
+                lang,
+              },
+            });
+            await supabase.from("core_outputs").insert({
+              document_id: data.id,
+              module_type: item.meta?.moduleType ?? "generic",
+              payload: structured as any,
+            } as any);
+          } catch (e) {
+            console.warn("CORE structureFieldEntry failed (non bloquant)", e);
+          }
+        }
+
         // Upload photos (if any) to storage and patch the document
         const photoIds = item.photoIds ?? [];
         if (photoIds.length > 0) {
@@ -413,5 +441,5 @@ export function useSyncEngine() {
       unsub();
     };
 
-  }, [transcribe, generate, queryClient]);
+  }, [transcribe, generate, structure, queryClient]);
 }
