@@ -1,3 +1,18 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// SYNC ENGINE — pipeline offline-first de COLLECT
+//
+// Boucle unique qui draine la file IndexedDB vers Supabase :
+//   pending → transcribing (audio → texte) → generating → synced
+//
+// Deux chemins de traitement cohabitent :
+//   • `field_entry` (nouveau, neutre) — sauvegarde brute du transcript,
+//     AUCUNE génération structurée. La normalisation sera faite par CORE.
+//   • types legacy (`rapport`, `pv`, `enquete`, `recensement`) — pipeline IA
+//     complet conservé pour compatibilité ascendante. Ne PAS supprimer.
+//
+// Résilience : retry avec backoff exponentiel (max 8), déclencheurs multiples
+// (online, custom event `aurum:sync-now`, interval 30s, subscribe queue).
+// ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
