@@ -41,20 +41,40 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { ModuleType } from "@/lib/offline-store";
 
+// Le layout racine appelle `router.invalidate()` à chaque événement d'auth
+// Supabase (y compris les rafraîchissements de token en arrière-plan), ce
+// qui relance ce `beforeLoad` très fréquemment. On mémorise donc le résultat
+// par utilisateur pour éviter de refaire l'appel réseau à chaque fois, et
+// pour ne pas bounce l'utilisateur en cas d'aléa réseau transitoire sur le RPC.
+let supervisorCheckCache: { userId: string; isSupervisor: boolean } | null = null;
+
 export const Route = createFileRoute("/_authenticated/supervisor")({
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) return; // le layout _authenticated gère déjà la redirection login
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData.session?.user;
+    if (!user) return; // le layout _authenticated gère déjà la redirection login
 
-    const { data: isSupervisor } = await supabase.rpc("has_role", {
-      _user: auth.user.id,
+    const cached = supervisorCheckCache;
+    if (cached && cached.userId === user.id) {
+      if (!cached.isSupervisor) throw redirect({ to: "/" });
+      return;
+    }
+
+    const { data: isSupervisor, error } = await supabase.rpc("has_role", {
+      _user: user.id,
       _role: "supervisor",
     });
 
-    if (!isSupervisor) {
+    if (error) {
+      // Aléa réseau transitoire : si on avait déjà confirmé le rôle
+      // précédemment pour cet utilisateur, on ne bounce pas inutilement.
+      if (cached && cached.userId === user.id && cached.isSupervisor) return;
       throw redirect({ to: "/" });
     }
+
+    supervisorCheckCache = { userId: user.id, isSupervisor: !!isSupervisor };
+    if (!isSupervisor) throw redirect({ to: "/" });
   },
   component: SupervisorDashboard,
   head: () => ({
