@@ -1,12 +1,14 @@
 import { createFileRoute, Link, useParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Download, Save, Trash2, Loader2, Share2, Pencil } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { ArrowLeft, Download, Save, Trash2, Loader2, Share2, Pencil, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { exportDocumentPdf } from "@/lib/pdf";
 import { useI18n } from "@/i18n";
 import { SuggestionsPanel } from "@/components/SuggestionsPanel";
 import { MISSION_LABEL, resolveMissionType, normalizeDocumentType, type DocumentType } from "@/lib/document-types";
+import { updateOwnDocument } from "@/lib/moderation.functions";
 
 export const Route = createFileRoute("/_authenticated/document/$id")({
   component: DocPage,
@@ -37,6 +39,7 @@ type Doc = {
   photo_urls: string[] | null;
   suggestions: string[] | null;
   location_data: { lat?: number; lng?: number; city?: string; country?: string; source?: string } | null;
+  validated_at: string | null;
 };
 
 const SECTION_LABELS: Record<MissionType, Array<{ key: "introduction" | "faits" | "declarations" | "observations" | "conclusion"; label: string }>> = {
@@ -78,18 +81,24 @@ function DocPage() {
   const { id } = useParams({ from: "/_authenticated/document/$id" });
   const navigate = useNavigate();
   const { t } = useI18n();
+  const submitUpdate = useServerFn(updateOwnDocument);
   const [doc, setDoc] = useState<Doc | null>(null);
+  const [original, setOriginal] = useState<Doc | null>(null);
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reason, setReason] = useState("");
 
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase.from("documents").select("*").eq("id", id).single();
       if (error) { toast.error(error.message); return; }
       setDoc(data as Doc);
+      setOriginal(data as Doc);
     })();
   }, [id]);
+
+  const isValidated = !!doc?.validated_at;
 
   function patch<K extends keyof Doc>(k: K, v: Doc[K]) {
     setDoc(d => d ? { ...d, [k]: v } : d);
@@ -97,28 +106,39 @@ function DocPage() {
   }
 
   async function save() {
-    if (!doc) return;
+    if (!doc || !original) return;
+    if (!reason.trim()) {
+      toast.error("Indique une justification pour cette correction.");
+      return;
+    }
+    const EDITABLE = [
+      "title", "introduction", "faits", "declarations", "observations", "conclusion",
+      "agent_name", "location", "reference", "signature_name", "doc_date", "doc_time",
+    ] as const;
+
+    const changes: Record<string, string | null> = {};
+    for (const key of EDITABLE) {
+      const newVal = (doc as any)[key] ?? null;
+      const oldVal = (original as any)[key] ?? null;
+      if (newVal !== oldVal) changes[key] = newVal;
+    }
+    if (Object.keys(changes).length === 0) {
+      toast.info("Aucune modification à enregistrer.");
+      return;
+    }
+
     setSaving(true);
-    const { error } = await supabase
-      .from("documents")
-      .update({
-        title: doc.title,
-        introduction: doc.introduction,
-        faits: doc.faits,
-        declarations: doc.declarations,
-        observations: doc.observations,
-        conclusion: doc.conclusion,
-        agent_name: doc.agent_name,
-        location: doc.location,
-        reference: doc.reference,
-        signature_name: doc.signature_name,
-        doc_date: doc.doc_date,
-        doc_time: doc.doc_time,
-      })
-      .eq("id", doc.id);
-    setSaving(false);
-    if (error) toast.error(error.message);
-    else { setDirty(false); toast.success(t("doc.saved_ok")); }
+    try {
+      await submitUpdate({ data: { documentId: doc.id, changes, reason: reason.trim() } });
+      setOriginal(doc);
+      setDirty(false);
+      setReason("");
+      toast.success(t("doc.saved_ok"));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'enregistrement");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function remove() {
@@ -221,17 +241,25 @@ function DocPage() {
           <ArrowLeft className="h-4 w-4" /> {t("common.home")}
         </Link>
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => setEditing(e => !e)}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition ${
-              editing ? "border-gold bg-gold/10 text-gold" : "border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Pencil className="h-3.5 w-3.5" /> {t("doc.edit_doc")}
-          </button>
-          <button onClick={remove} className="p-2 text-muted-foreground hover:text-destructive">
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {isValidated ? (
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-400">
+              <Lock className="h-3.5 w-3.5" /> Validé — verrouillé
+            </span>
+          ) : (
+            <button
+              onClick={() => setEditing(e => !e)}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition ${
+                editing ? "border-gold bg-gold/10 text-gold" : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Pencil className="h-3.5 w-3.5" /> {t("doc.edit_doc")}
+            </button>
+          )}
+          {!isValidated && (
+            <button onClick={remove} className="p-2 text-muted-foreground hover:text-destructive">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -311,6 +339,24 @@ function DocPage() {
           <PhotosSection paths={doc.photo_urls} />
         )}
 
+        {editing && dirty && !isValidated && (
+          <section className="glass-card rounded-xl border border-gold/30 p-4">
+            <h2 className="mb-2 font-display text-base uppercase tracking-wider text-gold">
+              Justification de la correction
+            </h2>
+            <p className="mb-2 text-xs text-muted-foreground">
+              Obligatoire — conservé dans le journal d'audit avec l'ancienne et la nouvelle valeur.
+            </p>
+            <textarea
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="Ex : erreur de saisie sur le lieu, correction du nom de l'agent…"
+              rows={2}
+              className="w-full resize-y rounded-lg border border-border bg-input/50 p-3 text-sm outline-none focus:border-gold"
+            />
+          </section>
+        )}
+
         {/* Signature */}
         <section className="glass-card rounded-xl p-4">
           <h2 className="mb-3 font-display text-base uppercase tracking-wider text-gold">{t("doc.signature")}</h2>
@@ -326,10 +372,10 @@ function DocPage() {
       {/* Sticky action bar */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-xl items-center gap-2 px-5 py-3">
-          {editing && (
+          {editing && !isValidated && (
             <button
               onClick={save}
-              disabled={!dirty || saving}
+              disabled={!dirty || saving || !reason.trim()}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-3 text-sm disabled:opacity-40"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
