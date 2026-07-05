@@ -10,7 +10,7 @@ import { buildMetierContext } from "./role-context";
 
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions";
-const OPENAI_MODEL = "gpt-4o-mini";
+const OPENAI_MODEL = "gpt-5.4-mini";
 
 function getOpenAiKey(): string {
   const key = process.env.OPENAI_API_KEY;
@@ -49,7 +49,7 @@ async function transcribeWithWhisper(audioBase64: string, mimeType: string, lang
 
   const form = new FormData();
   form.append("file", blob, `audio.${ext}`);
-  form.append("model", "whisper-1");
+  form.append("model", "gpt-4o-mini-transcribe");
   form.append("language", lang);
 
   const res = await fetch(OPENAI_WHISPER_URL, {
