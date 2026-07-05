@@ -2,37 +2,68 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { buildMetierContext } from "./role-context";
 
+// ============================================================
+// OpenAI — appel direct, sans passer par un gateway tiers.
+// Clé lue depuis la variable d'environnement OPENAI_API_KEY
+// (Project Settings → Environment Variables), jamais en dur ici.
+// ============================================================
 
-const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-2.5-flash";
+const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions";
+const OPENAI_MODEL = "gpt-4o-mini";
 
-type GatewayMessage =
-  | { role: string; content: string }
-  | { role: string; content: Array<
-      | { type: "text"; text: string }
-      | { type: "input_audio"; input_audio: { data: string; format: string } }
-    > };
+function getOpenAiKey(): string {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("OPENAI_API_KEY manquante — à configurer dans les variables d'environnement du projet.");
+  return key;
+}
 
-async function callGatewayRaw(messages: GatewayMessage[], jsonMode = false) {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY missing");
-  const res = await fetch(GATEWAY, {
+async function callOpenAiChat(messages: Array<{ role: string; content: string }>, jsonMode = false) {
+  const apiKey = getOpenAiKey();
+  const res = await fetch(OPENAI_CHAT_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: MODEL,
+      model: OPENAI_MODEL,
       messages,
       ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
     }),
   });
   if (!res.ok) {
     const text = await res.text();
-    if (res.status === 429) throw new Error("Limite de requêtes atteinte, réessayez dans un instant.");
-    if (res.status === 402) throw new Error("Crédits IA épuisés. Ajoutez des crédits dans Lovable.");
-    throw new Error(`Erreur IA (${res.status}): ${text.slice(0, 200)}`);
+    if (res.status === 429) throw new Error("Limite de requêtes OpenAI atteinte, réessayez dans un instant.");
+    if (res.status === 401) throw new Error("Clé OPENAI_API_KEY invalide ou expirée.");
+    throw new Error(`Erreur OpenAI (${res.status}): ${text.slice(0, 200)}`);
   }
-  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
   return data.choices?.[0]?.message?.content ?? "";
+}
+
+async function transcribeWithWhisper(audioBase64: string, mimeType: string, lang: "fr" | "en"): Promise<string> {
+  const apiKey = getOpenAiKey();
+  const binary = atob(audioBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const ext = audioFormatFromMime(mimeType);
+  const blob = new Blob([bytes], { type: mimeType });
+
+  const form = new FormData();
+  form.append("file", blob, `audio.${ext}`);
+  form.append("model", "whisper-1");
+  form.append("language", lang);
+
+  const res = await fetch(OPENAI_WHISPER_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    if (res.status === 401) throw new Error("Clé OPENAI_API_KEY invalide ou expirée.");
+    throw new Error(`Erreur Whisper (${res.status}): ${text.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { text?: string };
+  return json.text ?? "";
 }
 
 function audioFormatFromMime(mime: string): string {
@@ -96,27 +127,13 @@ export const transcribeAudio = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data }) => {
-    const format = audioFormatFromMime(data.mimeType);
     const lang = data.lang ?? "fr";
-    const sys = lang === "en"
-      ? "You are a professional audio transcriber. Faithfully transcribe the audio content in English, with no commentary, no preamble, no markdown. If audio is inaudible or empty, return an empty string."
-      : "Tu es un transcripteur audio professionnel français. Transcris fidèlement le contenu audio en français, sans ajouter de commentaire, sans préambule, sans markdown. Si l'audio est inaudible ou vide, renvoie une chaîne vide.";
-    const userText = lang === "en" ? "Transcribe this audio recording in English." : "Transcris cet enregistrement audio en français.";
-    const content = await callGatewayRaw([
-      { role: "system", content: sys },
-      {
-        role: "user",
-        content: [
-          { type: "text", text: userText },
-          { type: "input_audio", input_audio: { data: data.audioBase64, format } },
-        ],
-      },
-    ]);
-    return { text: content.trim() };
+    const text = await transcribeWithWhisper(data.audioBase64, data.mimeType, lang);
+    return { text: text.trim() };
   });
 
 async function callGateway(messages: Array<{ role: string; content: string }>, jsonMode = false) {
-  return callGatewayRaw(messages, jsonMode);
+  return callOpenAiChat(messages, jsonMode);
 }
 
 async function cleanRawTranscript(raw: string, lang: "fr" | "en" = "fr"): Promise<string> {
