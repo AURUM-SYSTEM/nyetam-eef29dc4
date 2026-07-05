@@ -1,22 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// OFFLINE STORE — IndexedDB (queue, audio, photos)
+// OFFLINE STORE — IndexedDB (queue, audio, photos, vidéos)
 //
 // Source de vérité côté client tant qu'une saisie n'est pas `synced`.
 // Le sync engine (use-sync-engine.ts) draine cette file vers Supabase.
 //
 // Extension modules : ajouter un domaine métier = étendre `ModuleType`
-// puis mettre à jour `src/lib/organization-context.ts`. Aucun changement
-// de schéma DB n'est requis (le champ `module_type` côté `documents`
-// est un text libre, indexable, sans CHECK contraignant).
+// puis mettre à jour `src/lib/organization-context.ts` et
+// `src/lib/module-fields.ts`. Aucun changement de schéma DB n'est requis
+// (le champ `module_type` côté `documents` est un text libre, indexable,
+// sans CHECK contraignant).
 //
 // Legacy : `DocType` conserve `rapport | pv | recensement | mission_terrain
 // | enquete` pour lire les anciens enregistrements. Les nouvelles saisies
 // utilisent `field_entry` (neutre, sans génération IA structurée).
+//
+// DB_VERSION 5 : ajout de l'object store `videos` (courtes preuves vidéo
+// terrain, ≤ 60s) — additif, ne modifie aucun store existant.
 // ─────────────────────────────────────────────────────────────────────────────
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "aurum-offline";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export type DocType =
   | "rapport"
@@ -54,6 +58,14 @@ export type PhotoRecord = {
   createdAt: number;
 };
 
+export type VideoRecord = {
+  id: string;
+  blob: Blob;
+  mimeType: string;
+  durationMs: number;
+  createdAt: number;
+};
+
 export type GpsLocation = {
   lat: number;
   lng: number;
@@ -74,6 +86,9 @@ export type QueueMeta = {
   gps?: GpsLocation;
   autoDetect?: boolean;
   moduleType?: ModuleType;
+  // Champs structurés spécifiques au module métier (voir module-fields.ts),
+  // saisis directement par l'agent — ex: { surface_ha: "2.5", culture: "maïs" }
+  fieldData?: Record<string, string>;
   // Recensement-specific
   subjectName?: string;
   subjectStatus?: string;
@@ -87,6 +102,7 @@ export type QueueItem = {
   audioId?: string;
   transcript?: string;
   photoIds?: string[];
+  videoIds?: string[];
   status: QueueStatus;
   remoteDocId?: string;
   errorMsg?: string;
@@ -121,6 +137,9 @@ function getDB() {
         }
         if (!db.objectStoreNames.contains("photos")) {
           db.createObjectStore("photos", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("videos")) {
+          db.createObjectStore("videos", { keyPath: "id" });
         }
       },
     });
@@ -166,6 +185,23 @@ export async function deletePhoto(id: string) {
   await db.delete("photos", id);
 }
 
+export async function saveVideo(blob: Blob, mimeType: string, durationMs: number) {
+  const db = await getDB();
+  const rec: VideoRecord = { id: rid(), blob, mimeType, durationMs, createdAt: Date.now() };
+  await db.put("videos", rec);
+  return rec.id;
+}
+
+export async function getVideo(id: string): Promise<VideoRecord | undefined> {
+  const db = await getDB();
+  return db.get("videos", id);
+}
+
+export async function deleteVideo(id: string) {
+  const db = await getDB();
+  await db.delete("videos", id);
+}
+
 export async function enqueue(
   item: Omit<QueueItem, "id" | "status" | "createdAt" | "updatedAt"> & { status?: QueueStatus },
 ): Promise<QueueItem> {
@@ -203,6 +239,11 @@ export async function deleteQueueItem(id: string) {
   if (item?.photoIds?.length) {
     for (const pid of item.photoIds) {
       try { await db.delete("photos", pid); } catch {}
+    }
+  }
+  if (item?.videoIds?.length) {
+    for (const vid of item.videoIds) {
+      try { await db.delete("videos", vid); } catch {}
     }
   }
   notify();
