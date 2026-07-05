@@ -6,11 +6,17 @@
 //   - table `user_roles` + fonction `has_role()`
 //   - policies RLS additives sur `documents` et `profiles`
 //
+// V2.1 : ajout de la demande de modification (superviseur → admin), voir
+// `src/lib/moderation.functions.ts`. Une donnée validée ne peut plus être
+// modifiée directement par le superviseur — il soumet une demande, journalisée
+// et gouvernée par un délai d'approbation automatique (pg_cron côté DB).
+//
 // Cette page ne modifie AUCUN fichier de la partie COLLECT existante et
 // ne touche à aucune policy RLS existante (uniquement des ajouts).
 // ─────────────────────────────────────────────────────────────────────────
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   Activity,
   AlertTriangle,
@@ -19,9 +25,11 @@ import {
   Loader2,
   Lock,
   MapPin,
+  Pencil,
   Radio,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Bar,
   BarChart,
@@ -42,6 +50,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
+import { requestModification } from "@/lib/moderation.functions";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
   component: SupervisorDashboard,
@@ -230,6 +239,83 @@ function MiniMap({ docs }: { docs: DocRow[] }) {
   );
 }
 
+// ── Formulaire compact de demande de modification ────────────────────────
+
+function ModificationRequestRow({ doc, onClose }: { doc: DocRow; onClose: () => void }) {
+  const submit = useServerFn(requestModification);
+  const [fieldName, setFieldName] = useState<"title" | "location">("title");
+  const [proposedValue, setProposedValue] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const currentValue = fieldName === "title" ? doc.title ?? "" : doc.location ?? "";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!proposedValue.trim() || !reason.trim()) {
+      toast.error("Renseigne la nouvelle valeur et la justification.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await submit({
+        data: {
+          documentId: doc.id,
+          fieldName,
+          currentValue: [currentValue],
+          proposedValue: [proposedValue.trim()],
+          reason: reason.trim(),
+        },
+      });
+      toast.success("Demande envoyée à l'administrateur");
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.message ?? "Échec de l'envoi");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <TableRow>
+      <TableCell colSpan={7} className="bg-card/30">
+        <form onSubmit={handleSubmit} className="space-y-2 py-2">
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={fieldName}
+              onChange={(e) => setFieldName(e.target.value as "title" | "location")}
+              className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs"
+            >
+              <option value="title">Titre</option>
+              <option value="location">Lieu</option>
+            </select>
+            <input
+              value={proposedValue}
+              onChange={(e) => setProposedValue(e.target.value)}
+              placeholder={`Nouvelle valeur (actuel : ${currentValue || "—"})`}
+              className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs"
+            />
+          </div>
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Justification de la correction"
+            className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs"
+          />
+          <div className="flex gap-2">
+            <button type="submit" disabled={busy} className="btn-gold rounded-lg px-3 py-1.5 text-xs disabled:opacity-40">
+              {busy ? "Envoi…" : "Envoyer la demande"}
+            </button>
+            <button type="button" onClick={onClose} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground">
+              Annuler
+            </button>
+          </div>
+        </form>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────
 
 function SupervisorDashboard() {
@@ -281,6 +367,7 @@ function SupervisorDashboardContent() {
   const [agentFilter, setAgentFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "ready">("all");
   const [validated, setValidated] = useState<Set<string>>(new Set());
+  const [requestingId, setRequestingId] = useState<string | null>(null);
 
   const agentOptions = useMemo(
     () => Array.from(new Set(Object.values(profilesById))).sort(),
@@ -474,47 +561,61 @@ function SupervisorDashboardContent() {
               <TableHead>Lieu</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Statut</TableHead>
-              <TableHead className="text-right">Validation</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredDocs.slice(0, 30).map((d) => (
-              <TableRow key={d.id}>
-                <TableCell className="font-medium">{profilesById[d.user_id] || "Agent"}</TableCell>
-                <TableCell>
-                  <span
-                    className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider"
-                    style={{
-                      backgroundColor: `color-mix(in oklch, ${moduleColor(d.module_type)} 18%, transparent)`,
-                      color: moduleColor(d.module_type),
-                    }}
-                  >
-                    {moduleLabel(d.module_type)}
-                  </span>
-                </TableCell>
-                <TableCell className="max-w-[180px] truncate">{d.title || "—"}</TableCell>
-                <TableCell className="text-muted-foreground">{d.location_data?.city || d.location || "—"}</TableCell>
-                <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                  {new Date(d.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                </TableCell>
-                <TableCell>
-                  <span className={d.status === "ready" ? "text-xs text-emerald-400" : "text-xs text-muted-foreground"}>
-                    {d.status === "ready" ? "Synchronisé" : "Brouillon"}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right">
-                  <button
-                    onClick={() => toggleValidate(d.id)}
-                    className={
-                      validated.has(d.id)
-                        ? "rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400"
-                        : "rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-                    }
-                  >
-                    {validated.has(d.id) ? "Validé ✓" : "Valider"}
-                  </button>
-                </TableCell>
-              </TableRow>
+              <Fragment key={d.id}>
+                <TableRow>
+                  <TableCell className="font-medium">{profilesById[d.user_id] || "Agent"}</TableCell>
+                  <TableCell>
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider"
+                      style={{
+                        backgroundColor: `color-mix(in oklch, ${moduleColor(d.module_type)} 18%, transparent)`,
+                        color: moduleColor(d.module_type),
+                      }}
+                    >
+                      {moduleLabel(d.module_type)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="max-w-[180px] truncate">{d.title || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{d.location_data?.city || d.location || "—"}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {new Date(d.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </TableCell>
+                  <TableCell>
+                    <span className={d.status === "ready" ? "text-xs text-emerald-400" : "text-xs text-muted-foreground"}>
+                      {d.status === "ready" ? "Synchronisé" : "Brouillon"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        onClick={() => setRequestingId(requestingId === d.id ? null : d.id)}
+                        title="Demander une modification"
+                        className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => toggleValidate(d.id)}
+                        className={
+                          validated.has(d.id)
+                            ? "rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400"
+                            : "rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                        }
+                      >
+                        {validated.has(d.id) ? "Validé ✓" : "Valider"}
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+                {requestingId === d.id && (
+                  <ModificationRequestRow doc={d} onClose={() => setRequestingId(null)} />
+                )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>
