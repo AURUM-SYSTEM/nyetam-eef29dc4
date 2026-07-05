@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronLeft, Loader2, Lock, Mail, ShieldCheck, UserPlus } from "lucide-react";
+import { CheckCircle2, ChevronLeft, Loader2, Lock, Mail, ShieldCheck, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { listOrgUsers, inviteAgent, updateAgentAssignment } from "@/lib/admin.functions";
+import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -33,6 +34,17 @@ type OrgUser = {
   roles: string[];
 };
 
+type ModRequest = {
+  id: string;
+  documentTitle: string;
+  requestedByName: string;
+  fieldName: string;
+  currentValue: unknown;
+  proposedValue: unknown;
+  reason: string;
+  expiresAt: string;
+};
+
 type AdminState =
   | { status: "checking" }
   | { status: "denied" }
@@ -44,10 +56,15 @@ function AdminDashboard() {
   const listUsers = useServerFn(listOrgUsers);
   const invite = useServerFn(inviteAgent);
   const updateAssignment = useServerFn(updateAgentAssignment);
+  const listRequests = useServerFn(listPendingModificationRequests);
+  const decideRequest = useServerFn(decideModificationRequest);
 
   const [state, setState] = useState<AdminState>({ status: "checking" });
   const [users, setUsers] = useState<OrgUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [requests, setRequests] = useState<ModRequest[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
 
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -74,11 +91,37 @@ function AdminDashboard() {
     }
   }
 
+  async function loadRequests() {
+    setLoadingRequests(true);
+    try {
+      const res = await listRequests({ data: undefined as any });
+      setRequests(res.requests);
+    } catch (e: any) {
+      // silencieux : la section users a déjà géré le cas "non admin"
+    } finally {
+      setLoadingRequests(false);
+    }
+  }
+
   useEffect(() => {
     if (!session?.user) return;
     void loadUsers();
+    void loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
+
+  async function decide(requestId: string, decision: "approved" | "rejected") {
+    setDecidingId(requestId);
+    try {
+      await decideRequest({ data: { requestId, decision } });
+      toast.success(decision === "approved" ? "Modification approuvée et appliquée" : "Demande rejetée");
+      setRequests(prev => prev.filter(r => r.id !== requestId));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la décision");
+    } finally {
+      setDecidingId(null);
+    }
+  }
 
   async function submitInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -206,6 +249,47 @@ function AdminDashboard() {
             Envoyer l'invitation
           </button>
         </form>
+      )}
+
+      {requests.length > 0 && (
+        <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <h2 className="mb-3 text-xs uppercase tracking-widest text-amber-300">
+            Demandes de modification en attente ({requests.length})
+          </h2>
+          <div className="space-y-3">
+            {requests.map(r => (
+              <div key={r.id} className="rounded-xl border border-amber-500/20 bg-card/40 p-3">
+                <p className="text-sm font-medium">{r.documentTitle}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Par {r.requestedByName} — champ « {r.fieldName} »
+                </p>
+                <p className="mt-1 text-xs text-amber-200/90">
+                  {JSON.stringify(r.currentValue)} → {JSON.stringify(r.proposedValue)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground italic">« {r.reason} »</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Auto-approuvée le {new Date(r.expiresAt).toLocaleString("fr-FR")} si aucune décision
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => void decide(r.id, "approved")}
+                    disabled={decidingId === r.id}
+                    className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-400 disabled:opacity-40"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Approuver
+                  </button>
+                  <button
+                    onClick={() => void decide(r.id, "rejected")}
+                    disabled={decidingId === r.id}
+                    className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground disabled:opacity-40"
+                  >
+                    <XCircle className="h-3.5 w-3.5" /> Rejeter
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       <section className="glass-card rounded-2xl p-4">
