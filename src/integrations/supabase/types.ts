@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      core_outputs: {
+        Row: {
+          document_id: string
+          id: string
+          module_type: string
+          payload: Json
+          processed_at: string | null
+          version: number
+        }
+        Insert: {
+          document_id: string
+          id?: string
+          module_type: string
+          payload: Json
+          processed_at?: string | null
+          version?: number
+        }
+        Update: {
+          document_id?: string
+          id?: string
+          module_type?: string
+          payload?: Json
+          processed_at?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "core_outputs_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           agent_name: string
@@ -23,6 +58,7 @@ export type Database = {
           doc_date: string | null
           doc_time: string | null
           faits: string
+          field_data: Json | null
           id: string
           introduction: string
           lang: string
@@ -41,6 +77,7 @@ export type Database = {
           type: string
           updated_at: string
           user_id: string
+          video_urls: string[] | null
         }
         Insert: {
           agent_name?: string
@@ -50,6 +87,7 @@ export type Database = {
           doc_date?: string | null
           doc_time?: string | null
           faits?: string
+          field_data?: Json | null
           id?: string
           introduction?: string
           lang?: string
@@ -68,6 +106,7 @@ export type Database = {
           type: string
           updated_at?: string
           user_id: string
+          video_urls?: string[] | null
         }
         Update: {
           agent_name?: string
@@ -77,6 +116,7 @@ export type Database = {
           doc_date?: string | null
           doc_time?: string | null
           faits?: string
+          field_data?: Json | null
           id?: string
           introduction?: string
           lang?: string
@@ -95,6 +135,31 @@ export type Database = {
           type?: string
           updated_at?: string
           user_id?: string
+          video_urls?: string[] | null
+        }
+        Relationships: []
+      }
+      organizations: {
+        Row: {
+          created_at: string | null
+          id: string
+          module_type: string
+          name: string
+          type: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          module_type: string
+          name: string
+          type: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          module_type?: string
+          name?: string
+          type?: string
         }
         Relationships: []
       }
@@ -106,6 +171,7 @@ export type Database = {
           full_name: string
           id: string
           module_type: string
+          organization_id: string | null
           organization_name: string
           organization_type: string
           preferred_lang: string
@@ -121,6 +187,7 @@ export type Database = {
           full_name?: string
           id: string
           module_type?: string
+          organization_id?: string | null
           organization_name?: string
           organization_type?: string
           preferred_lang?: string
@@ -136,6 +203,7 @@ export type Database = {
           full_name?: string
           id?: string
           module_type?: string
+          organization_id?: string | null
           organization_name?: string
           organization_type?: string
           preferred_lang?: string
@@ -144,17 +212,57 @@ export type Database = {
           secteur_activite?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          organization_id: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          organization_id?: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: { _role: Database["public"]["Enums"]["app_role"]; _user: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "agent" | "supervisor" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -281,6 +389,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["agent", "supervisor", "admin"],
+    },
   },
 } as const
