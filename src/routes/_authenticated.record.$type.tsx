@@ -12,7 +12,7 @@ import { useI18n } from "@/i18n";
 import { captureGps } from "@/lib/geo";
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
-import { fieldsForModule } from "@/lib/module-fields";
+import { supabase } from "@/integrations/supabase/client";
 
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
@@ -131,6 +131,48 @@ const MAX_VIDEO_SECONDS = 60;
 type LocalPhoto = { id: string; previewUrl: string };
 type LocalVideo = { id: string; previewUrl: string; durationMs: number };
 
+// ── Formulaire dynamique par mission ─────────────────────────────────────
+// Configuré en base (table `mission_forms`), jamais codé en dur ici.
+// Un module peut avoir plusieurs missions ; chaque mission définit ses
+// propres champs. Voir docs/ARCHITECTURE — principe "Collecte guidée par
+// le contexte".
+type MissionFieldDef = {
+  key: string;
+  label: string;
+  type: "text" | "number";
+  unit?: string;
+  required?: boolean;
+};
+type MissionForm = {
+  mission_key: string;
+  mission_label: string;
+  fields: MissionFieldDef[];
+};
+
+function useMissionForms(moduleType: ModuleType | undefined) {
+  const [forms, setForms] = useState<MissionForm[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("mission_forms")
+        .select("mission_key, mission_label, fields")
+        .eq("module_type", moduleType ?? "generic")
+        .order("sort_order", { ascending: true });
+      if (!cancelled) {
+        if (!error && data) setForms(data as unknown as MissionForm[]);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [moduleType]);
+
+  return { forms, loading };
+}
+
 function RecordPage() {
   const { type } = useParams({ from: "/_authenticated/record/$type" });
   const { profile } = useAuth();
@@ -141,7 +183,17 @@ function RecordPage() {
   const online = useOnline();
   const { t, lang } = useI18n();
 
-  const moduleFields = fieldsForModule(moduleFromProfile);
+  const { forms: missionForms, loading: missionFormsLoading } = useMissionForms(moduleFromProfile);
+  const [missionKey, setMissionKey] = useState<string>("");
+
+  useEffect(() => {
+    if (missionForms.length > 0 && !missionKey) {
+      setMissionKey(missionForms[0].mission_key);
+    }
+  }, [missionForms, missionKey]);
+
+  const activeMission = missionForms.find(m => m.mission_key === missionKey);
+  const missionFields = activeMission?.fields ?? [];
 
   const [supported, setSupported] = useState(true);
   const [secureOk, setSecureOk] = useState(true);
@@ -161,6 +213,11 @@ function RecordPage() {
   const [gps, setGps] = useState<GpsLocation | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+
+  // Réinitialise les valeurs saisies si l'agent change de mission
+  useEffect(() => {
+    setFieldValues({});
+  }, [missionKey]);
 
   // Photos & vidéos jointes
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
@@ -217,6 +274,7 @@ function RecordPage() {
 
   function buildMeta(): QueueMeta {
     const p = getProfile();
+    const hasFieldValues = Object.keys(fieldValues).length > 0;
     return {
       agentName: agentName.trim() || p.name,
       location: location.trim(),
@@ -228,7 +286,9 @@ function RecordPage() {
       gps: gps ?? undefined,
       autoDetect: docType === "auto",
       moduleType: moduleFromProfile,
-      fieldData: Object.keys(fieldValues).length > 0 ? fieldValues : undefined,
+      fieldData: (hasFieldValues || missionKey)
+        ? { ...(missionKey ? { _mission_key: missionKey } : {}), ...fieldValues }
+        : undefined,
     };
   }
 
@@ -487,6 +547,22 @@ function RecordPage() {
         </div>
       )}
 
+      {/* Sélecteur de mission (généré dynamiquement, jamais codé en dur) */}
+      {missionForms.length > 1 && (
+        <section className="mt-6 glass-card rounded-2xl p-4">
+          <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">Type de mission</h2>
+          <select
+            value={missionKey}
+            onChange={e => setMissionKey(e.target.value)}
+            className="w-full rounded-lg border border-border bg-input/50 px-3 py-2.5 text-sm outline-none focus:border-gold"
+          >
+            {missionForms.map(m => (
+              <option key={m.mission_key} value={m.mission_key}>{m.mission_label}</option>
+            ))}
+          </select>
+        </section>
+      )}
+
       {/* Metadata */}
       <section className="mt-6 glass-card rounded-2xl p-4">
         <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">{t("record.context_meta")}</h2>
@@ -527,24 +603,23 @@ function RecordPage() {
         </div>
       </section>
 
-      {/* Champs spécifiques au métier (agro / santé / ONG) */}
-      {moduleFields.length > 0 && (
+      {/* Champs de la mission active — générés dynamiquement depuis `mission_forms` */}
+      {!missionFormsLoading && missionFields.length > 0 && (
         <section className="mt-4 glass-card rounded-2xl p-4">
           <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">
-            Informations spécifiques
+            {activeMission?.mission_label ?? "Informations spécifiques"}
           </h2>
           <div className="grid grid-cols-2 gap-3">
-            {moduleFields.map(f => (
+            {missionFields.map(f => (
               <label key={f.key} className={f.type === "text" && f.key.length > 12 ? "col-span-2 block" : "block"}>
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
-                  {f.label}{f.unit ? ` (${f.unit})` : ""}
+                  {f.label}{f.unit ? ` (${f.unit})` : ""}{f.required ? " *" : ""}
                 </span>
                 <input
                   type={f.type === "number" ? "number" : "text"}
                   inputMode={f.type === "number" ? "decimal" : undefined}
                   value={fieldValues[f.key] ?? ""}
                   onChange={e => setFieldValues(prev => ({ ...prev, [f.key]: e.target.value }))}
-                  placeholder={f.placeholder}
                   className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
                 />
               </label>
@@ -699,4 +774,3 @@ function RecordPage() {
     </div>
   );
 }
-
