@@ -451,16 +451,16 @@ export const generateDocument = createServerFn({ method: "POST" })
 
 const CORE_MODULE_HINTS: Record<string, { fr: string; en: string }> = {
   agro: {
-    fr: "Contexte agricole : cultures, parcelles, rendements, coopératives, visites terrain.",
-    en: "Agricultural context: crops, plots, yields, cooperatives, field visits.",
+    fr: "Contexte agricole : cultures, parcelles, rendements, coopératives, visites terrain. Cherche activement dans le texte : la culture concernée, la surface (en ha), le nombre de parcelles, le rendement estimé — si mentionnés.",
+    en: "Agricultural context: crops, plots, yields, cooperatives, field visits. Actively look for: the crop involved, the surface area (ha), the number of plots, the estimated yield — if mentioned.",
   },
   health: {
-    fr: "Contexte santé : patients, campagnes, indicateurs sanitaires, structures de soin.",
-    en: "Health context: patients, campaigns, health indicators, care facilities.",
+    fr: "Contexte santé : patients, campagnes, indicateurs sanitaires, structures de soin. Cherche activement dans le texte : le nombre de patients, la pathologie ou motif, la structure de santé concernée — si mentionnés.",
+    en: "Health context: patients, campaigns, health indicators, care facilities. Actively look for: the number of patients, the pathology or reason, the health facility involved — if mentioned.",
   },
   ngo: {
-    fr: "Contexte ONG : bénéficiaires, distributions, activités humanitaires.",
-    en: "NGO context: beneficiaries, distributions, humanitarian activities.",
+    fr: "Contexte ONG : bénéficiaires, distributions, activités humanitaires. Cherche activement dans le texte : le nombre de bénéficiaires, le type de distribution/aide, la zone d'intervention — si mentionnés.",
+    en: "NGO context: beneficiaries, distributions, humanitarian activities. Actively look for: the number of beneficiaries, the type of distribution/aid, the intervention zone — if mentioned.",
   },
   generic: {
     fr: "Contexte générique : capture terrain libre, sans domaine métier spécifique.",
