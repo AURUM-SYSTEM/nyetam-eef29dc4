@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.claude/hooks/auto-push.sh\"",
+            "timeout": 90,
+            "statusMessage": "Envoi des modifications vers GitHub..."
+          }
+        ]
+      }
+    ]
+  }
+}
