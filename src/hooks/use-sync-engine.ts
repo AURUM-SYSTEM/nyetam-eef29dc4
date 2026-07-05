@@ -25,6 +25,8 @@ import {
   deleteAudio,
   getPhoto,
   deletePhoto,
+  getVideo,
+  deleteVideo,
   blobToBase64,
   subscribeQueue,
   type QueueItem,
@@ -220,6 +222,7 @@ export function useSyncEngine() {
             agent_name: item.meta?.agentName ?? "",
             location: locationLabel,
             location_data: resolvedLocation as any,
+            field_data: item.meta?.fieldData ?? null,
             suggestions,
             reference: item.meta?.reference ?? "",
             signature_name:
@@ -288,6 +291,39 @@ export function useSyncEngine() {
           }
           for (const pid of photoIds) {
             try { await deletePhoto(pid); } catch {}
+          }
+        }
+
+        // Upload vidéos (si présentes) — même logique que les photos
+        const videoIds = item.videoIds ?? [];
+        if (videoIds.length > 0) {
+          toast.loading("🎬 Envoi de la vidéo…", { id: toastId });
+          const vpaths: string[] = [];
+          for (const vid of videoIds) {
+            const video = await getVideo(vid);
+            if (!video) continue;
+            const ext = (video.mimeType.split("/")[1] || "webm").split(";")[0];
+            const path = `${userId}/${data.id}/${vid}.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from("recensement-videos")
+              .upload(path, video.blob, {
+                contentType: video.mimeType,
+                upsert: true,
+              });
+            if (upErr) {
+              console.error("Video upload failed", upErr);
+              continue;
+            }
+            vpaths.push(path);
+          }
+          if (vpaths.length > 0) {
+            await supabase
+              .from("documents")
+              .update({ video_urls: vpaths })
+              .eq("id", data.id);
+          }
+          for (const vid of videoIds) {
+            try { await deleteVideo(vid); } catch {}
           }
         }
 
