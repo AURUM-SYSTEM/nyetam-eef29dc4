@@ -1,14 +1,18 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2 } from "lucide-react";
+import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2, Camera, Video, X, VideoOff } from "lucide-react";
 import { toast } from "sonner";
-import { saveAudio, enqueue, type QueueMeta, type DocType, type GpsLocation, type ModuleType } from "@/lib/offline-store";
+import {
+  saveAudio, enqueue, savePhoto, saveVideo,
+  type QueueMeta, type DocType, type GpsLocation, type ModuleType,
+} from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
 import { captureGps } from "@/lib/geo";
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
+import { fieldsForModule } from "@/lib/module-fields";
 
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
@@ -91,6 +95,20 @@ function pickMimeType(): string {
   return "";
 }
 
+function pickVideoMimeType(): string {
+  if (typeof MediaRecorder === "undefined") return "";
+  const candidates = [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm",
+    "video/mp4",
+  ];
+  for (const m of candidates) {
+    try { if ((MediaRecorder as any).isTypeSupported?.(m)) return m; } catch {}
+  }
+  return "";
+}
+
 export const Route = createFileRoute("/_authenticated/record/$type")({
   component: RecordPage,
   head: () => ({ meta: [{ title: "Enregistrement — AURUM" }] }),
@@ -108,6 +126,11 @@ const TYPE_LABELS: Record<string, string> = {
   enquete: "Enquête",
 };
 
+const MAX_VIDEO_SECONDS = 60;
+
+type LocalPhoto = { id: string; previewUrl: string };
+type LocalVideo = { id: string; previewUrl: string; durationMs: number };
+
 function RecordPage() {
   const { type } = useParams({ from: "/_authenticated/record/$type" });
   const { profile } = useAuth();
@@ -118,6 +141,7 @@ function RecordPage() {
   const online = useOnline();
   const { t, lang } = useI18n();
 
+  const moduleFields = fieldsForModule(moduleFromProfile);
 
   const [supported, setSupported] = useState(true);
   const [secureOk, setSecureOk] = useState(true);
@@ -136,12 +160,27 @@ function RecordPage() {
   const [docTime, setDocTime] = useState(now.toTimeString().slice(0, 5));
   const [gps, setGps] = useState<GpsLocation | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+
+  // Photos & vidéos jointes
+  const [photos, setPhotos] = useState<LocalPhoto[]>([]);
+  const [videos, setVideos] = useState<LocalVideo[]>([]);
+  const [videoRecording, setVideoRecording] = useState(false);
+  const [videoElapsed, setVideoElapsed] = useState(0);
 
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef<number>(0);
+
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const videoRecRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const videoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoStartedAtRef = useRef<number>(0);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const p = getProfile();
@@ -167,6 +206,11 @@ function RecordPage() {
       try { recRef.current?.stop(); } catch {}
       streamRef.current?.getTracks().forEach(t => t.stop());
       if (timerRef.current) clearInterval(timerRef.current);
+      try { videoRecRef.current?.stop(); } catch {}
+      videoStreamRef.current?.getTracks().forEach(t => t.stop());
+      if (videoTimerRef.current) clearInterval(videoTimerRef.current);
+      photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
+      videos.forEach(v => URL.revokeObjectURL(v.previewUrl));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -184,6 +228,7 @@ function RecordPage() {
       gps: gps ?? undefined,
       autoDetect: docType === "auto",
       moduleType: moduleFromProfile,
+      fieldData: Object.keys(fieldValues).length > 0 ? fieldValues : undefined,
     };
   }
 
@@ -197,6 +242,118 @@ function RecordPage() {
     } finally { setGpsLoading(false); }
   }
 
+  // ── Photos ──────────────────────────────────────────────────────────
+
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    for (const file of files) {
+      try {
+        const id = await savePhoto(file, file.type || "image/jpeg", file.name || "photo.jpg");
+        setPhotos(prev => [...prev, { id, previewUrl: URL.createObjectURL(file) }]);
+      } catch {
+        toast.error("Impossible d'ajouter cette photo");
+      }
+    }
+  }
+
+  function removePhoto(id: string) {
+    setPhotos(prev => {
+      const found = prev.find(p => p.id === id);
+      if (found) URL.revokeObjectURL(found.previewUrl);
+      return prev.filter(p => p.id !== id);
+    });
+  }
+
+  // ── Vidéo (courte preuve terrain, ≤ 60s) ────────────────────────────
+
+  async function startVideo() {
+    if (!secureOk) { toast.error("HTTPS requis"); return; }
+    if (!navigator.mediaDevices?.getUserMedia) { toast.error("Caméra indisponible."); return; }
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+        audio: true,
+      });
+    } catch (err: any) {
+      toast.error("Accès caméra refusé : " + (err?.message || err?.name || "inconnu"));
+      return;
+    }
+    if (videoPreviewRef.current) {
+      videoPreviewRef.current.srcObject = stream;
+      void videoPreviewRef.current.play().catch(() => {});
+    }
+    const mime = pickVideoMimeType();
+    let rec: MediaRecorder;
+    try {
+      rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch (e: any) {
+      stream.getTracks().forEach(t => t.stop());
+      toast.error("Impossible de démarrer la vidéo : " + e.message);
+      return;
+    }
+    videoChunksRef.current = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) videoChunksRef.current.push(e.data); };
+    rec.start(1000);
+    videoRecRef.current = rec;
+    videoStreamRef.current = stream;
+    videoStartedAtRef.current = Date.now();
+    setVideoElapsed(0);
+    setVideoRecording(true);
+    videoTimerRef.current = setInterval(() => {
+      setVideoElapsed(s => {
+        const next = s + 1;
+        if (next >= MAX_VIDEO_SECONDS) {
+          void stopVideo();
+        }
+        return next;
+      });
+    }, 1000);
+  }
+
+  async function stopVideo() {
+    const rec = videoRecRef.current;
+    const stream = videoStreamRef.current;
+    if (!rec) return;
+    if (videoTimerRef.current) { clearInterval(videoTimerRef.current); videoTimerRef.current = null; }
+    const durationMs = Date.now() - videoStartedAtRef.current;
+    const finalBlob: Blob = await new Promise((resolve) => {
+      rec.onstop = () => {
+        const t = rec.mimeType || "video/webm";
+        resolve(new Blob(videoChunksRef.current, { type: t }));
+      };
+      try { rec.stop(); } catch { resolve(new Blob(videoChunksRef.current, { type: rec.mimeType || "video/webm" })); }
+    });
+    stream?.getTracks().forEach(t => t.stop());
+    videoRecRef.current = null;
+    videoStreamRef.current = null;
+    if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+    setVideoRecording(false);
+
+    if (finalBlob.size === 0) {
+      toast.error("Vidéo vide, non enregistrée");
+      return;
+    }
+    try {
+      const mimeType = finalBlob.type || "video/webm";
+      const id = await saveVideo(finalBlob, mimeType, durationMs);
+      setVideos(prev => [...prev, { id, previewUrl: URL.createObjectURL(finalBlob), durationMs }]);
+      toast.success("Vidéo ajoutée");
+    } catch {
+      toast.error("Impossible d'enregistrer la vidéo");
+    }
+  }
+
+  function removeVideo(id: string) {
+    setVideos(prev => {
+      const found = prev.find(v => v.id === id);
+      if (found) URL.revokeObjectURL(found.previewUrl);
+      return prev.filter(v => v.id !== id);
+    });
+  }
+
+  // ── Audio ────────────────────────────────────────────────────────────
 
   async function ensureMicAccess(): Promise<MediaStream | null> {
     if (!secureOk) { toast.error("HTTPS requis"); return null; }
@@ -267,7 +424,12 @@ function RecordPage() {
       const mimeType = finalBlob.type || "audio/webm";
       if (finalBlob.size === 0) throw new Error("Enregistrement vide");
       const audioId = await saveAudio(finalBlob, mimeType, durationMs);
-      await enqueue({ type: docType, audioId, meta: buildMeta() });
+      await enqueue({
+        type: docType, audioId,
+        photoIds: photos.map(p => p.id),
+        videoIds: videos.map(v => v.id),
+        meta: buildMeta(),
+      });
       toast.success(online ? "Enregistré — synchronisation en cours" : "Enregistré localement — sync à la reconnexion");
       navigate({ to: "/" });
     } catch (e: any) {
@@ -281,7 +443,12 @@ function RecordPage() {
     if (!tx) { toast.error("Texte vide."); return; }
     setSaving(true);
     try {
-      await enqueue({ type: docType, transcript: tx, meta: buildMeta() });
+      await enqueue({
+        type: docType, transcript: tx,
+        photoIds: photos.map(p => p.id),
+        videoIds: videos.map(v => v.id),
+        meta: buildMeta(),
+      });
       toast.success(online ? "Ajouté — synchronisation en cours" : "Ajouté à la file — sync à la reconnexion");
       navigate({ to: "/" });
     } catch (e: any) {
@@ -292,6 +459,8 @@ function RecordPage() {
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
+  const vmm = String(Math.floor(videoElapsed / 60)).padStart(2, "0");
+  const vss = String(videoElapsed % 60).padStart(2, "0");
 
   return (
     <div className="px-5 pt-8 pb-32">
@@ -356,6 +525,111 @@ function RecordPage() {
               className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
           </label>
         </div>
+      </section>
+
+      {/* Champs spécifiques au métier (agro / santé / ONG) */}
+      {moduleFields.length > 0 && (
+        <section className="mt-4 glass-card rounded-2xl p-4">
+          <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">
+            Informations spécifiques
+          </h2>
+          <div className="grid grid-cols-2 gap-3">
+            {moduleFields.map(f => (
+              <label key={f.key} className={f.type === "text" && f.key.length > 12 ? "col-span-2 block" : "block"}>
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
+                  {f.label}{f.unit ? ` (${f.unit})` : ""}
+                </span>
+                <input
+                  type={f.type === "number" ? "number" : "text"}
+                  inputMode={f.type === "number" ? "decimal" : undefined}
+                  value={fieldValues[f.key] ?? ""}
+                  onChange={e => setFieldValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={f.placeholder}
+                  className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
+                />
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Photos & vidéos */}
+      <section className="mt-4 glass-card rounded-2xl p-4">
+        <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">Photos & vidéo</h2>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <Camera className="h-4 w-4 text-gold" /> Ajouter une photo
+          </button>
+          <button
+            type="button"
+            onClick={videoRecording ? stopVideo : startVideo}
+            disabled={videos.length > 0 && !videoRecording}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm disabled:opacity-40 ${
+              videoRecording
+                ? "border-destructive/50 bg-destructive/10 text-destructive"
+                : "border-border bg-card/50 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {videoRecording ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4 text-gold" />}
+            {videoRecording ? `Arrêter (${vmm}:${vss})` : "Vidéo courte (≤60s)"}
+          </button>
+        </div>
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          multiple
+          className="hidden"
+          onChange={handlePhotoSelected}
+        />
+
+        {videoRecording && (
+          <video ref={videoPreviewRef} muted playsInline className="mt-3 w-full rounded-lg border border-destructive/40" />
+        )}
+
+        {photos.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {photos.map(p => (
+              <div key={p.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border">
+                <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removePhoto(p.id)}
+                  className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {videos.length > 0 && !videoRecording && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {videos.map(v => (
+              <div key={v.id} className="relative overflow-hidden rounded-lg border border-border">
+                <video src={v.previewUrl} muted className="h-16 w-24 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeVideo(v.id)}
+                  className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {photos.length === 0 && videos.length === 0 && !videoRecording && (
+          <p className="mt-2 text-xs text-muted-foreground">Optionnel — utile comme preuve terrain.</p>
+        )}
       </section>
 
 
@@ -425,3 +699,4 @@ function RecordPage() {
     </div>
   );
 }
+
