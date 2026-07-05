@@ -21,7 +21,6 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
-  ChevronLeft,
   Loader2,
   Lock,
   MapPin,
@@ -51,9 +50,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
+import { BackofficeShell } from "@/components/BackofficeShell";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
-  component: SupervisorDashboard,
+  component: SupervisorPage,
   head: () => ({
     meta: [
       { title: "AURUM SUPERVISOR — Tableau de bord" },
@@ -318,6 +318,14 @@ function ModificationRequestRow({ doc, onClose }: { doc: DocRow; onClose: () => 
 
 // ── Page ──────────────────────────────────────────────────────────────
 
+function SupervisorPage() {
+  return (
+    <BackofficeShell>
+      <SupervisorDashboard />
+    </BackofficeShell>
+  );
+}
+
 function SupervisorDashboard() {
   const roleState = useSupervisorRole();
 
@@ -455,13 +463,7 @@ function SupervisorDashboardContent() {
 
   return (
     <div className="px-5 pb-32 pt-8">
-      <div className="mb-6 flex items-center justify-between gap-2">
-        <Link
-          to="/"
-          className="flex items-center gap-1 rounded-lg border border-border bg-card/50 px-2.5 py-2 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" /> Accueil agent
-        </Link>
+      <div className="mb-6 flex items-center justify-end gap-2">
         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] uppercase tracking-widest text-emerald-400">
           Données réelles
         </span>

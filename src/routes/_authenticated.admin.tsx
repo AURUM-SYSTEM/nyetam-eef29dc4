@@ -1,16 +1,25 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, ChevronLeft, Loader2, Lock, Mail, ShieldCheck, UserPlus, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Lock, Mail, ShieldCheck, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { listOrgUsers, inviteAgent, updateAgentAssignment } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
+import { BackofficeShell } from "@/components/BackofficeShell";
 
 export const Route = createFileRoute("/_authenticated/admin")({
-  component: AdminDashboard,
+  component: AdminPage,
   head: () => ({ meta: [{ title: "AURUM ADMIN — Gestion des utilisateurs" }] }),
 });
+
+function AdminPage() {
+  return (
+    <BackofficeShell>
+      <AdminDashboard />
+    </BackofficeShell>
+  );
+}
 
 const MODULE_LABELS: Record<string, string> = {
   agro: "Agriculture",
@@ -194,10 +203,6 @@ function AdminDashboard() {
 
   return (
     <div className="px-5 pb-32 pt-8">
-      <Link to="/" className="mb-6 inline-flex items-center gap-1 rounded-lg border border-border bg-card/50 px-2.5 py-2 text-xs text-muted-foreground hover:text-foreground">
-        <ChevronLeft className="h-3.5 w-3.5" /> Accueil
-      </Link>
-
       <header className="mb-6">
         <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Administration</p>
         <h1 className="mt-2 font-display text-3xl">
