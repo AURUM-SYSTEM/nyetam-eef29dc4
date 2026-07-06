@@ -299,6 +299,7 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string | null
+          enabled_modules: string[]
           id: string
           modification_request_delay_hours: number
           module_type: string
@@ -307,6 +308,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          enabled_modules?: string[]
           id?: string
           modification_request_delay_hours?: number
           module_type: string
@@ -315,6 +317,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          enabled_modules?: string[]
           id?: string
           modification_request_delay_hours?: number
           module_type?: string

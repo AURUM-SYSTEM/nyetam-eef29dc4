@@ -132,6 +132,60 @@ export const inviteAgent = createServerFn({ method: "POST" })
   });
 
 // ============================================================
+// Paramètres de l'organisation (nom, modules activés, délai
+// d'auto-approbation des demandes de modification)
+// ============================================================
+
+export const getOrgSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await assertAdminAndGetOrg(context.supabase, context.userId);
+
+    const { data: org, error } = await supabaseAdmin
+      .from("organizations")
+      .select("id, name, enabled_modules, modification_request_delay_hours")
+      .eq("id", orgId)
+      .single();
+    if (error || !org) throw new Error("Organisation introuvable.");
+
+    return {
+      id: (org as any).id as string,
+      name: ((org as any).name ?? "") as string,
+      enabled_modules: (((org as any).enabled_modules ?? [...MODULE_TYPES]) as string[]),
+      modification_request_delay_hours: (org as any).modification_request_delay_hours as number,
+    };
+  });
+
+export const updateOrgSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { name?: string; enabledModules?: string[]; modificationRequestDelayHours?: number }) =>
+    z.object({
+      name: z.string().min(1).max(200).optional(),
+      enabledModules: z
+        .array(z.enum(MODULE_TYPES))
+        .min(1, "Au moins un module doit rester activé.")
+        .optional(),
+      modificationRequestDelayHours: z.number().int().min(1).max(720).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertAdminAndGetOrg(context.supabase, context.userId);
+
+    const patch: Record<string, unknown> = {};
+    if (data.name !== undefined) patch.name = data.name.trim();
+    if (data.enabledModules !== undefined) patch.enabled_modules = Array.from(new Set(data.enabledModules));
+    if (data.modificationRequestDelayHours !== undefined) {
+      patch.modification_request_delay_hours = data.modificationRequestDelayHours;
+    }
+    if (Object.keys(patch).length === 0) return { success: true };
+
+    const { error } = await supabaseAdmin.from("organizations").update(patch as any).eq("id", orgId);
+    if (error) throw new Error(error.message);
+
+    return { success: true };
+  });
+
+// ============================================================
 // Modifier le module et/ou le rôle d'un agent existant
 // ============================================================
 

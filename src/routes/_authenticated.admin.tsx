@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, Loader2, Lock, Mail, ShieldCheck, UserPlus, XCircle } from "lucide-react";
+import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { listOrgUsers, inviteAgent, updateAgentAssignment } from "@/lib/admin.functions";
+import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { BackofficeShell } from "@/components/BackofficeShell";
@@ -67,6 +67,8 @@ function AdminDashboard() {
   const updateAssignment = useServerFn(updateAgentAssignment);
   const listRequests = useServerFn(listPendingModificationRequests);
   const decideRequest = useServerFn(decideModificationRequest);
+  const fetchOrgSettings = useServerFn(getOrgSettings);
+  const saveOrg = useServerFn(updateOrgSettings);
 
   const [state, setState] = useState<AdminState>({ status: "checking" });
   const [users, setUsers] = useState<OrgUser[]>([]);
@@ -81,6 +83,64 @@ function AdminDashboard() {
   const [inviteModule, setInviteModule] = useState("generic");
   const [inviteRole, setInviteRole] = useState("agent");
   const [inviting, setInviting] = useState(false);
+
+  // ── Paramètres de l'organisation ──
+  const [orgLoaded, setOrgLoaded] = useState(false);
+  const [orgName, setOrgName] = useState("");
+  const [orgModules, setOrgModules] = useState<string[]>(MODULES);
+  const [orgDelay, setOrgDelay] = useState<number>(48);
+  const [savingOrg, setSavingOrg] = useState(false);
+
+  // Modules réellement activés pour l'organisation — pilotent le formulaire
+  // d'invitation et le sélecteur de module par agent.
+  const availableModules = orgLoaded ? orgModules : MODULES;
+
+  async function loadOrgSettings() {
+    try {
+      const org = await fetchOrgSettings({ data: undefined as any });
+      setOrgName(org.name);
+      setOrgModules(org.enabled_modules);
+      setOrgDelay(org.modification_request_delay_hours);
+      setOrgLoaded(true);
+      // Le module pré-sélectionné du formulaire d'invitation doit rester
+      // dans la liste des modules activés.
+      setInviteModule(prev => (org.enabled_modules.includes(prev) ? prev : org.enabled_modules[0]));
+    } catch {
+      // silencieux : la section users gère déjà le cas "non admin"
+    }
+  }
+
+  function toggleOrgModule(m: string) {
+    setOrgModules(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]));
+  }
+
+  async function submitOrgSettings(e: React.FormEvent) {
+    e.preventDefault();
+    if (orgModules.length === 0) {
+      toast.error("Au moins un module doit rester activé.");
+      return;
+    }
+    if (!orgName.trim()) {
+      toast.error("Le nom de l'organisation est requis.");
+      return;
+    }
+    setSavingOrg(true);
+    try {
+      await saveOrg({
+        data: {
+          name: orgName.trim(),
+          enabledModules: orgModules,
+          modificationRequestDelayHours: Math.max(1, Math.round(orgDelay)),
+        },
+      });
+      toast.success("Organisation mise à jour");
+      void loadOrgSettings();
+    } catch (err: any) {
+      toast.error(err?.message ?? "Échec de la mise à jour");
+    } finally {
+      setSavingOrg(false);
+    }
+  }
 
   async function loadUsers() {
     setLoadingUsers(true);
@@ -116,6 +176,7 @@ function AdminDashboard() {
     if (!session?.user) return;
     void loadUsers();
     void loadRequests();
+    void loadOrgSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
@@ -237,7 +298,7 @@ function AdminDashboard() {
               <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Module</span>
               <select value={inviteModule} onChange={e => setInviteModule(e.target.value)}
                 className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
-                {MODULES.map(m => <option key={m} value={m}>{MODULE_LABELS[m]}</option>)}
+                {availableModules.map(m => <option key={m} value={m}>{MODULE_LABELS[m]}</option>)}
               </select>
             </label>
             <label className="block">
@@ -297,6 +358,66 @@ function AdminDashboard() {
         </section>
       )}
 
+      <section className="glass-card mb-6 rounded-2xl p-4">
+        <h2 className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
+          <Building2 className="h-3.5 w-3.5" /> Organisation
+        </h2>
+
+        {!orgLoaded ? (
+          <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+        ) : (
+          <form onSubmit={submitOrgSettings} className="space-y-3">
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Nom de l'organisation</span>
+              <input required value={orgName} onChange={e => setOrgName(e.target.value)}
+                className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+            </label>
+
+            <div>
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Modules activés</span>
+              <div className="grid grid-cols-2 gap-2">
+                {MODULES.map(m => (
+                  <label
+                    key={m}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                      orgModules.includes(m) ? "border-gold bg-gold/10 text-gold" : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={orgModules.includes(m)}
+                      onChange={() => toggleOrgModule(m)}
+                      className="accent-[var(--gold)]"
+                    />
+                    {MODULE_LABELS[m]}
+                  </label>
+                ))}
+              </div>
+              {orgModules.length === 0 && (
+                <p className="mt-1 text-xs text-destructive">Au moins un module doit rester activé.</p>
+              )}
+            </div>
+
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
+                Délai d'auto-approbation des demandes de modification (heures)
+              </span>
+              <input
+                type="number" min={1} max={720} required value={orgDelay}
+                onChange={e => setOrgDelay(Number(e.target.value))}
+                className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
+              />
+            </label>
+
+            <button type="submit" disabled={savingOrg || orgModules.length === 0}
+              className="flex w-full items-center justify-center gap-2 rounded-xl btn-gold px-4 py-2.5 text-sm disabled:opacity-40">
+              {savingOrg ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Enregistrer
+            </button>
+          </form>
+        )}
+      </section>
+
       <section className="glass-card rounded-2xl p-4">
         <h2 className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
           <ShieldCheck className="h-3.5 w-3.5" /> Utilisateurs de l'organisation ({users.length})
@@ -322,7 +443,15 @@ function AdminDashboard() {
                     onChange={e => void changeModule(u.id, e.target.value)}
                     className="rounded-lg border border-border bg-input/50 px-2 py-1.5 text-xs"
                   >
-                    {MODULES.map(m => <option key={m} value={m}>{MODULE_LABELS[m]}</option>)}
+                    {/* Si le module actuel de l'agent a été désactivé, on le
+                        garde visible (non sélectionnable) pour ne pas fausser
+                        l'affichage ni écraser la valeur par accident. */}
+                    {!availableModules.includes(u.moduleType) && (
+                      <option value={u.moduleType} disabled>
+                        {MODULE_LABELS[u.moduleType] ?? u.moduleType} (désactivé)
+                      </option>
+                    )}
+                    {availableModules.map(m => <option key={m} value={m}>{MODULE_LABELS[m]}</option>)}
                   </select>
                   <select
                     value={u.roles[0] ?? "agent"}
