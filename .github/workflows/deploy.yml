@@ -80,7 +80,7 @@ jobs:
           fi
           case "$gem" in
             AIza*) ;;
-            *) echo "::error::GEMINI_API_KEY ne ressemble pas à une clé Google (attendu : AIza…) — recopier la clé depuis https://aistudio.google.com/apikey"; exit 1 ;;
+            *) echo "::warning::GEMINI_API_KEY n'a pas le préfixe habituel AIza… — la validation en direct ci-dessous fait foi." ;;
           esac
           # Validation en direct auprès de l'API Google : une clé invalide
           # doit bloquer le déploiement ici, pas casser en production.
