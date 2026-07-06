@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          justification: string | null
+          new_value: Json | null
+          old_value: Json | null
+          organization_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          justification?: string | null
+          new_value?: Json | null
+          old_value?: Json | null
+          organization_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          justification?: string | null
+          new_value?: Json | null
+          old_value?: Json | null
+          organization_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       core_outputs: {
         Row: {
           document_id: string
@@ -77,6 +124,8 @@ export type Database = {
           type: string
           updated_at: string
           user_id: string
+          validated_at: string | null
+          validated_by: string | null
           video_urls: string[] | null
         }
         Insert: {
@@ -106,6 +155,8 @@ export type Database = {
           type: string
           updated_at?: string
           user_id: string
+          validated_at?: string | null
+          validated_by?: string | null
           video_urls?: string[] | null
         }
         Update: {
@@ -135,14 +186,121 @@ export type Database = {
           type?: string
           updated_at?: string
           user_id?: string
+          validated_at?: string | null
+          validated_by?: string | null
           video_urls?: string[] | null
         }
         Relationships: []
+      }
+      mission_forms: {
+        Row: {
+          created_at: string
+          fields: Json
+          id: string
+          mission_key: string
+          mission_label: string
+          module_type: string
+          organization_id: string | null
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          fields?: Json
+          id?: string
+          mission_key: string
+          mission_label: string
+          module_type: string
+          organization_id?: string | null
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          fields?: Json
+          id?: string
+          mission_key?: string
+          mission_label?: string
+          module_type?: string
+          organization_id?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mission_forms_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modification_requests: {
+        Row: {
+          created_at: string
+          current_value: Json | null
+          decided_at: string | null
+          decided_by: string | null
+          document_id: string
+          expires_at: string
+          field_name: string
+          id: string
+          organization_id: string
+          proposed_value: Json
+          reason: string
+          requested_by: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          current_value?: Json | null
+          decided_at?: string | null
+          decided_by?: string | null
+          document_id: string
+          expires_at: string
+          field_name: string
+          id?: string
+          organization_id: string
+          proposed_value: Json
+          reason: string
+          requested_by: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          current_value?: Json | null
+          decided_at?: string | null
+          decided_by?: string | null
+          document_id?: string
+          expires_at?: string
+          field_name?: string
+          id?: string
+          organization_id?: string
+          proposed_value?: Json
+          reason?: string
+          requested_by?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "modification_requests_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modification_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       organizations: {
         Row: {
           created_at: string | null
           id: string
+          modification_request_delay_hours: number
           module_type: string
           name: string
           type: string
@@ -150,6 +308,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
+          modification_request_delay_hours?: number
           module_type: string
           name: string
           type: string
@@ -157,6 +316,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
+          modification_request_delay_hours?: number
           module_type?: string
           name?: string
           type?: string
@@ -256,10 +416,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_modification_request: {
+        Args: { _decided_by: string; _new_status: string; _request_id: string }
+        Returns: undefined
+      }
       has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"]; _user: string }
         Returns: boolean
       }
+      sweep_expired_modification_requests: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "agent" | "supervisor" | "admin"
