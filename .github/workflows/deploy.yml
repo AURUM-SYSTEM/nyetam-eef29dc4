@@ -78,6 +78,20 @@ jobs:
             echo "::error::Le secret GitHub GEMINI_API_KEY est vide ou absent — à renseigner dans Settings > Secrets and variables > Actions"
             exit 1
           fi
+          case "$gem" in
+            AIza*) ;;
+            *) echo "::error::GEMINI_API_KEY ne ressemble pas à une clé Google (attendu : AIza…) — recopier la clé depuis https://aistudio.google.com/apikey"; exit 1 ;;
+          esac
+          # Validation en direct auprès de l'API Google : une clé invalide
+          # doit bloquer le déploiement ici, pas casser en production.
+          code=$(curl -sS -o /tmp/gemini-check.json -w "%{http_code}" --max-time 20 \
+            -H "x-goog-api-key: $gem" \
+            "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1" || echo "000")
+          if [ "$code" != "200" ]; then
+            echo "::error::GEMINI_API_KEY refusée par l'API Google (HTTP $code) : $(head -c 200 /tmp/gemini-check.json 2>/dev/null)"
+            exit 1
+          fi
+          echo "GEMINI_API_KEY validée par l'API Google (HTTP 200)"
           echo "CLEAN_GEMINI_API_KEY=$gem" >> "$GITHUB_ENV"
         env:
           RAW_VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
