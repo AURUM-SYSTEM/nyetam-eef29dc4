@@ -3,77 +3,71 @@ import { z } from "zod";
 import { buildMetierContext } from "./role-context";
 
 // ============================================================
-// OpenAI — appel direct, sans passer par un gateway tiers.
-// Clé lue depuis la variable d'environnement OPENAI_API_KEY
+// Gemini (Google AI) — appel direct à l'API generateContent.
+// Clé lue depuis la variable d'environnement GEMINI_API_KEY
 // (Project Settings → Environment Variables), jamais en dur ici.
 // ============================================================
 
-const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
-const OPENAI_WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions";
-const OPENAI_MODEL = "gpt-5.4-mini";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
-function getOpenAiKey(): string {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY manquante — à configurer dans les variables d'environnement du projet.");
+function getGeminiKey(): string {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY manquante — à configurer dans les variables d'environnement du projet.");
   return key;
 }
 
-async function callOpenAiChat(messages: Array<{ role: string; content: string }>, jsonMode = false) {
-  const apiKey = getOpenAiKey();
-  const res = await fetch(OPENAI_CHAT_URL, {
+type GeminiPart =
+  | { text: string }
+  | { inline_data: { mime_type: string; data: string } };
+
+async function callGemini(parts: GeminiPart[], systemText: string, jsonMode = false): Promise<string> {
+  const apiKey = getGeminiKey();
+  const res = await fetch(GEMINI_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages,
-      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
+      contents: [{ role: "user", parts }],
+      ...(jsonMode ? { generationConfig: { responseMimeType: "application/json" } } : {}),
     }),
   });
   if (!res.ok) {
     const text = await res.text();
-    if (res.status === 429) throw new Error("Limite de requêtes OpenAI atteinte, réessayez dans un instant.");
-    if (res.status === 401) throw new Error("Clé OPENAI_API_KEY invalide ou expirée.");
-    throw new Error(`Erreur OpenAI (${res.status}): ${text.slice(0, 200)}`);
+    if (res.status === 429) throw new Error("Limite de requêtes Gemini atteinte, réessayez dans un instant.");
+    if (res.status === 401 || res.status === 403) throw new Error("Clé GEMINI_API_KEY invalide ou expirée.");
+    throw new Error(`Erreur Gemini (${res.status}): ${text.slice(0, 200)}`);
   }
-  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  return data.choices?.[0]?.message?.content ?? "";
+  const data = (await res.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  return (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("");
 }
 
-async function transcribeWithWhisper(audioBase64: string, mimeType: string, lang: "fr" | "en"): Promise<string> {
-  const apiKey = getOpenAiKey();
-  const binary = atob(audioBase64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  const ext = audioFormatFromMime(mimeType);
-  const blob = new Blob([bytes], { type: mimeType });
-
-  const form = new FormData();
-  form.append("file", blob, `audio.${ext}`);
-  form.append("model", "gpt-4o-mini-transcribe");
-  form.append("language", lang);
-
-  const res = await fetch(OPENAI_WHISPER_URL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: form,
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    if (res.status === 401) throw new Error("Clé OPENAI_API_KEY invalide ou expirée.");
-    throw new Error(`Erreur Whisper (${res.status}): ${text.slice(0, 200)}`);
-  }
-  const json = (await res.json()) as { text?: string };
-  return json.text ?? "";
+// Adaptateur conservant la signature "messages" utilisée par le reste du
+// fichier : le(s) message(s) system deviennent systemInstruction, le reste
+// forme le contenu utilisateur.
+async function callGeminiChat(messages: Array<{ role: string; content: string }>, jsonMode = false) {
+  const systemText = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+  const userText = messages.filter((m) => m.role !== "system").map((m) => m.content).join("\n\n");
+  return callGemini([{ text: userText }], systemText, jsonMode);
 }
 
-function audioFormatFromMime(mime: string): string {
-  const m = mime.toLowerCase();
-  if (m.includes("webm")) return "webm";
-  if (m.includes("ogg")) return "ogg";
-  if (m.includes("mp4") || m.includes("m4a") || m.includes("aac")) return "mp4";
-  if (m.includes("wav")) return "wav";
-  if (m.includes("mpeg") || m.includes("mp3")) return "mp3";
-  return "webm";
+// Gemini accepte l'audio nativement (inline_data base64 + mimeType) dans le
+// même appel generateContent — pas d'endpoint de transcription séparé.
+async function transcribeWithGemini(audioBase64: string, mimeType: string, lang: "fr" | "en"): Promise<string> {
+  const sys = lang === "en"
+    ? "You are a professional audio transcriber. Faithfully transcribe the audio content in English, with no commentary, no preamble, no markdown. If the audio is inaudible or empty, return an empty string."
+    : "Tu es un transcripteur audio professionnel. Transcris fidèlement le contenu audio en français, sans commentaire, sans préambule, sans markdown. Si l'audio est inaudible ou vide, renvoie une chaîne vide.";
+  const userText = lang === "en"
+    ? "Transcribe this audio recording in English."
+    : "Transcris cet enregistrement audio en français.";
+  return callGemini(
+    [
+      { text: userText },
+      { inline_data: { mime_type: mimeType, data: audioBase64 } },
+    ],
+    sys,
+  );
 }
 
 const LangSchema = z.enum(["fr", "en"]).default("fr");
@@ -128,12 +122,12 @@ export const transcribeAudio = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const lang = data.lang ?? "fr";
-    const text = await transcribeWithWhisper(data.audioBase64, data.mimeType, lang);
+    const text = await transcribeWithGemini(data.audioBase64, data.mimeType, lang);
     return { text: text.trim() };
   });
 
 async function callGateway(messages: Array<{ role: string; content: string }>, jsonMode = false) {
-  return callOpenAiChat(messages, jsonMode);
+  return callGeminiChat(messages, jsonMode);
 }
 
 async function cleanRawTranscript(raw: string, lang: "fr" | "en" = "fr"): Promise<string> {

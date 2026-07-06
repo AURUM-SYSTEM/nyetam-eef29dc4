@@ -73,19 +73,19 @@ jobs:
             *) echo "::error::SUPABASE_SERVICE_ROLE_KEY n'est pas au format sb_secret_… — corriger le secret GitHub"; exit 1 ;;
           esac
           echo "CLEAN_SUPABASE_SERVICE_ROLE_KEY=$srk" >> "$GITHUB_ENV"
-          oai="$(norm "$RAW_OPENAI_API_KEY")"
-          if [ -z "$oai" ]; then
-            echo "::error::Le secret GitHub OPENAI_API_KEY est vide ou absent — à renseigner dans Settings > Secrets and variables > Actions"
+          gem="$(norm "$RAW_GEMINI_API_KEY")"
+          if [ -z "$gem" ]; then
+            echo "::error::Le secret GitHub GEMINI_API_KEY est vide ou absent — à renseigner dans Settings > Secrets and variables > Actions"
             exit 1
           fi
-          echo "CLEAN_OPENAI_API_KEY=$oai" >> "$GITHUB_ENV"
+          echo "CLEAN_GEMINI_API_KEY=$gem" >> "$GITHUB_ENV"
         env:
           RAW_VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           RAW_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           RAW_VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_TGEoFkxjlF1X26RAXNvssg_G6b_lEyj' }}
           RAW_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_TGEoFkxjlF1X26RAXNvssg_G6b_lEyj' }}
           RAW_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          RAW_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RAW_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Deploy to Cloudflare
         run: npm run deploy
@@ -103,7 +103,7 @@ jobs:
           put SUPABASE_URL "$CLEAN_SUPABASE_URL"
           put SUPABASE_PUBLISHABLE_KEY "$CLEAN_SUPABASE_PUBLISHABLE_KEY"
           put SUPABASE_SERVICE_ROLE_KEY "$CLEAN_SUPABASE_SERVICE_ROLE_KEY"
-          put OPENAI_API_KEY "$CLEAN_OPENAI_API_KEY"
+          put GEMINI_API_KEY "$CLEAN_GEMINI_API_KEY"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
