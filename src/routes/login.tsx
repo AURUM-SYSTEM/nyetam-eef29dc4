@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { Loader2, LogIn, Sparkles, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -44,9 +43,16 @@ function LoginPage() {
 
   async function google() {
     setBusy(true);
-    const res = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (res.error) { toast.error(res.error.message); setBusy(false); return; }
-    if (!res.redirected) navigate({ to: search.redirect || "/" });
+    // OAuth Google natif Supabase (indépendant de l'hébergement Lovable).
+    // Redirection pleine page ; au retour sur /login, la session détectée
+    // dans l'URL déclenche la navigation via le useEffect ci-dessus.
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/login?redirect=${encodeURIComponent(search.redirect || "/")}`,
+      },
+    });
+    if (error) { toast.error(error.message); setBusy(false); }
   }
 
   return (

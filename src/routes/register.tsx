@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { COUNTRIES } from "@/lib/countries";
@@ -46,8 +45,12 @@ function RegisterPage() {
 
   async function google() {
     setBusy(true);
-    const res = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (res.error) { toast.error(res.error.message); setBusy(false); }
+    // OAuth Google natif Supabase (indépendant de l'hébergement Lovable).
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/login` },
+    });
+    if (error) { toast.error(error.message); setBusy(false); }
   }
 
   return (
