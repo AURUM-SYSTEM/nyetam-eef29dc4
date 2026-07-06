@@ -27,3 +27,22 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Clé publiable intégrée au bundle client au build. Le secret GitHub
+          # prime ; à défaut, la valeur du .env committé est utilisée par Vite.
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_TGEoFkxjlF1X26RAXNvssg_G6b_lEyj' }}
+
+      - name: Push runtime secrets to the Worker
+        run: |
+          for s in SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
+            v="${!s}"
+            if [ -z "$v" ]; then
+              echo "::error::Le secret GitHub $s est vide ou absent — à renseigner dans Settings > Secrets and variables > Actions"
+              exit 1
+            fi
+            printf '%s' "$v" | npx wrangler secret put "$s" --name tanstack-start-app
+          done
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

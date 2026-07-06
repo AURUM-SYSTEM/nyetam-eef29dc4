@@ -4,4 +4,9 @@
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
+  // Variables runtime non sensibles du Worker (les clés sensibles comme
+  // SUPABASE_SERVICE_ROLE_KEY sont poussées en secrets par le workflow CI).
+  "vars": {
+    "SUPABASE_URL": "https://ugtsswijcugnfwykbrtb.supabase.co",
+  },
 }
