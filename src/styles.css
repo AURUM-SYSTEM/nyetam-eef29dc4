@@ -155,6 +155,18 @@
   .btn-gold:hover { transform: translateY(-1px); filter: brightness(1.05); }
   .btn-gold:active { transform: translateY(0); }
 
+  /* Fondu doux — utilisé uniquement par les écrans publics (welcome/login/register) */
+  .fade-in-soft {
+    animation: fadeInSoft 0.5s ease-out both;
+  }
+  .fade-in-soft-delayed {
+    animation: fadeInSoft 0.6s ease-out 0.15s both;
+  }
+  @keyframes fadeInSoft {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+
   .pulse-rec {
     animation: pulseRec 1.4s ease-in-out infinite;
   }
