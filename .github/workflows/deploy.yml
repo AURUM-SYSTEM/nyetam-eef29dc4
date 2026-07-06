@@ -22,17 +22,45 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Check build-time Supabase key
+        # Échoue si la clé qui sera intégrée au bundle client n'est pas au
+        # nouveau format sb_publishable_… (ex. ancien secret GitHub resté sur
+        # la clé JWT legacy), et affiche son préfixe (clé publique) pour
+        # vérification dans les logs.
+        run: |
+          case "$VITE_SUPABASE_PUBLISHABLE_KEY" in
+            sb_publishable_*)
+              echo "Clé publiable du bundle client : ${VITE_SUPABASE_PUBLISHABLE_KEY:0:22}…" ;;
+            *)
+              echo "::error::VITE_SUPABASE_PUBLISHABLE_KEY n'est pas au format sb_publishable_… (probablement l'ancienne clé JWT) — mettre à jour le secret GitHub"
+              exit 1 ;;
+          esac
+        env:
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_TGEoFkxjlF1X26RAXNvssg_G6b_lEyj' }}
+
       - name: Deploy to Cloudflare
         run: npm run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Clé publiable intégrée au bundle client au build. Le secret GitHub
-          # prime ; à défaut, la valeur du .env committé est utilisée par Vite.
+          # Variables intégrées au bundle client par Vite pendant le build
+          # (npm run deploy = vite build + wrangler deploy). Le secret GitHub
+          # prime ; repli sur les valeurs publiques connues sinon.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://ugtsswijcugnfwykbrtb.supabase.co' }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_TGEoFkxjlF1X26RAXNvssg_G6b_lEyj' }}
 
       - name: Push runtime secrets to the Worker
         run: |
+          # Garde-fous AVANT poussée : refuser des secrets restés sur les
+          # anciens formats de clés Supabase (JWT legacy)
+          case "$SUPABASE_PUBLISHABLE_KEY" in
+            sb_publishable_*) ;;
+            *) echo "::error::Le secret GitHub SUPABASE_PUBLISHABLE_KEY n'est pas au format sb_publishable_… — valeur obsolète"; exit 1 ;;
+          esac
+          case "$SUPABASE_SERVICE_ROLE_KEY" in
+            sb_secret_*) ;;
+            *) echo "::error::Le secret GitHub SUPABASE_SERVICE_ROLE_KEY n'est pas au format sb_secret_… — valeur obsolète"; exit 1 ;;
+          esac
           for s in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY OPENAI_API_KEY; do
             v="${!s}"
             if [ -z "$v" ]; then
