@@ -50,6 +50,9 @@ function LoginPage() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/login?redirect=${encodeURIComponent(search.redirect || "/")}`,
+        // La passerelle Supabase (nouvelles clés sb_publishable_…) exige
+        // l'apikey sur /auth/v1/authorize ; supabase-js ne l'ajoute pas lui-même.
+        queryParams: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string },
       },
     });
     if (error) { toast.error(error.message); setBusy(false); }
