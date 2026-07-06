@@ -33,7 +33,7 @@ jobs:
 
       - name: Push runtime secrets to the Worker
         run: |
-          for s in SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
+          for s in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY OPENAI_API_KEY; do
             v="${!s}"
             if [ -z "$v" ]; then
               echo "::error::Le secret GitHub $s est vide ou absent — à renseigner dans Settings > Secrets and variables > Actions"
@@ -44,5 +44,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # L'URL Supabase est publique : repli sur sa valeur connue si le
+          # secret GitHub n'existe pas. Les autres n'ont aucun repli possible.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://ugtsswijcugnfwykbrtb.supabase.co' }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
