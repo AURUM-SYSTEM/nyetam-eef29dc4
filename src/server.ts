@@ -66,6 +66,35 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+// Diagnostic temporaire — lit la valeur RUNTIME de SUPABASE_URL telle que
+// réellement liée au Worker (pas ce que la CI a calculé/validé, ni un log
+// susceptible d'être masqué : la source de vérité du binding lui-même).
+// Ne renvoie que le nom d'hôte, jamais de clé. À retirer une fois la
+// confusion de projet Supabase clarifiée.
+function debugEnvResponse(env: unknown): Response {
+  const raw = (env as { SUPABASE_URL?: string } | null)?.SUPABASE_URL;
+  let supabaseUrlHost: string;
+  if (!raw) {
+    supabaseUrlHost = "(SUPABASE_URL absent du binding runtime)";
+  } else {
+    try {
+      supabaseUrlHost = new URL(raw).host;
+    } catch {
+      supabaseUrlHost = "(SUPABASE_URL présent mais n'est pas une URL valide)";
+    }
+  }
+  return new Response(
+    JSON.stringify({ supabaseUrlHost, commit: __BUILD_SHA__, checkedAt: new Date().toISOString() }, null, 2),
+    {
+      status: 200,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store, no-cache, must-revalidate",
+      },
+    },
+  );
+}
+
 // Marqueur de diagnostic temporaire (voir __BUILD_SHA__/__BUILD_TIME__ dans
 // vite.config.ts) — permet de confirmer que le Worker exécute bien le
 // dernier déploiement, sans passer par le routage SSR ni aucun cache
@@ -94,7 +123,9 @@ function healthResponse(): Response {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    if (new URL(request.url).pathname === "/health") return healthResponse();
+    const pathname = new URL(request.url).pathname;
+    if (pathname === "/health") return healthResponse();
+    if (pathname === "/api/debug-env") return debugEnvResponse(env);
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
