@@ -121,3 +121,12 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Confirm live deployment timestamp on Cloudflare
+        # Preuve indépendante du wrangler deploy ci-dessus : interroge
+        # directement l'historique des déploiements Cloudflare (horodatage
+        # serveur, pas une inférence depuis les logs CI).
+        run: npx wrangler deployments list --name tanstack-start-app | head -20
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

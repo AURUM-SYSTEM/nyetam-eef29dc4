@@ -136,6 +136,11 @@ function RootComponent() {
           </AuthBridge>
         </AuthProvider>
       </QueryClientProvider>
+      {/* Marqueur de build temporaire — à retirer une fois la confusion de
+          projet Supabase clarifiée. Voir aussi /health. */}
+      <div className="pointer-events-none fixed bottom-1 left-1 z-50 select-none rounded bg-black/60 px-1.5 py-0.5 font-mono text-[9px] text-white/70">
+        build {__BUILD_SHA__}
+      </div>
     </I18nProvider>
   );
 }

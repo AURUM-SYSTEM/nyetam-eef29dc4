@@ -66,8 +66,35 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+// Marqueur de diagnostic temporaire (voir __BUILD_SHA__/__BUILD_TIME__ dans
+// vite.config.ts) — permet de confirmer que le Worker exécute bien le
+// dernier déploiement, sans passer par le routage SSR ni aucun cache
+// d'assets. À retirer une fois la confusion de projet Supabase clarifiée.
+function healthResponse(): Response {
+  return new Response(
+    JSON.stringify(
+      {
+        status: "ok",
+        commit: __BUILD_SHA__,
+        builtAt: __BUILD_TIME__,
+        checkedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
+    {
+      status: 200,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store, no-cache, must-revalidate",
+      },
+    },
+  );
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    if (new URL(request.url).pathname === "/health") return healthResponse();
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
