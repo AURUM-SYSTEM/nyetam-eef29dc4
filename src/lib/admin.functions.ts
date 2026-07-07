@@ -215,6 +215,22 @@ export const updateAgentAssignment = createServerFn({ method: "POST" })
     }
 
     if (data.role) {
+      // Garde-fou : un admin ne peut pas retirer son propre rôle admin s'il
+      // est le dernier admin de l'organisation (sinon plus personne ne peut
+      // administrer — incident déjà survenu).
+      if (data.userId === context.userId && data.role !== "admin") {
+        const { count, error: cntErr } = await supabaseAdmin
+          .from("user_roles")
+          .select("user_id", { count: "exact", head: true })
+          .eq("organization_id", orgId)
+          .eq("role", "admin")
+          .neq("user_id", context.userId);
+        if (cntErr) throw new Error(cntErr.message);
+        if ((count ?? 0) === 0) {
+          throw new Error("Impossible de retirer votre propre rôle administrateur : vous êtes le seul admin de l'organisation. Nommez d'abord un autre admin.");
+        }
+      }
+
       await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId).eq("organization_id", orgId);
       await supabaseAdmin.from("user_roles").insert({
         user_id: data.userId,

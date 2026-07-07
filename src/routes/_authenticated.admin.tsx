@@ -453,14 +453,24 @@ function AdminDashboard() {
                     )}
                     {availableModules.map(m => <option key={m} value={m}>{MODULE_LABELS[m]}</option>)}
                   </select>
+                  {/* Sur sa propre ligne, le rôle n'est pas modifiable : évite
+                      de se retirer soi-même l'accès admin par accident (un
+                      autre admin peut toujours le faire). */}
                   <select
                     value={u.roles[0] ?? "agent"}
                     onChange={e => void changeRole(u.id, e.target.value)}
-                    className="rounded-lg border border-border bg-input/50 px-2 py-1.5 text-xs"
+                    disabled={u.id === session?.user?.id}
+                    title={u.id === session?.user?.id ? "Vous ne pouvez pas modifier votre propre rôle" : undefined}
+                    className="rounded-lg border border-border bg-input/50 px-2 py-1.5 text-xs disabled:opacity-50"
                   >
                     {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                   </select>
                 </div>
+                {u.id === session?.user?.id && (
+                  <p className="mt-1.5 text-[10px] text-muted-foreground">
+                    Votre compte — le rôle ne peut être modifié que par un autre admin.
+                  </p>
+                )}
               </div>
             ))}
           </div>
