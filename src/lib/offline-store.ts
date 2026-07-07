@@ -89,6 +89,9 @@ export type QueueMeta = {
   // Champs structurés spécifiques au module métier (voir module-fields.ts),
   // saisis directement par l'agent — ex: { surface_ha: "2.5", culture: "maïs" }
   fieldData?: Record<string, string>;
+  // AGRO : parcelle choisie ou créée avant la saisie — liée au document
+  // à la synchronisation (colonne documents.parcelle_id)
+  parcelleId?: string;
   // Recensement-specific
   subjectName?: string;
   subjectStatus?: string;

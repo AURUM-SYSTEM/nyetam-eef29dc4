@@ -61,6 +61,27 @@ export type Database = {
           },
         ]
       }
+      cooperatives: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
       core_outputs: {
         Row: {
           document_id: string
@@ -114,6 +135,7 @@ export type Database = {
           mission_type: string | null
           module_type: string | null
           observations: string
+          parcelle_id: string | null
           photo_urls: string[]
           reference: string
           signature_name: string
@@ -145,6 +167,7 @@ export type Database = {
           mission_type?: string | null
           module_type?: string | null
           observations?: string
+          parcelle_id?: string | null
           photo_urls?: string[]
           reference?: string
           signature_name?: string
@@ -326,6 +349,45 @@ export type Database = {
         }
         Relationships: []
       }
+      parcelles: {
+        Row: {
+          cooperative_id: string | null
+          created_at: string
+          created_by: string | null
+          culture: string
+          id: string
+          lat: number
+          lng: number
+          notes: string | null
+          organization_id: string
+          surface_ha: number | null
+        }
+        Insert: {
+          cooperative_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          culture: string
+          id?: string
+          lat: number
+          lng: number
+          notes?: string | null
+          organization_id: string
+          surface_ha?: number | null
+        }
+        Update: {
+          cooperative_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          culture?: string
+          id?: string
+          lat?: number
+          lng?: number
+          notes?: string | null
+          organization_id?: string
+          surface_ha?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           country: string
@@ -422,6 +484,10 @@ export type Database = {
       apply_modification_request: {
         Args: { _decided_by: string; _new_status: string; _request_id: string }
         Returns: undefined
+      }
+      find_nearby_parcelle: {
+        Args: { _lat: number; _lng: number; _org: string; _radius_m?: number }
+        Returns: { culture: string; distance_meters: number; id: string }[]
       }
       has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"]; _user: string }

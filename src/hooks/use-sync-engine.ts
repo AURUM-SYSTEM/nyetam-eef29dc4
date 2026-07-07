@@ -223,6 +223,7 @@ export function useSyncEngine() {
             location: locationLabel,
             location_data: resolvedLocation as any,
             field_data: item.meta?.fieldData ?? null,
+            parcelle_id: item.meta?.parcelleId ?? null,
             suggestions,
             reference: item.meta?.reference ?? "",
             signature_name:

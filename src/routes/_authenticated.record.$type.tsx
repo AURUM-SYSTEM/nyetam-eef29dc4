@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2, Camera, Video, X, VideoOff } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2, Camera, Video, X, VideoOff, AlertTriangle, CheckCircle2, Sprout } from "lucide-react";
 import { toast } from "sonner";
 import {
   saveAudio, enqueue, savePhoto, saveVideo,
@@ -13,6 +14,7 @@ import { captureGps } from "@/lib/geo";
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
+import { listParcelles, listCooperatives, checkGpsDuplicate, createParcelle } from "@/lib/agro.functions";
 
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
@@ -219,6 +221,126 @@ function RecordPage() {
     setFieldValues({});
   }, [missionKey]);
 
+  // ── AGRO : liaison parcelle (visite_parcelle / recensement_plantations) ──
+  const fetchParcelles = useServerFn(listParcelles);
+  const fetchCooperatives = useServerFn(listCooperatives);
+  const checkDup = useServerFn(checkGpsDuplicate);
+  const createParc = useServerFn(createParcelle);
+
+  const isParcelleMission =
+    moduleFromProfile === "agro" &&
+    (missionKey === "visite_parcelle" || missionKey === "recensement_plantations");
+
+  const [parcelleMode, setParcelleMode] = useState<"existing" | "new">("existing");
+  const [parcelleList, setParcelleList] = useState<Array<{
+    id: string; culture: string; surfaceHa: number | null; cooperativeName: string | null;
+  }>>([]);
+  const [parcellesLoading, setParcellesLoading] = useState(false);
+  const [selectedParcelleId, setSelectedParcelleId] = useState("");
+  const [coopNames, setCoopNames] = useState<string[]>([]);
+  const [newCulture, setNewCulture] = useState("");
+  const [newSurface, setNewSurface] = useState("");
+  const [newCoop, setNewCoop] = useState("");
+  const [dupParcelle, setDupParcelle] = useState<null | { id: string; culture: string; distanceMeters: number }>(null);
+  const [createdParcelleId, setCreatedParcelleId] = useState<string | null>(null);
+  const [creatingParcelle, setCreatingParcelle] = useState(false);
+
+  // Changement de mission → repartir d'un état parcelle neutre
+  useEffect(() => {
+    setParcelleMode("existing");
+    setSelectedParcelleId("");
+    setDupParcelle(null);
+    setCreatedParcelleId(null);
+  }, [missionKey]);
+
+  // Chargement des parcelles et coopératives de l'organisation (en ligne uniquement)
+  useEffect(() => {
+    if (!isParcelleMission || !online) return;
+    let cancelled = false;
+    (async () => {
+      setParcellesLoading(true);
+      try {
+        const [p, c] = await Promise.all([
+          fetchParcelles({ data: undefined as any }),
+          fetchCooperatives({ data: undefined as any }),
+        ]);
+        if (cancelled) return;
+        setParcelleList(p.parcelles);
+        setCoopNames(c.cooperatives.map(x => x.name));
+      } catch {
+        // silencieux : la saisie reste possible sans liaison parcelle
+      } finally {
+        if (!cancelled) setParcellesLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isParcelleMission, online]);
+
+  // Vérification automatique des doublons GPS dès qu'une position est capturée
+  // en mode "Nouvelle parcelle"
+  useEffect(() => {
+    if (!isParcelleMission || parcelleMode !== "new" || !gps || !online || createdParcelleId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await checkDup({ data: { lat: gps.lat, lng: gps.lng } });
+        if (!cancelled) setDupParcelle(res.duplicate ? res.existingParcelle : null);
+      } catch {
+        // silencieux
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isParcelleMission, parcelleMode, gps, online, createdParcelleId]);
+
+  function useExistingDuplicate() {
+    if (!dupParcelle) return;
+    // Si la parcelle détectée n'est pas encore dans la liste locale, on l'ajoute
+    setParcelleList(prev => prev.some(p => p.id === dupParcelle.id)
+      ? prev
+      : [{ id: dupParcelle.id, culture: dupParcelle.culture, surfaceHa: null, cooperativeName: null }, ...prev]);
+    setSelectedParcelleId(dupParcelle.id);
+    setParcelleMode("existing");
+    setDupParcelle(null);
+  }
+
+  async function handleCreateParcelle(force: boolean) {
+    if (!gps) { toast.error("Capturez d'abord la position GPS (section ci-dessus)."); return; }
+    if (!newCulture.trim()) { toast.error("Indiquez la culture de la parcelle."); return; }
+    const surface = newSurface.trim() ? Number(newSurface) : undefined;
+    if (surface !== undefined && (!Number.isFinite(surface) || surface <= 0)) {
+      toast.error("Surface invalide.");
+      return;
+    }
+    setCreatingParcelle(true);
+    try {
+      const res = await createParc({
+        data: {
+          culture: newCulture.trim(),
+          surfaceHa: surface,
+          cooperativeName: newCoop.trim() || undefined,
+          lat: gps.lat,
+          lng: gps.lng,
+          forceCreate: force,
+        },
+      });
+      if (!res.success && res.duplicateFound) {
+        setDupParcelle(res.existingParcelle);
+        return;
+      }
+      if (res.success) {
+        setCreatedParcelleId(res.parcelleId);
+        setDupParcelle(null);
+        toast.success("Parcelle créée — elle sera liée à cette saisie");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la création de la parcelle");
+    } finally {
+      setCreatingParcelle(false);
+    }
+  }
+
   // Photos & vidéos jointes
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [videos, setVideos] = useState<LocalVideo[]>([]);
@@ -288,6 +410,9 @@ function RecordPage() {
       moduleType: moduleFromProfile,
       fieldData: (hasFieldValues || missionKey)
         ? { ...(missionKey ? { _mission_key: missionKey } : {}), ...fieldValues }
+        : undefined,
+      parcelleId: isParcelleMission
+        ? ((parcelleMode === "existing" ? selectedParcelleId : createdParcelleId) || undefined)
         : undefined,
     };
   }
@@ -602,6 +727,129 @@ function RecordPage() {
           </label>
         </div>
       </section>
+
+      {/* AGRO — liaison à une parcelle (avant la saisie audio/texte) */}
+      {isParcelleMission && (
+        <section className="mt-4 glass-card rounded-2xl p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
+            <Sprout className="h-3.5 w-3.5" /> Parcelle
+          </h2>
+
+          {!online ? (
+            <p className="text-sm text-muted-foreground">
+              La liaison à une parcelle nécessite une connexion. La saisie reste possible : le document ne sera simplement pas rattaché à une parcelle.
+            </p>
+          ) : (
+            <>
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                {(["existing", "new"] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setParcelleMode(mode)}
+                    className={parcelleMode === mode
+                      ? "rounded-lg border border-gold bg-gold/10 px-3 py-2 text-sm text-gold"
+                      : "rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:text-foreground"}
+                  >
+                    {mode === "existing" ? "Parcelle existante" : "Nouvelle parcelle"}
+                  </button>
+                ))}
+              </div>
+
+              {parcelleMode === "existing" ? (
+                parcellesLoading ? (
+                  <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin text-gold" /></div>
+                ) : parcelleList.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Aucune parcelle enregistrée pour l'instant — passez sur « Nouvelle parcelle ».
+                  </p>
+                ) : (
+                  <select
+                    value={selectedParcelleId}
+                    onChange={e => setSelectedParcelleId(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-input/50 px-3 py-2.5 text-sm outline-none focus:border-gold"
+                  >
+                    <option value="">— Choisir une parcelle —</option>
+                    {parcelleList.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.culture}
+                        {p.surfaceHa ? ` · ${p.surfaceHa} ha` : ""}
+                        {p.cooperativeName ? ` · ${p.cooperativeName}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )
+              ) : createdParcelleId ? (
+                <p className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-400">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" /> Parcelle créée — elle sera liée à cette saisie.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Culture *</span>
+                      <input value={newCulture} onChange={e => setNewCulture(e.target.value)} placeholder="ex : cacao"
+                        className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Surface (ha)</span>
+                      <input type="number" inputMode="decimal" min="0" step="0.01" value={newSurface} onChange={e => setNewSurface(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Coopérative</span>
+                    <input list="agro-coop-list" value={newCoop} onChange={e => setNewCoop(e.target.value)} placeholder="ex : COOP-CA Mbam"
+                      className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                    <datalist id="agro-coop-list">
+                      {coopNames.map(n => <option key={n} value={n} />)}
+                    </datalist>
+                  </label>
+
+                  {!gps && (
+                    <p className="text-xs text-muted-foreground">
+                      Capturez la position GPS (section « métadonnées » ci-dessus) pour pouvoir enregistrer la parcelle.
+                    </p>
+                  )}
+
+                  {dupParcelle && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                      <p className="flex items-start gap-2 text-sm text-amber-300">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        Une parcelle avec {dupParcelle.culture} existe déjà à {dupParcelle.distanceMeters} m de cette
+                        position — l'utiliser à la place, ou continuer quand même ?
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button type="button" onClick={useExistingDuplicate}
+                          className="rounded-lg btn-gold px-3 py-1.5 text-xs">
+                          Utiliser la parcelle existante
+                        </button>
+                        <button type="button" disabled={creatingParcelle}
+                          onClick={() => void handleCreateParcelle(true)}
+                          className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40">
+                          {creatingParcelle ? "Création…" : "Créer quand même"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!dupParcelle && (
+                    <button
+                      type="button"
+                      disabled={creatingParcelle || !gps || !newCulture.trim()}
+                      onClick={() => void handleCreateParcelle(false)}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg btn-gold px-4 py-2.5 text-sm disabled:opacity-40"
+                    >
+                      {creatingParcelle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sprout className="h-4 w-4" />}
+                      Enregistrer la parcelle
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
 
       {/* Champs de la mission active — générés dynamiquement depuis `mission_forms` */}
       {!missionFormsLoading && missionFields.length > 0 && (

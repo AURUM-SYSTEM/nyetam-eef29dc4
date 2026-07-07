@@ -26,6 +26,7 @@ import {
   MapPin,
   Pencil,
   Radio,
+  Sprout,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -50,6 +51,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
+import { listParcelles } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
@@ -368,7 +370,70 @@ function SupervisorDashboard() {
   return <SupervisorDashboardContent />;
 }
 
+// ── AGRO : parcelles de l'organisation (superviseurs du module agro) ─────
+
+function ParcellesSection() {
+  const fetchParcelles = useServerFn(listParcelles);
+  const [rows, setRows] = useState<Array<{
+    id: string; culture: string; surfaceHa: number | null; cooperativeName: string | null; visitCount: number;
+  }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchParcelles({ data: undefined as any });
+        if (!cancelled) setRows(res.parcelles);
+      } catch {
+        // silencieux : section purement informative
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
+        <Sprout className="h-4 w-4 text-gold" /> Parcelles
+      </h2>
+      {loading ? (
+        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+      ) : rows.length === 0 ? (
+        <p className="py-4 text-center text-sm text-muted-foreground">
+          Aucune parcelle enregistrée pour l'instant.
+        </p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Culture</TableHead>
+              <TableHead>Surface</TableHead>
+              <TableHead>Coopérative</TableHead>
+              <TableHead className="text-right">Visites</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map(p => (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">{p.culture}</TableCell>
+                <TableCell className="text-muted-foreground">{p.surfaceHa != null ? `${p.surfaceHa} ha` : "—"}</TableCell>
+                <TableCell className="text-muted-foreground">{p.cooperativeName ?? "—"}</TableCell>
+                <TableCell className="text-right">{p.visitCount}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </section>
+  );
+}
+
 function SupervisorDashboardContent() {
+  const { profile } = useAuth();
   const { docs, profilesById, loading, error, reload } = useSupervisorData();
 
   const [moduleFilter, setModuleFilter] = useState<string>("all");
@@ -513,6 +578,9 @@ function SupervisorDashboardContent() {
           </ResponsiveContainer>
         </div>
       </section>
+
+      {/* AGRO — parcelles (uniquement pour les superviseurs du module agro) */}
+      {profile?.module_type === "agro" && <ParcellesSection />}
 
       {alerts.length > 0 && (
         <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
