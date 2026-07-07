@@ -18,6 +18,9 @@ export function PublicFooter() {
           <Compass className="h-3.5 w-3.5 text-[#1B5E20]" /> Built for field operations
         </span>
         <span className="text-gray-400">AURUM SYSTEM · {PUBLIC_APP_VERSION}</span>
+        {/* Marqueur de build temporaire — à retirer une fois la confusion de
+            projet Supabase clarifiée. Voir aussi /health et le badge flottant. */}
+        <span className="font-mono text-gray-300">build {__BUILD_SHA__}</span>
       </div>
     </footer>
   );
