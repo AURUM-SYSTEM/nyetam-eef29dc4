@@ -40,7 +40,7 @@ jobs:
           }
           check_url() {
             local u; u="$(norm "$2")"
-            [ -z "$u" ] && u="https://ugtsswijcugnfwykbrtb.supabase.co"
+            [ -z "$u" ] && u="https://drmcdgfifmemytrvgvqb.supabase.co"
             case "$u" in
               https://*|http://*) ;;
               *.supabase.co) u="https://$u" ;;
@@ -49,7 +49,7 @@ jobs:
                 # invalide ne doit pas casser le déploiement — on avertit et
                 # on utilise la valeur connue.
                 echo "::warning::Le secret GitHub $1 contient une valeur qui n'est pas une URL — utilisation de l'URL publique du projet à la place. Corrigez ou supprimez ce secret."
-                u="https://ugtsswijcugnfwykbrtb.supabase.co" ;;
+                u="https://drmcdgfifmemytrvgvqb.supabase.co" ;;
             esac
             echo "$1=$u" >> "$GITHUB_ENV"
             echo "$1 : $u"
