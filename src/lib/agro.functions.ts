@@ -213,12 +213,6 @@ export const createParcelle = createServerFn({ method: "POST" })
       }
     }
 
-    // NOTE : `created_by` existe bel et bien sur `parcelles` (colonne
-    // nullable, confirmée en base et testée en SQL direct), mais le cache
-    // de schéma PostgREST de ce projet ne la reconnaît pas côté API REST
-    // — même symptôme que la fonction RPC find_nearby_parcelle en amont.
-    // On ne l'envoie donc pas ici ; l'auteur de la création reste tracé de
-    // façon fiable via l'entrée audit_log juste en dessous (actor_id).
     const { data: parcelle, error: parcErr } = await supabaseAdmin
       .from("parcelles")
       .insert({
@@ -229,6 +223,7 @@ export const createParcelle = createServerFn({ method: "POST" })
         lat: data.lat,
         lng: data.lng,
         notes: data.notes?.trim() || null,
+        registered_by: context.userId,
       } as any)
       .select("id")
       .single();
