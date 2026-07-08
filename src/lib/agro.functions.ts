@@ -4,8 +4,14 @@
 // Même pattern que admin.functions.ts : chaque fonction revérifie côté
 // serveur l'identité de l'appelant (middleware requireSupabaseAuth) et ne
 // travaille QUE sur les données de son organisation, via le client
-// `supabaseAdmin` (service role). La détection de doublon GPS s'appuie sur
-// la fonction SQL `find_nearby_parcelle_v2` (haversine, rayon 50 m).
+// `supabaseAdmin` (service role).
+//
+// La détection de doublon GPS n'utilise PAS de RPC PostgREST — le cache de
+// schéma de ce projet restait bloqué de façon persistante (confirmé par
+// test REST direct, insensible à NOTIFY/GRANT/recréation/restart/
+// renommage). À la place : un SELECT classique par boîte englobante (même
+// chemin API REST éprouvé que le reste de l'app), puis un calcul de
+// distance haversine exact en JS sur les candidats retenus.
 // ─────────────────────────────────────────────────────────────────────────
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -13,6 +19,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const DUPLICATE_RADIUS_M = 50;
+// Marge large autour du seuil réel (50 m) pour le filtrage grossier par
+// boîte englobante — 0.001° ≈ 111 m en latitude, un peu moins en longitude
+// selon la latitude ; largement suffisant pour ne rater aucun candidat.
+const BBOX_DEGREES = 0.001;
 
 async function getCallerOrg(userId: string): Promise<string> {
   const { data, error } = await supabaseAdmin
@@ -27,21 +37,36 @@ async function getCallerOrg(userId: string): Promise<string> {
 
 type NearbyParcelle = { id: string; culture: string; distanceMeters: number };
 
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 async function findNearbyParcelle(orgId: string, lat: number, lng: number): Promise<NearbyParcelle | null> {
-  // find_nearby_parcelle_v2 : la fonction d'origine (find_nearby_parcelle,
-  // _org/_radius_m) restait bloquée sur un cache de schéma PostgREST qui ne
-  // se resynchronisait pas malgré NOTIFY, recréation et restart du projet.
-  // Nouveau nom, nouvelle signature, aucun cache résiduel possible.
-  const { data, error } = await supabaseAdmin.rpc("find_nearby_parcelle_v2", {
-    _organization_id: orgId,
-    _lat: lat,
-    _lng: lng,
-    _threshold_meters: DUPLICATE_RADIUS_M,
-  });
+  const { data, error } = await supabaseAdmin
+    .from("parcelles")
+    .select("id, culture, lat, lng")
+    .eq("organization_id", orgId)
+    .gte("lat", lat - BBOX_DEGREES)
+    .lte("lat", lat + BBOX_DEGREES)
+    .gte("lng", lng - BBOX_DEGREES)
+    .lte("lng", lng + BBOX_DEGREES);
   if (error) throw new Error("Vérification des doublons impossible : " + error.message);
-  const row = (data as Array<{ id: string; culture: string; distance_meters: number }> | null)?.[0];
-  if (!row) return null;
-  return { id: row.id, culture: row.culture, distanceMeters: Math.round(row.distance_meters) };
+
+  let nearest: NearbyParcelle | null = null;
+  for (const row of (data ?? []) as Array<{ id: string; culture: string; lat: number; lng: number }>) {
+    const distanceMeters = haversineMeters(lat, lng, row.lat, row.lng);
+    if (distanceMeters <= DUPLICATE_RADIUS_M && (!nearest || distanceMeters < nearest.distanceMeters)) {
+      nearest = { id: row.id, culture: row.culture, distanceMeters: Math.round(distanceMeters) };
+    }
+  }
+  return nearest;
 }
 
 // ============================================================
