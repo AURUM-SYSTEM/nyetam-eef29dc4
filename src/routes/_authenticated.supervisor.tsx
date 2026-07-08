@@ -53,7 +53,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
-import { listParcelles, listDuplicateAlerts, reviewDuplicateAlert, getAgentQualityScores } from "@/lib/agro.functions";
+import { listParcelles, listProducers, listDuplicateAlerts, reviewDuplicateAlert, getAgentQualityScores } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
@@ -434,6 +434,64 @@ function ParcellesSection() {
   );
 }
 
+function ProducersSection() {
+  const fetchProducers = useServerFn(listProducers);
+  const [rows, setRows] = useState<Array<{
+    id: string; fullName: string; cooperativeName: string | null; parcelleCount: number;
+  }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchProducers({ data: undefined as any });
+        if (!cancelled) setRows(res.producers);
+      } catch {
+        // silencieux : section purement informative
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
+        <Users className="h-4 w-4 text-gold" /> Producteurs
+      </h2>
+      {loading ? (
+        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+      ) : rows.length === 0 ? (
+        <p className="py-4 text-center text-sm text-muted-foreground">
+          Aucun producteur enregistré pour l'instant.
+        </p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nom</TableHead>
+              <TableHead>Coopérative</TableHead>
+              <TableHead className="text-right">Parcelles</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map(p => (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">{p.fullName}</TableCell>
+                <TableCell className="text-muted-foreground">{p.cooperativeName ?? "—"}</TableCell>
+                <TableCell className="text-right">{p.parcelleCount}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </section>
+  );
+}
+
 // ── AGRO : qualité des données — alertes de doublons GPS ─────────────────
 
 const RISK_LABELS: Record<string, string> = { low: "Faible", medium: "Moyen", high: "Élevé" };
@@ -753,8 +811,13 @@ function SupervisorDashboardContent() {
         </div>
       </section>
 
-      {/* AGRO — parcelles (uniquement pour les superviseurs du module agro) */}
-      {profile?.module_type === "agro" && <ParcellesSection />}
+      {/* AGRO — parcelles et producteurs (uniquement pour les superviseurs du module agro) */}
+      {profile?.module_type === "agro" && (
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 [&>section]:mb-0">
+          <ParcellesSection />
+          <ProducersSection />
+        </div>
+      )}
 
       {/* AGRO — qualité des données / alertes de doublons GPS */}
       {profile?.module_type === "agro" && <DataQualitySection />}

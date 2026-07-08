@@ -14,7 +14,7 @@ import { captureGps } from "@/lib/geo";
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
-import { listParcelles, listCooperatives, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
+import { listParcelles, listCooperatives, listProducers, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
 
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
@@ -224,6 +224,7 @@ function RecordPage() {
   // ── AGRO : liaison parcelle (visite_parcelle / recensement_plantations) ──
   const fetchParcelles = useServerFn(listParcelles);
   const fetchCooperatives = useServerFn(listCooperatives);
+  const fetchProducers = useServerFn(listProducers);
   const checkDup = useServerFn(checkGpsDuplicate);
   const createParc = useServerFn(createParcelle);
   const logUsedExisting = useServerFn(logUsedExistingParcelle);
@@ -239,9 +240,11 @@ function RecordPage() {
   const [parcellesLoading, setParcellesLoading] = useState(false);
   const [selectedParcelleId, setSelectedParcelleId] = useState("");
   const [coopNames, setCoopNames] = useState<string[]>([]);
+  const [producerNames, setProducerNames] = useState<string[]>([]);
   const [newCulture, setNewCulture] = useState("");
   const [newSurface, setNewSurface] = useState("");
   const [newCoop, setNewCoop] = useState("");
+  const [newProducer, setNewProducer] = useState("");
   const [dupParcelle, setDupParcelle] = useState<null | { id: string; culture: string; distanceMeters: number }>(null);
   const [createdParcelleId, setCreatedParcelleId] = useState<string | null>(null);
   const [creatingParcelle, setCreatingParcelle] = useState(false);
@@ -263,13 +266,15 @@ function RecordPage() {
     (async () => {
       setParcellesLoading(true);
       try {
-        const [p, c] = await Promise.all([
+        const [p, c, pr] = await Promise.all([
           fetchParcelles({ data: undefined as any }),
           fetchCooperatives({ data: undefined as any }),
+          fetchProducers({ data: undefined as any }),
         ]);
         if (cancelled) return;
         setParcelleList(p.parcelles);
         setCoopNames(c.cooperatives.map(x => x.name));
+        setProducerNames(pr.producers.map(x => x.fullName));
       } catch {
         // silencieux : la saisie reste possible sans liaison parcelle
       } finally {
@@ -339,6 +344,7 @@ function RecordPage() {
           culture: newCulture.trim(),
           surfaceHa: surface,
           cooperativeName: newCoop.trim() || undefined,
+          producerName: newProducer.trim() || undefined,
           lat: gps.lat,
           lng: gps.lng,
           forceCreate: force,
@@ -824,6 +830,14 @@ function RecordPage() {
                       className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
                     <datalist id="agro-coop-list">
                       {coopNames.map(n => <option key={n} value={n} />)}
+                    </datalist>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Producteur</span>
+                    <input list="agro-producer-list" value={newProducer} onChange={e => setNewProducer(e.target.value)} placeholder="ex : Jean Mballa"
+                      className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                    <datalist id="agro-producer-list">
+                      {producerNames.map(n => <option key={n} value={n} />)}
                     </datalist>
                   </label>
 

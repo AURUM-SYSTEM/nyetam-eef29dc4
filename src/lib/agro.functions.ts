@@ -160,6 +160,112 @@ export const listCooperatives = createServerFn({ method: "POST" })
   });
 
 // ============================================================
+// Producteurs de l'organisation
+// ============================================================
+
+export const listProducers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await getCallerOrg(context.userId);
+
+    const { data: producers, error } = await supabaseAdmin
+      .from("producers")
+      .select("id, full_name, cooperative_id, contact_phone, contact_email")
+      .eq("organization_id", orgId)
+      .order("full_name", { ascending: true });
+    if (error) throw new Error(error.message);
+
+    const { data: coops } = await supabaseAdmin
+      .from("cooperatives")
+      .select("id, name")
+      .eq("organization_id", orgId);
+    const coopById = new Map(((coops ?? []) as Array<{ id: string; name: string }>).map(c => [c.id, c.name]));
+
+    const rows = (producers ?? []) as Array<any>;
+    const producerIds = rows.map(p => p.id as string);
+    const parcelleCountByProducer = new Map<string, number>();
+    if (producerIds.length > 0) {
+      const { data: parcelleRows } = await supabaseAdmin
+        .from("parcelles")
+        .select("producer_id")
+        .in("producer_id", producerIds);
+      for (const p of (parcelleRows ?? []) as Array<{ producer_id: string | null }>) {
+        if (p.producer_id) parcelleCountByProducer.set(p.producer_id, (parcelleCountByProducer.get(p.producer_id) ?? 0) + 1);
+      }
+    }
+
+    return {
+      producers: rows.map(p => ({
+        id: p.id as string,
+        fullName: p.full_name as string,
+        cooperativeName: p.cooperative_id ? (coopById.get(p.cooperative_id) ?? null) : null,
+        contactPhone: (p.contact_phone ?? null) as string | null,
+        contactEmail: (p.contact_email ?? null) as string | null,
+        parcelleCount: parcelleCountByProducer.get(p.id) ?? 0,
+      })),
+    };
+  });
+
+export const createProducer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    fullName: string;
+    cooperativeId?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    idDocumentType?: string;
+    idDocumentNumber?: string;
+  }) =>
+    z.object({
+      fullName: z.string().min(1).max(200),
+      cooperativeId: z.string().uuid().optional(),
+      contactPhone: z.string().max(40).optional(),
+      contactEmail: z.string().email().max(200).optional(),
+      idDocumentType: z.string().max(80).optional(),
+      idDocumentNumber: z.string().max(80).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await getCallerOrg(context.userId);
+
+    const { data: producer, error } = await supabaseAdmin
+      .from("producers")
+      .insert({
+        organization_id: orgId,
+        full_name: data.fullName.trim(),
+        cooperative_id: data.cooperativeId ?? null,
+        contact_phone: data.contactPhone?.trim() || null,
+        contact_email: data.contactEmail?.trim() || null,
+        id_document_type: data.idDocumentType?.trim() || null,
+        id_document_number: data.idDocumentNumber?.trim() || null,
+        registered_by: context.userId,
+      } as any)
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    const producerId = (producer as any).id as string;
+
+    // Journalisation — jamais bloquante pour l'agent terrain
+    try {
+      await supabaseAdmin.from("audit_log").insert({
+        organization_id: orgId,
+        actor_id: context.userId,
+        action: "creation",
+        entity_type: "producer",
+        entity_id: producerId,
+        new_value: {
+          full_name: data.fullName.trim(),
+          cooperative_id: data.cooperativeId ?? null,
+        } as any,
+      } as any);
+    } catch (e) {
+      console.warn("audit_log producer creation failed (non bloquant)", e);
+    }
+
+    return { success: true as const, producerId };
+  });
+
+// ============================================================
 // Détection de doublon GPS
 // ============================================================
 
@@ -189,6 +295,8 @@ export const createParcelle = createServerFn({ method: "POST" })
     culture: string;
     surfaceHa?: number;
     cooperativeName?: string;
+    producerId?: string;
+    producerName?: string;
     lat: number;
     lng: number;
     notes?: string;
@@ -199,6 +307,8 @@ export const createParcelle = createServerFn({ method: "POST" })
       culture: z.string().min(1).max(120),
       surfaceHa: z.number().positive().max(100000).optional(),
       cooperativeName: z.string().min(1).max(200).optional(),
+      producerId: z.string().uuid().optional(),
+      producerName: z.string().min(1).max(200).optional(),
       lat: z.number().min(-90).max(90),
       lng: z.number().min(-180).max(180),
       notes: z.string().max(2000).optional(),
@@ -246,6 +356,31 @@ export const createParcelle = createServerFn({ method: "POST" })
       }
     }
 
+    // Producteur : lien direct par id, ou création/réutilisation par nom libre
+    // (même pattern que la coopérative ci-dessus)
+    let producerId: string | null = data.producerId ?? null;
+    if (!producerId && data.producerName) {
+      const wanted = data.producerName.trim();
+      const { data: existingProducers, error: prodErr } = await supabaseAdmin
+        .from("producers")
+        .select("id, full_name")
+        .eq("organization_id", orgId);
+      if (prodErr) throw new Error(prodErr.message);
+      const match = ((existingProducers ?? []) as Array<{ id: string; full_name: string }>)
+        .find(p => p.full_name.trim().toLowerCase() === wanted.toLowerCase());
+      if (match) {
+        producerId = match.id;
+      } else {
+        const { data: created, error: createErr } = await supabaseAdmin
+          .from("producers")
+          .insert({ organization_id: orgId, full_name: wanted, registered_by: context.userId } as any)
+          .select("id")
+          .single();
+        if (createErr) throw new Error(createErr.message);
+        producerId = (created as any).id as string;
+      }
+    }
+
     const { data: parcelle, error: parcErr } = await supabaseAdmin
       .from("parcelles")
       .insert({
@@ -253,6 +388,7 @@ export const createParcelle = createServerFn({ method: "POST" })
         culture: data.culture.trim(),
         surface_ha: data.surfaceHa ?? null,
         cooperative_id: cooperativeId,
+        producer_id: producerId,
         lat: data.lat,
         lng: data.lng,
         notes: data.notes?.trim() || null,
@@ -275,6 +411,7 @@ export const createParcelle = createServerFn({ method: "POST" })
           culture: data.culture.trim(),
           surface_ha: data.surfaceHa ?? null,
           cooperative_id: cooperativeId,
+          producer_id: producerId,
           lat: data.lat,
           lng: data.lng,
           forced: forcingThroughDuplicate,

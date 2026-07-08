@@ -360,6 +360,7 @@ export type Database = {
           lng: number
           notes: string | null
           organization_id: string
+          producer_id: string | null
           surface_ha: number | null
         }
         Insert: {
@@ -372,6 +373,7 @@ export type Database = {
           lng: number
           notes?: string | null
           organization_id: string
+          producer_id?: string | null
           surface_ha?: number | null
         }
         Update: {
@@ -384,7 +386,47 @@ export type Database = {
           lng?: number
           notes?: string | null
           organization_id?: string
+          producer_id?: string | null
           surface_ha?: number | null
+        }
+        Relationships: []
+      }
+      producers: {
+        Row: {
+          contact_email: string | null
+          contact_phone: string | null
+          cooperative_id: string | null
+          created_at: string
+          full_name: string
+          id: string
+          id_document_number: string | null
+          id_document_type: string | null
+          organization_id: string
+          registered_by: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          cooperative_id?: string | null
+          created_at?: string
+          full_name: string
+          id?: string
+          id_document_number?: string | null
+          id_document_type?: string | null
+          organization_id: string
+          registered_by: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_phone?: string | null
+          cooperative_id?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          id_document_number?: string | null
+          id_document_type?: string | null
+          organization_id?: string
+          registered_by?: string
         }
         Relationships: []
       }
