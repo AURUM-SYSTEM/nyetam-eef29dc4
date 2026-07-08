@@ -485,8 +485,8 @@ export type Database = {
         Args: { _decided_by: string; _new_status: string; _request_id: string }
         Returns: undefined
       }
-      find_nearby_parcelle: {
-        Args: { _lat: number; _lng: number; _org: string; _radius_m?: number }
+      find_nearby_parcelle_v2: {
+        Args: { _lat: number; _lng: number; _organization_id: string; _threshold_meters?: number }
         Returns: { culture: string; distance_meters: number; id: string }[]
       }
       has_role: {

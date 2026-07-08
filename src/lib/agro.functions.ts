@@ -5,7 +5,7 @@
 // serveur l'identité de l'appelant (middleware requireSupabaseAuth) et ne
 // travaille QUE sur les données de son organisation, via le client
 // `supabaseAdmin` (service role). La détection de doublon GPS s'appuie sur
-// la fonction SQL `find_nearby_parcelle` (haversine, rayon 50 m).
+// la fonction SQL `find_nearby_parcelle_v2` (haversine, rayon 50 m).
 // ─────────────────────────────────────────────────────────────────────────
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -28,11 +28,15 @@ async function getCallerOrg(userId: string): Promise<string> {
 type NearbyParcelle = { id: string; culture: string; distanceMeters: number };
 
 async function findNearbyParcelle(orgId: string, lat: number, lng: number): Promise<NearbyParcelle | null> {
-  const { data, error } = await supabaseAdmin.rpc("find_nearby_parcelle", {
-    _org: orgId,
+  // find_nearby_parcelle_v2 : la fonction d'origine (find_nearby_parcelle,
+  // _org/_radius_m) restait bloquée sur un cache de schéma PostgREST qui ne
+  // se resynchronisait pas malgré NOTIFY, recréation et restart du projet.
+  // Nouveau nom, nouvelle signature, aucun cache résiduel possible.
+  const { data, error } = await supabaseAdmin.rpc("find_nearby_parcelle_v2", {
+    _organization_id: orgId,
     _lat: lat,
     _lng: lng,
-    _radius_m: DUPLICATE_RADIUS_M,
+    _threshold_meters: DUPLICATE_RADIUS_M,
   });
   if (error) throw new Error("Vérification des doublons impossible : " + error.message);
   const row = (data as Array<{ id: string; culture: string; distance_meters: number }> | null)?.[0];
