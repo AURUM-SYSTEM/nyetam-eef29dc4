@@ -27,6 +27,7 @@ import {
   Pencil,
   Radio,
   ShieldAlert,
+  Sparkles,
   Sprout,
   Users,
   XCircle,
@@ -53,6 +54,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
+import { askAgriAssistant } from "@/lib/insights.functions";
 import {
   listParcelles,
   listProducers,
@@ -681,6 +683,80 @@ function ProducersSection() {
   );
 }
 
+// ── AGRO : assistant IA conversationnel ───────────────────────────────────
+
+const AGRI_ASSISTANT_EXAMPLES = [
+  "Quels producteurs n'ont pas été visités récemment ?",
+  "Quelle coopérative a le plus d'alertes de doublons ?",
+  "Combien de parcelles de cacao avons-nous ?",
+];
+
+function AgriAssistantSection() {
+  const ask = useServerFn(askAgriAssistant);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+
+  async function handleAsk() {
+    if (!question.trim()) {
+      toast.error("Écrivez une question.");
+      return;
+    }
+    setAsking(true);
+    setAnswer(null);
+    try {
+      const res = await ask({ data: { question: question.trim() } });
+      setAnswer(res.answer);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la demande à l'assistant");
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
+        <Sparkles className="h-4 w-4 text-gold" /> Assistant IA — Posez une question
+      </h2>
+      <div className="space-y-2">
+        <textarea
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="ex : Combien de parcelles de cacao avons-nous ?"
+          rows={2}
+          className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
+        />
+        <div className="flex flex-wrap gap-2">
+          {AGRI_ASSISTANT_EXAMPLES.map((example) => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => setQuestion(example)}
+              className="rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleAsk()}
+          disabled={asking || !question.trim()}
+          className="rounded-lg btn-gold px-4 py-2 text-sm disabled:opacity-40"
+        >
+          {asking ? "Réflexion…" : "Demander"}
+        </button>
+        {answer && (
+          <p className="whitespace-pre-line rounded-lg border border-border bg-card/30 p-3 text-sm">
+            {answer}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ── AGRO : qualité des données — alertes de doublons GPS ─────────────────
 
 const RISK_LABELS: Record<string, string> = { low: "Faible", medium: "Moyen", high: "Élevé" };
@@ -1010,6 +1086,9 @@ function SupervisorDashboardContent() {
 
       {/* AGRO — qualité des données / alertes de doublons GPS */}
       {profile?.module_type === "agro" && <DataQualitySection />}
+
+      {/* AGRO — assistant IA conversationnel */}
+      {profile?.module_type === "agro" && <AgriAssistantSection />}
 
       {alerts.length > 0 && (
         <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
