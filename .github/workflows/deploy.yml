@@ -122,6 +122,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: List secrets actually present on the Worker
+        # Preuve indépendante de l'étape ci-dessus : ce que Cloudflare dit
+        # avoir réellement, pas ce que le script a essayé de pousser.
+        run: npx wrangler secret list --name tanstack-start-app
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Confirm live deployment timestamp on Cloudflare
         # Preuve indépendante du wrangler deploy ci-dessus : interroge
         # directement l'historique des déploiements Cloudflare (horodatage

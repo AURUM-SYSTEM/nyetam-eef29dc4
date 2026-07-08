@@ -66,16 +66,19 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
-// Diagnostic temporaire — lit la valeur RUNTIME de SUPABASE_URL telle que
-// réellement liée au Worker (pas ce que la CI a calculé/validé, ni un log
-// susceptible d'être masqué : la source de vérité du binding lui-même).
+// Diagnostic temporaire — lit SUPABASE_URL exactement comme le fait le
+// vrai code applicatif (client.server.ts : process.env.SUPABASE_URL), pas
+// via le paramètre `env` brut du Worker Cloudflare. Ce fichier server.ts
+// n'est PAS le point d'entrée réel du Worker (Nitro génère son propre
+// wrapper et n'y transmet jamais `env` — il alimente process.env par un
+// autre mécanisme interne), donc lire `env` ici donnait un faux négatif.
 // Ne renvoie que le nom d'hôte, jamais de clé. À retirer une fois la
 // confusion de projet Supabase clarifiée.
-function debugEnvResponse(env: unknown): Response {
-  const raw = (env as { SUPABASE_URL?: string } | null)?.SUPABASE_URL;
+function debugEnvResponse(): Response {
+  const raw = process.env.SUPABASE_URL;
   let supabaseUrlHost: string;
   if (!raw) {
-    supabaseUrlHost = "(SUPABASE_URL absent du binding runtime)";
+    supabaseUrlHost = "(process.env.SUPABASE_URL absent)";
   } else {
     try {
       supabaseUrlHost = new URL(raw).host;
@@ -125,7 +128,7 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const pathname = new URL(request.url).pathname;
     if (pathname === "/health") return healthResponse();
-    if (pathname === "/api/debug-env") return debugEnvResponse(env);
+    if (pathname === "/api/debug-env") return debugEnvResponse();
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
