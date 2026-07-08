@@ -55,7 +55,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
-import { askAgriAssistant, generateOrientations } from "@/lib/insights.functions";
+import { askAgriAssistant, generateOrientations, listAdvisorReports, markAdvisorReportTreated } from "@/lib/insights.functions";
 import {
   listParcelles,
   listProducers,
@@ -890,11 +890,47 @@ function AgriAssistantSection() {
 
 // ── AGRO : analyse IA — orientations (synthèse automatique) ──────────────
 
+type AdvisorReport = {
+  id: string;
+  analysis: string;
+  documentsAnalyzed: number;
+  generatedByName: string;
+  status: "a_traiter" | "traite";
+  treatedByName: string | null;
+  treatedAt: string | null;
+  treatmentNotes: string | null;
+  createdAt: string;
+};
+
 function OrientationsSection() {
   const generate = useServerFn(generateOrientations);
+  const fetchReports = useServerFn(listAdvisorReports);
+  const markTreated = useServerFn(markAdvisorReportTreated);
+
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [count, setCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [reports, setReports] = useState<AdvisorReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [treatingId, setTreatingId] = useState<string | null>(null);
+
+  async function loadReports() {
+    setReportsLoading(true);
+    try {
+      const res = await fetchReports({ data: undefined as any });
+      setReports(res.reports);
+    } catch {
+      // silencieux : historique purement informatif
+    } finally {
+      setReportsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleGenerate() {
     setLoading(true);
@@ -902,10 +938,24 @@ function OrientationsSection() {
       const res = await generate({ data: undefined as any });
       setAnalysis(res.analysis);
       setCount(res.count);
+      void loadReports();
     } catch (e: any) {
       toast.error(e?.message ?? "Échec de la génération de l'analyse");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleMarkTreated(reportId: string) {
+    setTreatingId(reportId);
+    try {
+      await markTreated({ data: { reportId } });
+      setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, status: "traite" as const } : r)));
+      toast.success("Analyse marquée comme traitée");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la mise à jour");
+    } finally {
+      setTreatingId(null);
     }
   }
 
@@ -935,6 +985,48 @@ function OrientationsSection() {
             </p>
           </div>
         )}
+
+        <div>
+          <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Historique des analyses</span>
+          {reportsLoading ? (
+            <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin text-gold" /></div>
+          ) : reports.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Aucune analyse générée pour l'instant.</p>
+          ) : (
+            <ul className="space-y-2">
+              {reports.map((r) => (
+                <li key={r.id} className="rounded-lg border border-border bg-card/30 p-2.5">
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-1.5">
+                    <span className="text-[11px] text-muted-foreground">
+                      {new Date(r.createdAt).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      {" · "}{r.documentsAnalyzed} document{r.documentsAnalyzed !== 1 ? "s" : ""}
+                    </span>
+                    <span className={r.status === "traite" ? "rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-emerald-500/15 text-emerald-400" : "rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-amber-500/15 text-amber-400"}>
+                      {r.status === "traite" ? "Traité" : "À traiter"}
+                    </span>
+                  </div>
+                  <p className="line-clamp-2 text-xs text-muted-foreground">{r.analysis}</p>
+                  {r.status === "a_traiter" ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleMarkTreated(r.id)}
+                      disabled={treatingId === r.id}
+                      className="mt-2 rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+                    >
+                      {treatingId === r.id ? "…" : "Marquer comme traité"}
+                    </button>
+                  ) : (
+                    r.treatedByName && (
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        Traité par {r.treatedByName}{r.treatedAt ? ` le ${new Date(r.treatedAt).toLocaleDateString("fr-FR")}` : ""}
+                      </p>
+                    )
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </section>
   );

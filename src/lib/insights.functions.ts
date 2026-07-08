@@ -5,7 +5,10 @@
 //   des questions libres sur les données de l'organisation.
 // - generateOrientations : synthèse automatique (tendances, points
 //   d'attention, recommandations) à partir des documents et core_outputs
-//   du module du superviseur.
+//   du module du superviseur. Chaque génération est archivée dans
+//   agro_advisor_reports (statut a_traiter/traite).
+// - listAdvisorReports / markAdvisorReportTreated : historique et suivi de
+//   traitement de ces analyses archivées.
 //
 // Même pattern d'authentification/scoping que le reste de l'app (voir
 // agro.functions.ts) : chaque fonction revérifie côté serveur l'identité
@@ -307,6 +310,98 @@ export const generateOrientations = createServerFn({ method: "POST" })
       dataContext,
     ].join("\n");
 
-    const analysis = await callGemini("Génère la synthèse demandée à partir des données ci-dessus.", system);
-    return { analysis: analysis.trim(), count };
+    const analysis = (await callGemini("Génère la synthèse demandée à partir des données ci-dessus.", system)).trim();
+
+    // Archivage — jamais bloquant pour l'affichage du résultat au superviseur.
+    try {
+      await supabaseAdmin.from("agro_advisor_reports").insert({
+        organization_id: orgId,
+        generated_by: context.userId,
+        analysis,
+        documents_analyzed: count,
+        status: "a_traiter",
+      } as any);
+    } catch (e) {
+      console.warn("agro_advisor_reports insert failed (non bloquant)", e);
+    }
+
+    return { analysis, count };
+  });
+
+// ============================================================
+// Historique des analyses Agro Advisor
+// ============================================================
+
+export const listAdvisorReports = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data, error } = await supabaseAdmin
+      .from("agro_advisor_reports")
+      .select("id, analysis, documents_analyzed, generated_by, status, treated_by, treated_at, treatment_notes, created_at")
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Array<{
+      id: string; analysis: string; documents_analyzed: number; generated_by: string;
+      status: string; treated_by: string | null; treated_at: string | null; treatment_notes: string | null; created_at: string;
+    }>;
+
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.generated_by, r.treated_by]).filter((v): v is string => !!v)));
+    const nameById = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", userIds);
+      for (const p of (profiles ?? []) as Array<{ id: string; full_name: string | null }>) {
+        nameById.set(p.id, p.full_name || "Agent");
+      }
+    }
+
+    return {
+      reports: rows.map((r) => ({
+        id: r.id,
+        analysis: r.analysis,
+        documentsAnalyzed: r.documents_analyzed,
+        generatedByName: nameById.get(r.generated_by) ?? "Superviseur",
+        status: r.status as "a_traiter" | "traite",
+        treatedByName: r.treated_by ? (nameById.get(r.treated_by) ?? "Agent") : null,
+        treatedAt: r.treated_at,
+        treatmentNotes: r.treatment_notes,
+        createdAt: r.created_at,
+      })),
+    };
+  });
+
+export const markAdvisorReportTreated = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { reportId: string; treatmentNotes?: string }) =>
+    z.object({
+      reportId: z.string().uuid(),
+      treatmentNotes: z.string().max(1000).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data: report, error: reportErr } = await supabaseAdmin
+      .from("agro_advisor_reports")
+      .select("id, organization_id")
+      .eq("id", data.reportId)
+      .single();
+    if (reportErr || !report || (report as any).organization_id !== orgId) {
+      throw new Error("Analyse introuvable dans votre organisation.");
+    }
+
+    const { error } = await supabaseAdmin
+      .from("agro_advisor_reports")
+      .update({
+        status: "traite",
+        treated_by: context.userId,
+        treated_at: new Date().toISOString(),
+        treatment_notes: data.treatmentNotes?.trim() || null,
+      } as any)
+      .eq("id", data.reportId);
+    if (error) throw new Error(error.message);
+
+    return { success: true as const };
   });

@@ -430,6 +430,45 @@ export type Database = {
         }
         Relationships: []
       }
+      agro_advisor_reports: {
+        Row: {
+          analysis: string
+          created_at: string
+          documents_analyzed: number
+          generated_by: string
+          id: string
+          organization_id: string
+          status: string
+          treated_at: string | null
+          treated_by: string | null
+          treatment_notes: string | null
+        }
+        Insert: {
+          analysis: string
+          created_at?: string
+          documents_analyzed: number
+          generated_by: string
+          id?: string
+          organization_id: string
+          status?: string
+          treated_at?: string | null
+          treated_by?: string | null
+          treatment_notes?: string | null
+        }
+        Update: {
+          analysis?: string
+          created_at?: string
+          documents_analyzed?: number
+          generated_by?: string
+          id?: string
+          organization_id?: string
+          status?: string
+          treated_at?: string | null
+          treated_by?: string | null
+          treatment_notes?: string | null
+        }
+        Relationships: []
+      }
       duplicate_alerts: {
         Row: {
           action: string

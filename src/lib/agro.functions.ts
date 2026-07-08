@@ -626,10 +626,10 @@ export const logUsedExistingParcelle = createServerFn({ method: "POST" })
 
 export const listDuplicateAlerts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { reviewStatus?: "pending" | "validated" | "rejected" }) =>
+  .inputValidator((d: { reviewStatus?: "pending" | "validated" | "rejected" } | undefined) =>
     z.object({
       reviewStatus: z.enum(["pending", "validated", "rejected"]).optional(),
-    }).parse(d),
+    }).parse(d ?? {}),
   )
   .handler(async ({ data, context }) => {
     const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
