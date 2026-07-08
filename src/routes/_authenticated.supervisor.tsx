@@ -53,7 +53,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
-import { listParcelles, listProducers, listDuplicateAlerts, reviewDuplicateAlert, getAgentQualityScores } from "@/lib/agro.functions";
+import {
+  listParcelles,
+  listProducers,
+  listCooperatives,
+  getProducerDetails,
+  updateProducer,
+  listDuplicateAlerts,
+  reviewDuplicateAlert,
+  getAgentQualityScores,
+} from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
@@ -434,19 +443,184 @@ function ParcellesSection() {
   );
 }
 
-function ProducersSection() {
-  const fetchProducers = useServerFn(listProducers);
-  const [rows, setRows] = useState<Array<{
-    id: string; fullName: string; cooperativeName: string | null; parcelleCount: number;
-  }>>([]);
+function ProducerDetailRow({
+  producerId,
+  cooperatives,
+  onClose,
+  onSaved,
+}: {
+  producerId: string;
+  cooperatives: Array<{ id: string; name: string }>;
+  onClose: () => void;
+  onSaved: (fullName: string, cooperativeName: string | null) => void;
+}) {
+  const fetchDetails = useServerFn(getProducerDetails);
+  const saveProducer = useServerFn(updateProducer);
+
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [parcelles, setParcelles] = useState<Array<{ id: string; culture: string; surfaceHa: number | null; createdAt: string }>>([]);
+  const [visitCount, setVisitCount] = useState(0);
+  const [fullName, setFullName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [idDocumentType, setIdDocumentType] = useState("");
+  const [idDocumentNumber, setIdDocumentNumber] = useState("");
+  const [cooperativeId, setCooperativeId] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetchProducers({ data: undefined as any });
-        if (!cancelled) setRows(res.producers);
+        const res = await fetchDetails({ data: { producerId } });
+        if (cancelled) return;
+        setFullName(res.producer.fullName);
+        setContactPhone(res.producer.contactPhone ?? "");
+        setContactEmail(res.producer.contactEmail ?? "");
+        setIdDocumentType(res.producer.idDocumentType ?? "");
+        setIdDocumentNumber(res.producer.idDocumentNumber ?? "");
+        setCooperativeId(res.producer.cooperativeId ?? "");
+        setParcelles(res.parcelles);
+        setVisitCount(res.visitCount);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? "Échec du chargement du producteur");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [producerId]);
+
+  async function handleSave() {
+    if (!fullName.trim()) {
+      toast.error("Le nom complet est obligatoire.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveProducer({
+        data: {
+          producerId,
+          fullName: fullName.trim(),
+          contactPhone: contactPhone.trim() || undefined,
+          contactEmail: contactEmail.trim() || undefined,
+          idDocumentType: idDocumentType.trim() || undefined,
+          idDocumentNumber: idDocumentNumber.trim() || undefined,
+          cooperativeId: cooperativeId || null,
+        },
+      });
+      toast.success("Producteur mis à jour");
+      const coopName = cooperativeId ? (cooperatives.find(c => c.id === cooperativeId)?.name ?? null) : null;
+      onSaved(fullName.trim(), coopName);
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la mise à jour");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <TableRow>
+      <TableCell colSpan={3} className="bg-card/30">
+        {loading ? (
+          <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+        ) : error ? (
+          <p className="py-2 text-sm text-destructive">{error}</p>
+        ) : (
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Nom complet *</span>
+                <input value={fullName} onChange={e => setFullName(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Coopérative</span>
+                <select value={cooperativeId} onChange={e => setCooperativeId(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs">
+                  <option value="">— Aucune —</option>
+                  {cooperatives.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Téléphone</span>
+                <input value={contactPhone} onChange={e => setContactPhone(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Email</span>
+                <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Type de pièce d'identité</span>
+                <input value={idDocumentType} onChange={e => setIdDocumentType(e.target.value)} placeholder="ex : CNI"
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Numéro de pièce</span>
+                <input value={idDocumentNumber} onChange={e => setIdDocumentNumber(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
+              </label>
+            </div>
+
+            <div>
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
+                Parcelles ({parcelles.length}) · {visitCount} visite{visitCount !== 1 ? "s" : ""}
+              </span>
+              {parcelles.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Aucune parcelle liée.</p>
+              ) : (
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {parcelles.map(pc => (
+                    <li key={pc.id}>
+                      {pc.culture}{pc.surfaceHa ? ` · ${pc.surfaceHa} ha` : ""} · {new Date(pc.createdAt).toLocaleDateString("fr-FR")}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button type="button" onClick={() => void handleSave()} disabled={saving}
+                className="btn-gold rounded-lg px-3 py-1.5 text-xs disabled:opacity-40">
+                {saving ? "Enregistrement…" : "Enregistrer"}
+              </button>
+              <button type="button" onClick={onClose} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground">
+                Fermer
+              </button>
+            </div>
+          </div>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function ProducersSection() {
+  const fetchProducers = useServerFn(listProducers);
+  const fetchCooperatives = useServerFn(listCooperatives);
+  const [rows, setRows] = useState<Array<{
+    id: string; fullName: string; cooperativeName: string | null; parcelleCount: number;
+  }>>([]);
+  const [cooperatives, setCooperatives] = useState<Array<{ id: string; name: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [res, coops] = await Promise.all([
+          fetchProducers({ data: undefined as any }),
+          fetchCooperatives({ data: undefined as any }),
+        ]);
+        if (cancelled) return;
+        setRows(res.producers);
+        setCooperatives(coops.cooperatives);
       } catch {
         // silencieux : section purement informative
       } finally {
@@ -479,11 +653,26 @@ function ProducersSection() {
           </TableHeader>
           <TableBody>
             {rows.map(p => (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">{p.fullName}</TableCell>
-                <TableCell className="text-muted-foreground">{p.cooperativeName ?? "—"}</TableCell>
-                <TableCell className="text-right">{p.parcelleCount}</TableCell>
-              </TableRow>
+              <Fragment key={p.id}>
+                <TableRow
+                  onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                  className="cursor-pointer hover:bg-card/40"
+                >
+                  <TableCell className="font-medium">{p.fullName}</TableCell>
+                  <TableCell className="text-muted-foreground">{p.cooperativeName ?? "—"}</TableCell>
+                  <TableCell className="text-right">{p.parcelleCount}</TableCell>
+                </TableRow>
+                {expandedId === p.id && (
+                  <ProducerDetailRow
+                    producerId={p.id}
+                    cooperatives={cooperatives}
+                    onClose={() => setExpandedId(null)}
+                    onSaved={(fullName, coopName) => {
+                      setRows(prev => prev.map(row => row.id === p.id ? { ...row, fullName, cooperativeName: coopName } : row));
+                    }}
+                  />
+                )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>

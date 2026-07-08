@@ -265,6 +265,147 @@ export const createProducer = createServerFn({ method: "POST" })
     return { success: true as const, producerId };
   });
 
+export const getProducerDetails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { producerId: string }) =>
+    z.object({ producerId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data: producer, error } = await supabaseAdmin
+      .from("producers")
+      .select("id, full_name, contact_phone, contact_email, id_document_type, id_document_number, cooperative_id, organization_id")
+      .eq("id", data.producerId)
+      .single();
+    if (error || !producer || (producer as any).organization_id !== orgId) {
+      throw new Error("Producteur introuvable dans votre organisation.");
+    }
+    const p = producer as any;
+
+    const { data: parcelleRows, error: parcErr } = await supabaseAdmin
+      .from("parcelles")
+      .select("id, culture, surface_ha, created_at")
+      .eq("producer_id", data.producerId)
+      .order("created_at", { ascending: false });
+    if (parcErr) throw new Error(parcErr.message);
+    const parcelles = (parcelleRows ?? []) as Array<{ id: string; culture: string; surface_ha: number | null; created_at: string }>;
+
+    const parcelleIds = parcelles.map(pc => pc.id);
+    let visitCount = 0;
+    if (parcelleIds.length > 0) {
+      const { data: docs } = await supabaseAdmin
+        .from("documents")
+        .select("parcelle_id")
+        .in("parcelle_id", parcelleIds);
+      visitCount = ((docs ?? []) as Array<{ parcelle_id: string | null }>).filter(d => d.parcelle_id).length;
+    }
+
+    return {
+      producer: {
+        id: p.id as string,
+        fullName: p.full_name as string,
+        contactPhone: (p.contact_phone ?? null) as string | null,
+        contactEmail: (p.contact_email ?? null) as string | null,
+        idDocumentType: (p.id_document_type ?? null) as string | null,
+        idDocumentNumber: (p.id_document_number ?? null) as string | null,
+        cooperativeId: (p.cooperative_id ?? null) as string | null,
+      },
+      parcelles: parcelles.map(pc => ({
+        id: pc.id,
+        culture: pc.culture,
+        surfaceHa: pc.surface_ha,
+        createdAt: pc.created_at,
+      })),
+      visitCount,
+    };
+  });
+
+export const updateProducer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    producerId: string;
+    fullName?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    idDocumentType?: string;
+    idDocumentNumber?: string;
+    cooperativeId?: string | null;
+  }) =>
+    z.object({
+      producerId: z.string().uuid(),
+      fullName: z.string().min(1).max(200).optional(),
+      contactPhone: z.string().max(40).optional(),
+      contactEmail: z.string().email().max(200).optional(),
+      idDocumentType: z.string().max(80).optional(),
+      idDocumentNumber: z.string().max(80).optional(),
+      cooperativeId: z.string().uuid().nullable().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data: existing, error: fetchErr } = await supabaseAdmin
+      .from("producers")
+      .select("id, full_name, contact_phone, contact_email, id_document_type, id_document_number, cooperative_id, organization_id")
+      .eq("id", data.producerId)
+      .single();
+    if (fetchErr || !existing || (existing as any).organization_id !== orgId) {
+      throw new Error("Producteur introuvable dans votre organisation.");
+    }
+    const before = existing as any;
+
+    const fieldMap: Array<[keyof typeof data, string]> = [
+      ["fullName", "full_name"],
+      ["contactPhone", "contact_phone"],
+      ["contactEmail", "contact_email"],
+      ["idDocumentType", "id_document_type"],
+      ["idDocumentNumber", "id_document_number"],
+      ["cooperativeId", "cooperative_id"],
+    ];
+
+    const updatePayload: Record<string, any> = {};
+    const oldValue: Record<string, any> = {};
+    const newValue: Record<string, any> = {};
+    for (const [key, column] of fieldMap) {
+      if (!(key in data)) continue;
+      const raw = (data as any)[key];
+      const nextValue = typeof raw === "string" ? (raw.trim() || null) : raw;
+      const prevValue = before[column] ?? null;
+      if (nextValue !== prevValue) {
+        updatePayload[column] = nextValue;
+        oldValue[column] = prevValue;
+        newValue[column] = nextValue;
+      }
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      return { success: true as const };
+    }
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("producers")
+      .update(updatePayload as any)
+      .eq("id", data.producerId);
+    if (updateErr) throw new Error(updateErr.message);
+
+    try {
+      await supabaseAdmin.from("audit_log").insert({
+        organization_id: orgId,
+        actor_id: context.userId,
+        action: "modification",
+        entity_type: "producer",
+        entity_id: data.producerId,
+        old_value: oldValue as any,
+        new_value: newValue as any,
+      } as any);
+    } catch (e) {
+      console.warn("audit_log producer modification failed (non bloquant)", e);
+    }
+
+    return { success: true as const };
+  });
+
 // ============================================================
 // Détection de doublon GPS
 // ============================================================
