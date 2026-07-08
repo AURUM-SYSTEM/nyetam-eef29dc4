@@ -14,7 +14,7 @@ import { captureGps } from "@/lib/geo";
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
-import { listParcelles, listCooperatives, checkGpsDuplicate, createParcelle } from "@/lib/agro.functions";
+import { listParcelles, listCooperatives, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
 
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
@@ -226,6 +226,7 @@ function RecordPage() {
   const fetchCooperatives = useServerFn(listCooperatives);
   const checkDup = useServerFn(checkGpsDuplicate);
   const createParc = useServerFn(createParcelle);
+  const logUsedExisting = useServerFn(logUsedExistingParcelle);
 
   const isParcelleMission =
     moduleFromProfile === "agro" &&
@@ -244,6 +245,7 @@ function RecordPage() {
   const [dupParcelle, setDupParcelle] = useState<null | { id: string; culture: string; distanceMeters: number }>(null);
   const [createdParcelleId, setCreatedParcelleId] = useState<string | null>(null);
   const [creatingParcelle, setCreatingParcelle] = useState(false);
+  const [forceReason, setForceReason] = useState("");
 
   // Changement de mission → repartir d'un état parcelle neutre
   useEffect(() => {
@@ -251,6 +253,7 @@ function RecordPage() {
     setSelectedParcelleId("");
     setDupParcelle(null);
     setCreatedParcelleId(null);
+    setForceReason("");
   }, [missionKey]);
 
   // Chargement des parcelles et coopératives de l'organisation (en ligne uniquement)
@@ -295,13 +298,25 @@ function RecordPage() {
   }, [isParcelleMission, parcelleMode, gps, online, createdParcelleId]);
 
   function useExistingDuplicate() {
-    if (!dupParcelle) return;
+    if (!dupParcelle || !gps) return;
     // Si la parcelle détectée n'est pas encore dans la liste locale, on l'ajoute
     setParcelleList(prev => prev.some(p => p.id === dupParcelle.id)
       ? prev
       : [{ id: dupParcelle.id, culture: dupParcelle.culture, surfaceHa: null, cooperativeName: null }, ...prev]);
     setSelectedParcelleId(dupParcelle.id);
     setParcelleMode("existing");
+    setForceReason("");
+    // Journalisation qualité des données — en arrière-plan, ne bloque jamais
+    // le flux de l'agent (le serveur avale déjà ses propres erreurs, mais on
+    // se protège aussi côté client par sécurité).
+    void logUsedExisting({
+      data: {
+        existingParcelleId: dupParcelle.id,
+        lat: gps.lat,
+        lng: gps.lng,
+        distanceMeters: dupParcelle.distanceMeters,
+      },
+    }).catch(() => {});
     setDupParcelle(null);
   }
 
@@ -311,6 +326,10 @@ function RecordPage() {
     const surface = newSurface.trim() ? Number(newSurface) : undefined;
     if (surface !== undefined && (!Number.isFinite(surface) || surface <= 0)) {
       toast.error("Surface invalide.");
+      return;
+    }
+    if (force && forceReason.trim().length < 10) {
+      toast.error("Indiquez une justification d'au moins 10 caractères.");
       return;
     }
     setCreatingParcelle(true);
@@ -323,6 +342,7 @@ function RecordPage() {
           lat: gps.lat,
           lng: gps.lng,
           forceCreate: force,
+          reason: force ? forceReason.trim() : undefined,
         },
       });
       if (!res.success && res.duplicateFound) {
@@ -332,6 +352,7 @@ function RecordPage() {
       if (res.success) {
         setCreatedParcelleId(res.parcelleId);
         setDupParcelle(null);
+        setForceReason("");
         toast.success("Parcelle créée — elle sera liée à cette saisie");
       }
     } catch (e: any) {
@@ -819,12 +840,31 @@ function RecordPage() {
                         Une parcelle avec {dupParcelle.culture} existe déjà à {dupParcelle.distanceMeters} m de cette
                         position — l'utiliser à la place, ou continuer quand même ?
                       </p>
+
+                      <label className="mt-2 block">
+                        <span className="mb-1 block text-[10px] uppercase tracking-widest text-amber-300/80">
+                          Justification (obligatoire pour créer quand même) *
+                        </span>
+                        <textarea
+                          value={forceReason}
+                          onChange={e => setForceReason(e.target.value)}
+                          placeholder="Pourquoi cette parcelle est-elle distincte malgré la proximité GPS ?"
+                          rows={2}
+                          className="w-full rounded-lg border border-amber-500/30 bg-input/50 px-3 py-2 text-sm outline-none focus:border-amber-400"
+                        />
+                        {forceReason.trim().length > 0 && forceReason.trim().length < 10 && (
+                          <p className="mt-1 text-[10px] text-amber-300/80">
+                            Encore {10 - forceReason.trim().length} caractère(s) minimum.
+                          </p>
+                        )}
+                      </label>
+
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button type="button" onClick={useExistingDuplicate}
                           className="rounded-lg btn-gold px-3 py-1.5 text-xs">
                           Utiliser la parcelle existante
                         </button>
-                        <button type="button" disabled={creatingParcelle}
+                        <button type="button" disabled={creatingParcelle || forceReason.trim().length < 10}
                           onClick={() => void handleCreateParcelle(true)}
                           className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40">
                           {creatingParcelle ? "Création…" : "Créer quand même"}

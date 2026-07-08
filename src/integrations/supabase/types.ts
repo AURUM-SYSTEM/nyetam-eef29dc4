@@ -388,6 +388,63 @@ export type Database = {
         }
         Relationships: []
       }
+      duplicate_alerts: {
+        Row: {
+          action: string
+          agent_id: string
+          created_at: string
+          distance_meters: number
+          existing_parcelle_id: string
+          id: string
+          lat: number
+          lng: number
+          new_parcelle_id: string | null
+          organization_id: string
+          reason: string | null
+          review_notes: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          risk_level: string
+        }
+        Insert: {
+          action: string
+          agent_id: string
+          created_at?: string
+          distance_meters: number
+          existing_parcelle_id: string
+          id?: string
+          lat: number
+          lng: number
+          new_parcelle_id?: string | null
+          organization_id: string
+          reason?: string | null
+          review_notes?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_level: string
+        }
+        Update: {
+          action?: string
+          agent_id?: string
+          created_at?: string
+          distance_meters?: number
+          existing_parcelle_id?: string
+          id?: string
+          lat?: number
+          lng?: number
+          new_parcelle_id?: string | null
+          organization_id?: string
+          reason?: string | null
+          review_notes?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_level?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           country: string

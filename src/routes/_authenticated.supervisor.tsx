@@ -26,8 +26,10 @@ import {
   MapPin,
   Pencil,
   Radio,
+  ShieldAlert,
   Sprout,
   Users,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -51,7 +53,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
-import { listParcelles } from "@/lib/agro.functions";
+import { listParcelles, listDuplicateAlerts, reviewDuplicateAlert, getAgentQualityScores } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
@@ -432,6 +434,178 @@ function ParcellesSection() {
   );
 }
 
+// ── AGRO : qualité des données — alertes de doublons GPS ─────────────────
+
+const RISK_LABELS: Record<string, string> = { low: "Faible", medium: "Moyen", high: "Élevé" };
+const RISK_CLASSES: Record<string, string> = {
+  low: "bg-emerald-500/15 text-emerald-400",
+  medium: "bg-amber-500/15 text-amber-400",
+  high: "bg-red-500/15 text-red-400",
+};
+const REVIEW_STATUS_LABELS: Record<string, string> = { pending: "En attente", validated: "Validé", rejected: "Rejeté" };
+
+type DuplicateAlert = {
+  id: string;
+  agentName: string;
+  action: "created_anyway" | "used_existing";
+  culture: string | null;
+  cooperativeName: string | null;
+  distanceMeters: number;
+  riskLevel: string;
+  reason: string | null;
+  reviewStatus: "pending" | "validated" | "rejected";
+};
+
+type AgentQualityScore = {
+  agentId: string;
+  agentName: string;
+  totalAlerts: number;
+  createdAnywayRate: number;
+  usedExistingRate: number;
+  validationRate: number;
+  confirmedDuplicates: number;
+};
+
+function DataQualitySection() {
+  const fetchAlerts = useServerFn(listDuplicateAlerts);
+  const reviewAlert = useServerFn(reviewDuplicateAlert);
+  const fetchScores = useServerFn(getAgentQualityScores);
+
+  const [alerts, setAlerts] = useState<DuplicateAlert[]>([]);
+  const [scores, setScores] = useState<AgentQualityScore[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [a, s] = await Promise.all([
+        fetchAlerts({ data: undefined as any }),
+        fetchScores({ data: undefined as any }),
+      ]);
+      setAlerts(a.alerts);
+      setScores(s.scores);
+    } catch {
+      // silencieux : section purement informative
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function decide(alertId: string, reviewStatus: "validated" | "rejected") {
+    setDecidingId(alertId);
+    try {
+      await reviewAlert({ data: { alertId, reviewStatus } });
+      toast.success(reviewStatus === "validated" ? "Alerte validée" : "Alerte rejetée");
+      setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, reviewStatus } : a));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la décision");
+    } finally {
+      setDecidingId(null);
+    }
+  }
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
+        <ShieldAlert className="h-4 w-4 text-gold" /> Qualité des données — Alertes de doublons
+      </h2>
+
+      {loading ? (
+        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+      ) : (
+        <>
+          {scores.length > 0 && (
+            <div className="mb-5 overflow-x-auto">
+              <p className="mb-2 text-xs uppercase tracking-widest text-gold-soft">Score qualité par agent</p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Agent</TableHead>
+                    <TableHead className="text-right">Alertes</TableHead>
+                    <TableHead className="text-right">Créé quand même</TableHead>
+                    <TableHead className="text-right">Utilisé existant</TableHead>
+                    <TableHead className="text-right">Taux de validation</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {scores.map(s => (
+                    <TableRow key={s.agentId}>
+                      <TableCell className="font-medium">{s.agentName}</TableCell>
+                      <TableCell className="text-right">{s.totalAlerts}</TableCell>
+                      <TableCell className="text-right">{s.createdAnywayRate}%</TableCell>
+                      <TableCell className="text-right">{s.usedExistingRate}%</TableCell>
+                      <TableCell className="text-right">{s.validationRate}%</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          <p className="mb-2 text-xs uppercase tracking-widest text-gold-soft">Événements</p>
+          {alerts.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Aucune alerte de doublon pour l'instant.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {alerts.map(a => (
+                <div key={a.id} className="rounded-xl border border-border bg-card/40 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">
+                        {a.agentName} — {a.action === "created_anyway" ? "A créé quand même" : "A utilisé la parcelle existante"}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {a.culture ?? "—"}{a.cooperativeName ? ` · ${a.cooperativeName}` : ""} · {a.distanceMeters} m
+                      </p>
+                      {a.reason && (
+                        <p className="mt-1 text-xs italic text-muted-foreground">« {a.reason} »</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider ${RISK_CLASSES[a.riskLevel] ?? ""}`}>
+                        Risque {RISK_LABELS[a.riskLevel] ?? a.riskLevel}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {REVIEW_STATUS_LABELS[a.reviewStatus] ?? a.reviewStatus}
+                      </span>
+                    </div>
+                  </div>
+                  {a.reviewStatus === "pending" && (
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={() => void decide(a.id, "validated")}
+                        disabled={decidingId === a.id}
+                        className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-xs text-emerald-400 disabled:opacity-40"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Valider
+                      </button>
+                      <button
+                        onClick={() => void decide(a.id, "rejected")}
+                        disabled={decidingId === a.id}
+                        className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground disabled:opacity-40"
+                      >
+                        <XCircle className="h-3.5 w-3.5" /> Rejeter
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function SupervisorDashboardContent() {
   const { profile } = useAuth();
   const { docs, profilesById, loading, error, reload } = useSupervisorData();
@@ -581,6 +755,9 @@ function SupervisorDashboardContent() {
 
       {/* AGRO — parcelles (uniquement pour les superviseurs du module agro) */}
       {profile?.module_type === "agro" && <ParcellesSection />}
+
+      {/* AGRO — qualité des données / alertes de doublons GPS */}
+      {profile?.module_type === "agro" && <DataQualitySection />}
 
       {alerts.length > 0 && (
         <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
