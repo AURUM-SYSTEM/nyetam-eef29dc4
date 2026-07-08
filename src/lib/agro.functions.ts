@@ -776,3 +776,201 @@ export const getAgentQualityScores = createServerFn({ method: "POST" })
         .sort((a, b) => b.totalAlerts - a.totalAlerts),
     };
   });
+
+// ============================================================
+// Détail complet d'un document (données brutes) — superviseur/admin
+// ============================================================
+
+async function signStoragePaths(paths: string[] | null | undefined, bucket: string): Promise<string[]> {
+  const list = paths ?? [];
+  const urls: string[] = [];
+  for (const p of list) {
+    if (/^https?:\/\//i.test(p)) { urls.push(p); continue; }
+    const { data: signed, error } = await supabaseAdmin.storage.from(bucket).createSignedUrl(p, 3600);
+    if (!error && signed) urls.push(signed.signedUrl);
+  }
+  return urls;
+}
+
+export const getDocumentDetails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { documentId: string }) =>
+    z.object({ documentId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data: doc, error: docErr } = await supabaseAdmin
+      .from("documents")
+      .select("id, user_id, title, transcript, field_data, photo_urls, video_urls, parcelle_id, location, location_data, status, validated_at, created_at, agent_name")
+      .eq("id", data.documentId)
+      .single();
+    if (docErr || !doc) throw new Error("Document introuvable.");
+    const d = doc as any;
+
+    const { data: ownerProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("organization_id")
+      .eq("id", d.user_id)
+      .single();
+    if ((ownerProfile as any)?.organization_id !== orgId) {
+      throw new Error("Ce document n'appartient pas à votre organisation.");
+    }
+
+    const [photoUrls, videoUrls] = await Promise.all([
+      signStoragePaths(d.photo_urls, "recensement-photos"),
+      signStoragePaths(d.video_urls, "recensement-videos"),
+    ]);
+
+    let parcelle: { culture: string; surfaceHa: number | null; producerName: string | null } | null = null;
+    if (d.parcelle_id) {
+      const { data: pc } = await supabaseAdmin
+        .from("parcelles")
+        .select("culture, surface_ha, producer_id")
+        .eq("id", d.parcelle_id)
+        .single();
+      if (pc) {
+        const pcRow = pc as any;
+        let producerName: string | null = null;
+        if (pcRow.producer_id) {
+          const { data: prod } = await supabaseAdmin
+            .from("producers")
+            .select("full_name")
+            .eq("id", pcRow.producer_id)
+            .single();
+          producerName = (prod as any)?.full_name ?? null;
+        }
+        parcelle = { culture: pcRow.culture as string, surfaceHa: (pcRow.surface_ha ?? null) as number | null, producerName };
+      }
+    }
+
+    const { data: coreOutputRow } = await supabaseAdmin
+      .from("core_outputs")
+      .select("payload")
+      .eq("document_id", data.documentId)
+      .order("processed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const payload = coreOutputRow ? ((coreOutputRow as any).payload as {
+      category?: string; summary?: string; indicators?: Array<{ label: string; value: string }>;
+    } | null) : null;
+
+    // Le champ_data est un JSON arbitraire (clé -> valeur saisie) — on le
+    // normalise en chaînes pour un affichage clé/valeur simple côté client
+    // et pour rester strictement sérialisable par createServerFn.
+    const rawFieldData = (d.field_data ?? null) as Record<string, unknown> | null;
+    const fieldData: Record<string, string> | null = rawFieldData
+      ? Object.fromEntries(Object.entries(rawFieldData).map(([k, v]) => [k, v == null ? "" : String(v)]))
+      : null;
+
+    return {
+      id: d.id as string,
+      title: (d.title ?? null) as string | null,
+      transcript: (d.transcript ?? "") as string,
+      fieldData,
+      photoUrls,
+      videoUrls,
+      location: (d.location ?? null) as string | null,
+      locationData: (d.location_data ?? null) as { lat?: number; lng?: number; city?: string } | null,
+      status: (d.status ?? null) as string | null,
+      validatedAt: (d.validated_at ?? null) as string | null,
+      createdAt: d.created_at as string,
+      agentName: (d.agent_name ?? null) as string | null,
+      parcelle,
+      coreOutput: payload
+        ? {
+            category: (payload.category ?? null) as string | null,
+            summary: (payload.summary ?? null) as string | null,
+            indicators: Array.isArray(payload.indicators) ? payload.indicators : [],
+          }
+        : null,
+    };
+  });
+
+// ============================================================
+// Data Analyst — complétude, validation, volumes (superviseur/admin)
+// ============================================================
+
+const DATA_ANALYST_DOCS_LIMIT = 1000;
+
+export const getDataAnalystStats = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data: callerProfile, error: callerErr } = await supabaseAdmin
+      .from("profiles")
+      .select("module_type")
+      .eq("id", context.userId)
+      .single();
+    if (callerErr || !callerProfile) throw new Error("Profil introuvable.");
+    const moduleType = (callerProfile as any).module_type as string;
+
+    const { data: orgProfiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("organization_id", orgId);
+    const profileIds = ((orgProfiles ?? []) as Array<{ id: string }>).map((p) => p.id);
+
+    type DocRow = {
+      photo_urls: string[] | null;
+      video_urls: string[] | null;
+      location_data: { lat?: number; lng?: number } | null;
+      parcelle_id: string | null;
+      validated_at: string | null;
+      created_at: string;
+    };
+    let docs: DocRow[] = [];
+    if (profileIds.length > 0) {
+      const { data } = await supabaseAdmin
+        .from("documents")
+        .select("photo_urls, video_urls, location_data, parcelle_id, validated_at, created_at")
+        .in("user_id", profileIds)
+        .eq("module_type", moduleType)
+        .order("created_at", { ascending: false })
+        .limit(DATA_ANALYST_DOCS_LIMIT);
+      docs = (data ?? []) as DocRow[];
+    }
+
+    const total = docs.length;
+    const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+
+    const withPhoto = docs.filter((d) => (d.photo_urls?.length ?? 0) > 0).length;
+    const withVideo = docs.filter((d) => (d.video_urls?.length ?? 0) > 0).length;
+    const withGps = docs.filter((d) => typeof d.location_data?.lat === "number" && typeof d.location_data?.lng === "number").length;
+    const withParcelle = docs.filter((d) => !!d.parcelle_id).length;
+
+    const validated = docs.filter((d) => !!d.validated_at);
+    const validatedCount = validated.length;
+    const pendingCount = total - validatedCount;
+
+    let avgValidationHours: number | null = null;
+    if (validatedCount > 0) {
+      const totalHours = validated.reduce((sum, d) => {
+        const created = new Date(d.created_at).getTime();
+        const done = new Date(d.validated_at as string).getTime();
+        return sum + Math.max(0, done - created) / (1000 * 60 * 60);
+      }, 0);
+      avgValidationHours = Math.round((totalHours / validatedCount) * 10) / 10;
+    }
+
+    const [{ count: parcelleCount }, { count: producerCount }, { count: cooperativeCount }] = await Promise.all([
+      supabaseAdmin.from("parcelles").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
+      supabaseAdmin.from("producers").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
+      supabaseAdmin.from("cooperatives").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
+    ]);
+
+    return {
+      totalDocuments: total,
+      photoRate: pct(withPhoto),
+      videoRate: pct(withVideo),
+      gpsRate: pct(withGps),
+      parcelleRate: pct(withParcelle),
+      validatedRate: pct(validatedCount),
+      pendingRate: pct(pendingCount),
+      avgValidationHours,
+      parcelleCount: parcelleCount ?? 0,
+      producerCount: producerCount ?? 0,
+      cooperativeCount: cooperativeCount ?? 0,
+    };
+  });

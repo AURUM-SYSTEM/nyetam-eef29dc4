@@ -20,6 +20,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Activity,
   AlertTriangle,
+  BarChart3,
   CheckCircle2,
   Loader2,
   Lock,
@@ -64,6 +65,8 @@ import {
   listDuplicateAlerts,
   reviewDuplicateAlert,
   getAgentQualityScores,
+  getDocumentDetails,
+  getDataAnalystStats,
 } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 
@@ -326,6 +329,134 @@ function ModificationRequestRow({ doc, onClose }: { doc: DocRow; onClose: () => 
             </button>
           </div>
         </form>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// ── Détail complet d'un document (données brutes) ────────────────────────
+
+type DocumentDetails = {
+  id: string;
+  title: string | null;
+  transcript: string;
+  fieldData: Record<string, string> | null;
+  photoUrls: string[];
+  videoUrls: string[];
+  location: string | null;
+  locationData: { lat?: number; lng?: number; city?: string } | null;
+  status: string | null;
+  validatedAt: string | null;
+  createdAt: string;
+  agentName: string | null;
+  parcelle: { culture: string; surfaceHa: number | null; producerName: string | null } | null;
+  coreOutput: { category: string | null; summary: string | null; indicators: Array<{ label: string; value: string }> } | null;
+};
+
+function humanizeFieldKey(key: string): string {
+  const spaced = key.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function DocumentDetailRow({ documentId, onClose }: { documentId: string; onClose: () => void }) {
+  const fetchDetails = useServerFn(getDocumentDetails);
+  const [details, setDetails] = useState<DocumentDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchDetails({ data: { documentId } });
+        if (!cancelled) setDetails(res as DocumentDetails);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? "Échec du chargement du document");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId]);
+
+  return (
+    <TableRow>
+      <TableCell colSpan={7} className="bg-card/30">
+        {loading ? (
+          <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+        ) : error ? (
+          <p className="py-2 text-sm text-destructive">{error}</p>
+        ) : details ? (
+          <div className="space-y-3 py-2">
+            <div>
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Transcription complète</span>
+              <p className="whitespace-pre-line rounded-lg border border-border bg-input/30 p-2 text-xs text-muted-foreground">
+                {details.transcript || "—"}
+              </p>
+            </div>
+
+            {details.fieldData && Object.keys(details.fieldData).length > 0 && (
+              <div>
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Données saisies</span>
+                <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  {Object.entries(details.fieldData).map(([k, v]) => (
+                    <li key={k}><span className="text-foreground">{humanizeFieldKey(k)}</span> : {String(v)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {(details.photoUrls.length > 0 || details.videoUrls.length > 0) && (
+              <div>
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Médias</span>
+                <div className="flex flex-wrap gap-2">
+                  {details.photoUrls.map((url, i) => (
+                    <a key={`p${i}`} href={url} target="_blank" rel="noreferrer">
+                      <img src={url} alt="" className="h-16 w-16 rounded-lg border border-border object-cover" />
+                    </a>
+                  ))}
+                  {details.videoUrls.map((url, i) => (
+                    // eslint-disable-next-line jsx-a11y/media-has-caption
+                    <video key={`v${i}`} src={url} controls className="h-16 w-24 rounded-lg border border-border object-cover" />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {details.parcelle && (
+              <div>
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Parcelle liée</span>
+                <p className="text-xs text-muted-foreground">
+                  {details.parcelle.culture}
+                  {details.parcelle.surfaceHa != null ? ` · ${details.parcelle.surfaceHa} ha` : ""}
+                  {" · Producteur : "}{details.parcelle.producerName ?? "—"}
+                </p>
+              </div>
+            )}
+
+            {details.coreOutput && (
+              <div>
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Résultat CORE (structuré)</span>
+                <p className="text-xs text-muted-foreground">
+                  {details.coreOutput.category ? `Catégorie : ${details.coreOutput.category}` : ""}
+                  {details.coreOutput.summary ? ` — ${details.coreOutput.summary}` : ""}
+                </p>
+                {details.coreOutput.indicators.length > 0 && (
+                  <ul className="mt-1 text-xs text-muted-foreground">
+                    {details.coreOutput.indicators.map((ind, i) => (
+                      <li key={i}>{ind.label} : {ind.value}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <button type="button" onClick={onClose} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground">
+              Fermer
+            </button>
+          </div>
+        ) : null}
       </TableCell>
     </TableRow>
   );
@@ -717,7 +848,7 @@ function AgriAssistantSection() {
   return (
     <section className="glass-card mb-6 rounded-2xl p-5">
       <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
-        <Sparkles className="h-4 w-4 text-gold" /> Assistant IA — Posez une question
+        <Sparkles className="h-4 w-4 text-gold" /> Assistant Agro
       </h2>
       <div className="space-y-2">
         <textarea
@@ -781,7 +912,7 @@ function OrientationsSection() {
   return (
     <section className="glass-card mb-6 rounded-2xl p-5">
       <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
-        <Sparkles className="h-4 w-4 text-gold" /> Analyse IA — Orientations
+        <Sparkles className="h-4 w-4 text-gold" /> Agro Advisor
       </h2>
       <div className="space-y-3">
         <button
@@ -805,6 +936,152 @@ function OrientationsSection() {
           </div>
         )}
       </div>
+    </section>
+  );
+}
+
+// ── AGRO : Data Analyst — complétude, validation, volumes ────────────────
+
+type DataAnalystStats = {
+  totalDocuments: number;
+  photoRate: number;
+  videoRate: number;
+  gpsRate: number;
+  parcelleRate: number;
+  validatedRate: number;
+  pendingRate: number;
+  avgValidationHours: number | null;
+  parcelleCount: number;
+  producerCount: number;
+  cooperativeCount: number;
+};
+
+function DataAnalystSection() {
+  const fetchStats = useServerFn(getDataAnalystStats);
+  const fetchScores = useServerFn(getAgentQualityScores);
+
+  const [stats, setStats] = useState<DataAnalystStats | null>(null);
+  const [scores, setScores] = useState<AgentQualityScore[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [s, q] = await Promise.all([
+          fetchStats({ data: undefined as any }),
+          fetchScores({ data: undefined as any }),
+        ]);
+        if (cancelled) return;
+        setStats(s);
+        setScores(q.scores);
+      } catch {
+        // silencieux : section purement informative
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
+        <BarChart3 className="h-4 w-4 text-gold" /> Data Analyst
+      </h2>
+      {loading ? (
+        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+      ) : !stats ? (
+        <p className="py-4 text-center text-sm text-muted-foreground">Données indisponibles pour l'instant.</p>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
+              Complétude ({stats.totalDocuments} document{stats.totalDocuments !== 1 ? "s" : ""})
+            </span>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                ["Avec photo", stats.photoRate],
+                ["Avec vidéo", stats.videoRate],
+                ["Avec GPS", stats.gpsRate],
+                ["Liés à une parcelle", stats.parcelleRate],
+              ].map(([label, rate]) => (
+                <div key={label as string} className="rounded-lg border border-border bg-card/30 p-2 text-center">
+                  <p className="font-display text-lg text-gold">{rate}%</p>
+                  <p className="text-[10px] text-muted-foreground">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Validation</span>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-border bg-card/30 p-2 text-center">
+                <p className="font-display text-lg text-emerald-400">{stats.validatedRate}%</p>
+                <p className="text-[10px] text-muted-foreground">Validés</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card/30 p-2 text-center">
+                <p className="font-display text-lg text-amber-400">{stats.pendingRate}%</p>
+                <p className="text-[10px] text-muted-foreground">En attente</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card/30 p-2 text-center">
+                <p className="font-display text-lg text-gold">
+                  {stats.avgValidationHours != null ? `${stats.avgValidationHours} h` : "—"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">Délai moyen création → validation</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Volumes actifs</span>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg border border-border bg-card/30 p-2 text-center">
+                <p className="font-display text-lg">{stats.parcelleCount}</p>
+                <p className="text-[10px] text-muted-foreground">Parcelles</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card/30 p-2 text-center">
+                <p className="font-display text-lg">{stats.producerCount}</p>
+                <p className="text-[10px] text-muted-foreground">Producteurs</p>
+              </div>
+              <div className="rounded-lg border border-border bg-card/30 p-2 text-center">
+                <p className="font-display text-lg">{stats.cooperativeCount}</p>
+                <p className="text-[10px] text-muted-foreground">Coopératives</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Scores qualité par agent</span>
+            {scores.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Aucune donnée de qualité pour l'instant.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Agent</TableHead>
+                    <TableHead className="text-right">Alertes</TableHead>
+                    <TableHead className="text-right">Créées quand même</TableHead>
+                    <TableHead className="text-right">Taux de validation</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {scores.map((s) => (
+                    <TableRow key={s.agentId}>
+                      <TableCell className="font-medium">{s.agentName}</TableCell>
+                      <TableCell className="text-right">{s.totalAlerts}</TableCell>
+                      <TableCell className="text-right">{s.createdAnywayRate}%</TableCell>
+                      <TableCell className="text-right">{s.validationRate}%</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -990,6 +1267,7 @@ function SupervisorDashboardContent() {
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "ready">("all");
   const [validated, setValidated] = useState<Set<string>>(new Set());
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   const agentOptions = useMemo(
     () => Array.from(new Set(Object.values(profilesById))).sort(),
@@ -1139,7 +1417,10 @@ function SupervisorDashboardContent() {
       {/* AGRO — qualité des données / alertes de doublons GPS */}
       {profile?.module_type === "agro" && <DataQualitySection />}
 
-      {/* AGRO — assistant IA conversationnel et analyse IA orientations */}
+      {/* AGRO — Data Analyst (complétude, validation, volumes) */}
+      {profile?.module_type === "agro" && <DataAnalystSection />}
+
+      {/* AGRO — Assistant Agro (questions libres) et Agro Advisor (synthèse) — deux blocs distincts */}
       {profile?.module_type === "agro" && (
         <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 [&>section]:mb-0">
           <AgriAssistantSection />
@@ -1202,7 +1483,10 @@ function SupervisorDashboardContent() {
           <TableBody>
             {filteredDocs.slice(0, 30).map((d) => (
               <Fragment key={d.id}>
-                <TableRow>
+                <TableRow
+                  onClick={() => setViewingId(viewingId === d.id ? null : d.id)}
+                  className="cursor-pointer hover:bg-card/40"
+                >
                   <TableCell className="font-medium">{profilesById[d.user_id] || "Agent"}</TableCell>
                   <TableCell>
                     <span
@@ -1228,14 +1512,14 @@ function SupervisorDashboardContent() {
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1.5">
                       <button
-                        onClick={() => setRequestingId(requestingId === d.id ? null : d.id)}
+                        onClick={(e) => { e.stopPropagation(); setRequestingId(requestingId === d.id ? null : d.id); }}
                         title="Demander une modification"
                         className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={() => toggleValidate(d.id)}
+                        onClick={(e) => { e.stopPropagation(); toggleValidate(d.id); }}
                         className={
                           validated.has(d.id)
                             ? "rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400"
@@ -1249,6 +1533,9 @@ function SupervisorDashboardContent() {
                 </TableRow>
                 {requestingId === d.id && (
                   <ModificationRequestRow doc={d} onClose={() => setRequestingId(null)} />
+                )}
+                {viewingId === d.id && (
+                  <DocumentDetailRow documentId={d.id} onClose={() => setViewingId(null)} />
                 )}
               </Fragment>
             ))}
