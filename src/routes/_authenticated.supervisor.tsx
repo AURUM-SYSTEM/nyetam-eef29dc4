@@ -54,7 +54,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
-import { askAgriAssistant } from "@/lib/insights.functions";
+import { askAgriAssistant, generateOrientations } from "@/lib/insights.functions";
 import {
   listParcelles,
   listProducers,
@@ -757,6 +757,58 @@ function AgriAssistantSection() {
   );
 }
 
+// ── AGRO : analyse IA — orientations (synthèse automatique) ──────────────
+
+function OrientationsSection() {
+  const generate = useServerFn(generateOrientations);
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [count, setCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleGenerate() {
+    setLoading(true);
+    try {
+      const res = await generate({ data: undefined as any });
+      setAnalysis(res.analysis);
+      setCount(res.count);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la génération de l'analyse");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
+        <Sparkles className="h-4 w-4 text-gold" /> Analyse IA — Orientations
+      </h2>
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => void handleGenerate()}
+          disabled={loading}
+          className="rounded-lg btn-gold px-4 py-2 text-sm disabled:opacity-40"
+        >
+          {loading ? "Génération…" : analysis ? "Régénérer" : "Générer l'analyse"}
+        </button>
+        {analysis && (
+          <div>
+            {count != null && (
+              <p className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">
+                Basé sur {count} document{count !== 1 ? "s" : ""}
+              </p>
+            )}
+            <p className="whitespace-pre-line rounded-lg border border-border bg-card/30 p-3 text-sm">
+              {analysis}
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ── AGRO : qualité des données — alertes de doublons GPS ─────────────────
 
 const RISK_LABELS: Record<string, string> = { low: "Faible", medium: "Moyen", high: "Élevé" };
@@ -1087,8 +1139,13 @@ function SupervisorDashboardContent() {
       {/* AGRO — qualité des données / alertes de doublons GPS */}
       {profile?.module_type === "agro" && <DataQualitySection />}
 
-      {/* AGRO — assistant IA conversationnel */}
-      {profile?.module_type === "agro" && <AgriAssistantSection />}
+      {/* AGRO — assistant IA conversationnel et analyse IA orientations */}
+      {profile?.module_type === "agro" && (
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 [&>section]:mb-0">
+          <AgriAssistantSection />
+          <OrientationsSection />
+        </div>
+      )}
 
       {alerts.length > 0 && (
         <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">

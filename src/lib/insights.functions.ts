@@ -1,5 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────
-// INSIGHTS — Assistant IA conversationnel pour le superviseur (module AGRO)
+// INSIGHTS — Fonctionnalités IA pour le superviseur
+//
+// - askAgriAssistant : assistant conversationnel (module AGRO), répond à
+//   des questions libres sur les données de l'organisation.
+// - generateOrientations : synthèse automatique (tendances, points
+//   d'attention, recommandations) à partir des documents et core_outputs
+//   du module du superviseur.
 //
 // Même pattern d'authentification/scoping que le reste de l'app (voir
 // agro.functions.ts) : chaque fonction revérifie côté serveur l'identité
@@ -212,4 +218,95 @@ export const askAgriAssistant = createServerFn({ method: "POST" })
 
     const answer = await callGemini(data.question.trim(), system);
     return { answer: answer.trim() || "Je n'ai pas assez d'information pour répondre à ça." };
+  });
+
+// ============================================================
+// Analyse IA — Orientations (synthèse automatique, pas de question posée)
+// ============================================================
+
+const ORIENTATIONS_DOCS_LIMIT = 200;
+
+export const generateOrientations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    // Le module de l'appelant borne le périmètre de l'analyse.
+    const { data: callerProfile, error: callerErr } = await supabaseAdmin
+      .from("profiles")
+      .select("module_type")
+      .eq("id", context.userId)
+      .single();
+    if (callerErr || !callerProfile) throw new Error("Profil introuvable.");
+    const moduleType = (callerProfile as any).module_type as string;
+
+    const { data: orgProfiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name")
+      .eq("organization_id", orgId);
+    const profileRows = (orgProfiles ?? []) as Array<{ id: string; full_name: string | null }>;
+    const profileIds = profileRows.map((p) => p.id);
+    const agentNameById = new Map(profileRows.map((p) => [p.id, p.full_name || "Agent"]));
+
+    let docs: Array<{ id: string; title: string | null; user_id: string; created_at: string; status: string | null }> = [];
+    if (profileIds.length > 0) {
+      const { data } = await supabaseAdmin
+        .from("documents")
+        .select("id, title, user_id, created_at, status")
+        .in("user_id", profileIds)
+        .eq("module_type", moduleType)
+        .order("created_at", { ascending: false })
+        .limit(ORIENTATIONS_DOCS_LIMIT);
+      docs = (data ?? []) as typeof docs;
+    }
+
+    const docIds = docs.map((d) => d.id);
+    let outputs: Array<{ document_id: string; payload: unknown }> = [];
+    if (docIds.length > 0) {
+      const { data } = await supabaseAdmin
+        .from("core_outputs")
+        .select("document_id, payload")
+        .in("document_id", docIds)
+        .eq("module_type", moduleType);
+      outputs = (data ?? []) as typeof outputs;
+    }
+
+    const count = docs.length;
+    if (count === 0) {
+      return { analysis: "Aucune donnée disponible pour générer une analyse.", count: 0 };
+    }
+
+    const docLines = docs.map((d) =>
+      `- "${d.title || "sans titre"}" | agent : ${agentNameById.get(d.user_id) ?? "agent inconnu"} | date : ${new Date(d.created_at).toLocaleDateString("fr-FR")} | statut : ${d.status === "ready" ? "synchronisé" : "brouillon"}`,
+    );
+
+    const outputLines = outputs.map((o) => {
+      const p = (o.payload ?? {}) as { category?: string; summary?: string; indicators?: Array<{ label: string; value: string }>; tags?: string[] };
+      const indicators = (p.indicators ?? []).map((i) => `${i.label} : ${i.value}`).join(", ");
+      const tags = p.tags?.length ? p.tags.join(", ") : "";
+      return `- catégorie : ${p.category ?? "—"} | résumé : ${p.summary ?? "—"}${indicators ? ` | indicateurs : ${indicators}` : ""}${tags ? ` | tags : ${tags}` : ""}`;
+    });
+
+    const dataContext = [
+      `DOCUMENTS (${docs.length} sur un maximum de ${ORIENTATIONS_DOCS_LIMIT}, module ${moduleType}) :`,
+      docLines.join("\n"),
+      "",
+      `DONNÉES STRUCTURÉES (core_outputs, ${outputs.length}) :`,
+      outputLines.length > 0 ? outputLines.join("\n") : "Aucune donnée structurée.",
+    ].join("\n");
+
+    const system = [
+      `Tu es un analyste terrain pour une organisation de reporting (module ${moduleType}).`,
+      "À partir UNIQUEMENT des données ci-dessous, rédige une synthèse en français, 250 mots maximum, structurée en 3 parties :",
+      "1) Tendances observées",
+      "2) Points d'attention",
+      "3) Recommandations concrètes (3 maximum)",
+      "N'invente JAMAIS de chiffres, de noms ou de faits absents des données fournies. Reste factuel et concis.",
+      "",
+      "DONNÉES DE L'ORGANISATION :",
+      dataContext,
+    ].join("\n");
+
+    const analysis = await callGemini("Génère la synthèse demandée à partir des données ci-dessus.", system);
+    return { analysis: analysis.trim(), count };
   });
