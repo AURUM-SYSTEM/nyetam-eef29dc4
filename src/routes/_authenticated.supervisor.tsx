@@ -530,9 +530,49 @@ type ParcelleTimelineDoc = {
   validatedAt: string | null;
 };
 
+// Petit polygone SVG — même esprit que MiniMap (projection lat/lng dans une
+// boîte englobante), mais tracé en lignes reliant les points du périmètre
+// plutôt qu'un nuage de points.
+function ParcelleBoundarySvg({ points }: { points: Array<{ lat: number; lng: number }> }) {
+  if (points.length < 3) return null;
+  const lats = points.map(p => p.lat);
+  const lngs = points.map(p => p.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const spanLat = Math.max(maxLat - minLat, 0.00001);
+  const spanLng = Math.max(maxLng - minLng, 0.00001);
+  const pad = 8;
+  const size = 100;
+  const toXY = (p: { lat: number; lng: number }) => ({
+    x: pad + ((p.lng - minLng) / spanLng) * (size - 2 * pad),
+    y: pad + (1 - (p.lat - minLat) / spanLat) * (size - 2 * pad),
+  });
+  const xy = points.map(toXY);
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} className="h-32 w-32 shrink-0 rounded-lg border border-border bg-secondary/40">
+      <polygon
+        points={xy.map(p => `${p.x},${p.y}`).join(" ")}
+        fill="color-mix(in oklch, var(--gold) 22%, transparent)"
+        stroke="var(--gold)"
+        strokeWidth="1.5"
+      />
+      {xy.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r="1.8" fill="var(--gold)" />
+      ))}
+    </svg>
+  );
+}
+
 function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onClose: () => void }) {
   const fetchTimeline = useServerFn(getParcelleTimeline);
-  const [parcelle, setParcelle] = useState<{ culture: string; surfaceHa: number | null; producerName: string | null; cooperativeName: string | null } | null>(null);
+  const [parcelle, setParcelle] = useState<{
+    culture: string; surfaceHa: number | null; surfaceHaCalculated: number | null;
+    boundaryPoints: Array<{ lat: number; lng: number }> | null;
+    producerName: string | null; cooperativeName: string | null;
+  } | null>(null);
   const [docs, setDocs] = useState<ParcelleTimelineDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -565,12 +605,18 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
         ) : (
           <div className="space-y-3 py-2">
             {parcelle && (
-              <p className="text-xs text-muted-foreground">
-                {parcelle.culture}
-                {parcelle.surfaceHa != null ? ` · ${parcelle.surfaceHa} ha` : ""}
-                {" · Producteur : "}{parcelle.producerName ?? "—"}
-                {" · Coopérative : "}{parcelle.cooperativeName ?? "—"}
-              </p>
+              <div className="flex items-start gap-3">
+                {parcelle.boundaryPoints && parcelle.boundaryPoints.length >= 3 && (
+                  <ParcelleBoundarySvg points={parcelle.boundaryPoints} />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {parcelle.culture}
+                  {parcelle.surfaceHa != null ? ` · ${parcelle.surfaceHa} ha` : ""}
+                  {parcelle.surfaceHaCalculated != null ? ` (calculée : ${parcelle.surfaceHaCalculated} ha)` : ""}
+                  {" · Producteur : "}{parcelle.producerName ?? "—"}
+                  {" · Coopérative : "}{parcelle.cooperativeName ?? "—"}
+                </p>
+              </div>
             )}
 
             <div>

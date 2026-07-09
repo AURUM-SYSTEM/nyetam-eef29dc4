@@ -17,6 +17,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { computePolygonCenter, computePolygonAreaHectares } from "@/lib/geo-polygon";
 
 const DUPLICATE_RADIUS_M = 50;
 // Marge large autour du seuil réel (50 m) pour le filtrage grossier par
@@ -443,6 +444,7 @@ export const createParcelle = createServerFn({ method: "POST" })
     notes?: string;
     forceCreate?: boolean;
     reason?: string;
+    boundaryPoints?: Array<{ lat: number; lng: number }>;
   }) =>
     z.object({
       culture: z.string().min(1).max(120),
@@ -455,13 +457,26 @@ export const createParcelle = createServerFn({ method: "POST" })
       notes: z.string().max(2000).optional(),
       forceCreate: z.boolean().optional(),
       reason: z.string().max(1000).optional(),
+      boundaryPoints: z.array(z.object({
+        lat: z.number().min(-90).max(90),
+        lng: z.number().min(-180).max(180),
+      })).min(3).max(500).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const orgId = await getCallerOrg(context.userId);
 
+    // Périmètre (polygone) — recalcul de sécurité côté serveur, jamais
+    // confiance dans un centre/surface envoyé par le client.
+    const boundaryCenter = data.boundaryPoints ? computePolygonCenter(data.boundaryPoints) : null;
+    const surfaceHaCalculated = data.boundaryPoints
+      ? Math.round(computePolygonAreaHectares(data.boundaryPoints) * 100) / 100
+      : null;
+    const effectiveLat = boundaryCenter?.lat ?? data.lat;
+    const effectiveLng = boundaryCenter?.lng ?? data.lng;
+
     // Garde anti-doublon — même logique que checkGpsDuplicate
-    const existing = await findNearbyParcelle(orgId, data.lat, data.lng);
+    const existing = await findNearbyParcelle(orgId, effectiveLat, effectiveLng);
     if (existing && data.forceCreate !== true) {
       return { success: false as const, duplicateFound: true as const, existingParcelle: existing };
     }
@@ -527,11 +542,13 @@ export const createParcelle = createServerFn({ method: "POST" })
       .insert({
         organization_id: orgId,
         culture: data.culture.trim(),
-        surface_ha: data.surfaceHa ?? null,
+        surface_ha: data.surfaceHa ?? surfaceHaCalculated ?? null,
+        surface_ha_calculated: surfaceHaCalculated,
+        boundary_points: (data.boundaryPoints as any) ?? null,
         cooperative_id: cooperativeId,
         producer_id: producerId,
-        lat: data.lat,
-        lng: data.lng,
+        lat: effectiveLat,
+        lng: effectiveLng,
         notes: data.notes?.trim() || null,
         registered_by: context.userId,
       } as any)
@@ -550,11 +567,13 @@ export const createParcelle = createServerFn({ method: "POST" })
         entity_id: parcelleId,
         new_value: {
           culture: data.culture.trim(),
-          surface_ha: data.surfaceHa ?? null,
+          surface_ha: data.surfaceHa ?? surfaceHaCalculated ?? null,
+          surface_ha_calculated: surfaceHaCalculated,
           cooperative_id: cooperativeId,
           producer_id: producerId,
-          lat: data.lat,
-          lng: data.lng,
+          lat: effectiveLat,
+          lng: effectiveLng,
+          boundary_points_count: data.boundaryPoints?.length ?? 0,
           forced: forcingThroughDuplicate,
         } as any,
       } as any);
@@ -575,8 +594,8 @@ export const createParcelle = createServerFn({ method: "POST" })
           distance_meters: existing.distanceMeters,
           risk_level: computeRiskLevel(existing.distanceMeters),
           reason,
-          lat: data.lat,
-          lng: data.lng,
+          lat: effectiveLat,
+          lng: effectiveLng,
         } as any);
       } catch (e) {
         console.warn("duplicate_alerts insert (created_anyway) failed (non bloquant)", e);
@@ -989,7 +1008,7 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
 
     const { data: parcelle, error: parcErr } = await supabaseAdmin
       .from("parcelles")
-      .select("id, culture, surface_ha, cooperative_id, producer_id, organization_id")
+      .select("id, culture, surface_ha, surface_ha_calculated, boundary_points, cooperative_id, producer_id, organization_id")
       .eq("id", data.parcelleId)
       .single();
     if (parcErr || !parcelle || (parcelle as any).organization_id !== orgId) {
@@ -1032,6 +1051,8 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
         id: pc.id as string,
         culture: pc.culture as string,
         surfaceHa: (pc.surface_ha ?? null) as number | null,
+        surfaceHaCalculated: (pc.surface_ha_calculated ?? null) as number | null,
+        boundaryPoints: (pc.boundary_points ?? null) as Array<{ lat: number; lng: number }> | null,
         producerName: (producer as any)?.full_name ?? null,
         cooperativeName: (coop as any)?.name ?? null,
       },

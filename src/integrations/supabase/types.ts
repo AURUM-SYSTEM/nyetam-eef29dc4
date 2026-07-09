@@ -351,9 +351,9 @@ export type Database = {
       }
       parcelles: {
         Row: {
+          boundary_points: Json | null
           cooperative_id: string | null
           created_at: string
-          created_by: string | null
           culture: string
           id: string
           lat: number
@@ -361,12 +361,14 @@ export type Database = {
           notes: string | null
           organization_id: string
           producer_id: string | null
+          registered_by: string | null
           surface_ha: number | null
+          surface_ha_calculated: number | null
         }
         Insert: {
+          boundary_points?: Json | null
           cooperative_id?: string | null
           created_at?: string
-          created_by?: string | null
           culture: string
           id?: string
           lat: number
@@ -374,12 +376,14 @@ export type Database = {
           notes?: string | null
           organization_id: string
           producer_id?: string | null
+          registered_by?: string | null
           surface_ha?: number | null
+          surface_ha_calculated?: number | null
         }
         Update: {
+          boundary_points?: Json | null
           cooperative_id?: string | null
           created_at?: string
-          created_by?: string | null
           culture?: string
           id?: string
           lat?: number
@@ -387,7 +391,9 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           producer_id?: string | null
+          registered_by?: string | null
           surface_ha?: number | null
+          surface_ha_calculated?: number | null
         }
         Relationships: []
       }

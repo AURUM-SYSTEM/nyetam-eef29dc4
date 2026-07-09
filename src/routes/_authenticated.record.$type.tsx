@@ -11,6 +11,7 @@ import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
 import { captureGps } from "@/lib/geo";
+import { computePolygonCenter, computePolygonAreaHectares } from "@/lib/geo-polygon";
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -255,6 +256,11 @@ function RecordPage() {
   const [creatingParcelle, setCreatingParcelle] = useState(false);
   const [forceReason, setForceReason] = useState("");
 
+  // Capture de périmètre (polygone) — complément du point unique existant.
+  const [boundaryPoints, setBoundaryPoints] = useState<Array<{ lat: number; lng: number }>>([]);
+  const [boundaryClosed, setBoundaryClosed] = useState(false);
+  const [capturingBoundaryPoint, setCapturingBoundaryPoint] = useState(false);
+
   // Changement de mission → repartir d'un état parcelle neutre, avec le
   // mode fixé par la mission (jamais un choix libre de l'agent).
   useEffect(() => {
@@ -263,6 +269,8 @@ function RecordPage() {
     setDupParcelle(null);
     setCreatedParcelleId(null);
     setForceReason("");
+    setBoundaryPoints([]);
+    setBoundaryClosed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionKey]);
 
@@ -332,6 +340,32 @@ function RecordPage() {
     setDupParcelle(null);
   }
 
+  // Capture de périmètre — l'agent tape "Ajouter un point" à chaque coin de
+  // la parcelle en se déplaçant, puis "Terminer le périmètre" pour fermer
+  // le polygone. Le centre calculé remplace alors le point GPS unique.
+  async function handleAddBoundaryPoint() {
+    setCapturingBoundaryPoint(true);
+    try {
+      const p = await captureGps();
+      if (!p) { toast.error("Position GPS indisponible"); return; }
+      setBoundaryPoints(prev => [...prev, { lat: p.lat, lng: p.lng }]);
+    } finally {
+      setCapturingBoundaryPoint(false);
+    }
+  }
+
+  function handleFinishBoundary() {
+    if (boundaryPoints.length < 3) return;
+    const center = computePolygonCenter(boundaryPoints);
+    setGps({ lat: center.lat, lng: center.lng });
+    setBoundaryClosed(true);
+  }
+
+  function handleResetBoundary() {
+    setBoundaryPoints([]);
+    setBoundaryClosed(false);
+  }
+
   async function handleCreateParcelle(force: boolean) {
     if (!gps) { toast.error("Capturez d'abord la position GPS (section ci-dessus)."); return; }
     if (!newCulture.trim()) { toast.error("Indiquez la culture de la parcelle."); return; }
@@ -344,6 +378,7 @@ function RecordPage() {
       toast.error("Indiquez une justification d'au moins 10 caractères.");
       return;
     }
+    const useBoundary = boundaryClosed && boundaryPoints.length >= 3;
     setCreatingParcelle(true);
     try {
       const res = await createParc({
@@ -356,6 +391,7 @@ function RecordPage() {
           lng: gps.lng,
           forceCreate: force,
           reason: force ? forceReason.trim() : undefined,
+          boundaryPoints: useBoundary ? boundaryPoints : undefined,
         },
       });
       if (!res.success && res.duplicateFound) {
@@ -835,6 +871,48 @@ function RecordPage() {
                       {producerNames.map(n => <option key={n} value={n} />)}
                     </datalist>
                   </label>
+
+                  <div className="rounded-xl border border-border bg-card/30 p-3">
+                    <span className="mb-2 block text-[10px] uppercase tracking-widest text-muted-foreground">
+                      Périmètre (optionnel) — complète ou remplace le point GPS unique
+                    </span>
+                    {boundaryClosed ? (
+                      <div className="space-y-2">
+                        <p className="flex items-center gap-2 text-sm text-emerald-400">
+                          <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          Périmètre fermé — {boundaryPoints.length} points, surface estimée :{" "}
+                          {computePolygonAreaHectares(boundaryPoints).toFixed(2)} ha
+                        </p>
+                        <button type="button" onClick={handleResetBoundary}
+                          className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+                          Reprendre le périmètre
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleAddBoundaryPoint()}
+                          disabled={capturingBoundaryPoint}
+                          className="flex items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          {capturingBoundaryPoint ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
+                          Ajouter un point
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleFinishBoundary}
+                          disabled={boundaryPoints.length < 3}
+                          className="rounded-lg btn-gold px-3 py-2 text-sm disabled:opacity-40"
+                        >
+                          Terminer le périmètre
+                        </button>
+                        <span className="text-xs text-muted-foreground">
+                          {boundaryPoints.length} point{boundaryPoints.length !== 1 ? "s" : ""} capturé{boundaryPoints.length !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
                   {!gps && (
                     <p className="text-xs text-muted-foreground">
