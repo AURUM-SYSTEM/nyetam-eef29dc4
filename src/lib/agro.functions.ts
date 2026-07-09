@@ -1008,7 +1008,7 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
 
     const { data: parcelle, error: parcErr } = await supabaseAdmin
       .from("parcelles")
-      .select("id, culture, surface_ha, surface_ha_calculated, boundary_points, cooperative_id, producer_id, organization_id")
+      .select("id, culture, surface_ha, surface_ha_calculated, boundary_points, lat, lng, cooperative_id, producer_id, organization_id")
       .eq("id", data.parcelleId)
       .single();
     if (parcErr || !parcelle || (parcelle as any).organization_id !== orgId) {
@@ -1053,6 +1053,8 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
         surfaceHa: (pc.surface_ha ?? null) as number | null,
         surfaceHaCalculated: (pc.surface_ha_calculated ?? null) as number | null,
         boundaryPoints: (pc.boundary_points ?? null) as Array<{ lat: number; lng: number }> | null,
+        lat: (pc.lat ?? null) as number | null,
+        lng: (pc.lng ?? null) as number | null,
         producerName: (producer as any)?.full_name ?? null,
         cooperativeName: (coop as any)?.name ?? null,
       },

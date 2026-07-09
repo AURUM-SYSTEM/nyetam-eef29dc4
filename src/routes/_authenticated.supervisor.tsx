@@ -571,11 +571,13 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
   const [parcelle, setParcelle] = useState<{
     culture: string; surfaceHa: number | null; surfaceHaCalculated: number | null;
     boundaryPoints: Array<{ lat: number; lng: number }> | null;
+    lat: number | null; lng: number | null;
     producerName: string | null; cooperativeName: string | null;
   } | null>(null);
   const [docs, setDocs] = useState<ParcelleTimelineDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -594,6 +596,36 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parcelleId]);
+
+  async function handleExportPdf() {
+    if (!parcelle) return;
+    setExportingPdf(true);
+    try {
+      const { exportParcelleTraceabilityPdf } = await import("@/lib/exports");
+      await exportParcelleTraceabilityPdf({
+        culture: parcelle.culture,
+        surfaceHa: parcelle.surfaceHa,
+        cooperativeName: parcelle.cooperativeName,
+        producerName: parcelle.producerName,
+        lat: parcelle.lat,
+        lng: parcelle.lng,
+        boundaryPoints: parcelle.boundaryPoints,
+        documents: docs.map((d) => ({
+          title: d.title,
+          missionType: d.missionType,
+          agentName: d.agentName,
+          createdAt: d.createdAt,
+          photoCount: d.photoCount,
+          videoCount: d.videoCount,
+          validatedAt: d.validatedAt,
+        })),
+      });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'export PDF");
+    } finally {
+      setExportingPdf(false);
+    }
+  }
 
   return (
     <TableRow>
@@ -654,9 +686,19 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
               )}
             </div>
 
-            <button type="button" onClick={onClose} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground">
-              Fermer
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handleExportPdf()}
+                disabled={exportingPdf}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+              >
+                {exportingPdf ? "Export…" : "Exporter la fiche PDF"}
+              </button>
+              <button type="button" onClick={onClose} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground">
+                Fermer
+              </button>
+            </div>
           </div>
         )}
       </TableCell>
@@ -1070,6 +1112,8 @@ function OrientationsSection() {
   const [reportsLoading, setReportsLoading] = useState(true);
   const [treatingId, setTreatingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [exportingPdfId, setExportingPdfId] = useState<string | null>(null);
+  const [exportingDocxId, setExportingDocxId] = useState<string | null>(null);
 
   async function loadReports() {
     setReportsLoading(true);
@@ -1110,6 +1154,30 @@ function OrientationsSection() {
       toast.error(e?.message ?? "Échec de la mise à jour");
     } finally {
       setTreatingId(null);
+    }
+  }
+
+  async function handleExportReportPdf(r: AdvisorReport) {
+    setExportingPdfId(r.id);
+    try {
+      const { exportAdvisorReportPdf } = await import("@/lib/exports");
+      await exportAdvisorReportPdf({ createdAt: r.createdAt, documentsAnalyzed: r.documentsAnalyzed, analysis: r.analysis });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'export PDF");
+    } finally {
+      setExportingPdfId(null);
+    }
+  }
+
+  async function handleExportReportDocx(r: AdvisorReport) {
+    setExportingDocxId(r.id);
+    try {
+      const { exportAdvisorReportDocx } = await import("@/lib/exports");
+      await exportAdvisorReportDocx({ createdAt: r.createdAt, documentsAnalyzed: r.documentsAnalyzed, analysis: r.analysis });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'export Word");
+    } finally {
+      setExportingDocxId(null);
     }
   }
 
@@ -1157,6 +1225,26 @@ function OrientationsSection() {
                         {r.analysis}
                       </p>
                     </div>
+                    {expanded && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); void handleExportReportPdf(r); }}
+                          disabled={exportingPdfId === r.id}
+                          className="rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+                        >
+                          {exportingPdfId === r.id ? "…" : "Exporter PDF"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); void handleExportReportDocx(r); }}
+                          disabled={exportingDocxId === r.id}
+                          className="rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+                        >
+                          {exportingDocxId === r.id ? "…" : "Exporter Word"}
+                        </button>
+                      </div>
+                    )}
                     {r.status === "a_traiter" ? (
                       <button
                         type="button"
@@ -1512,6 +1600,7 @@ function SupervisorDashboardContent() {
   const [validated, setValidated] = useState<Set<string>>(new Set());
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [exportingActivities, setExportingActivities] = useState(false);
 
   const agentOptions = useMemo(
     () => Array.from(new Set(Object.values(profilesById))).sort(),
@@ -1574,6 +1663,24 @@ function SupervisorDashboardContent() {
       else next.add(id);
       return next;
     });
+  }
+
+  async function handleExportActivitiesXlsx() {
+    setExportingActivities(true);
+    try {
+      const { exportActivitiesXlsx } = await import("@/lib/exports");
+      await exportActivitiesXlsx(filteredDocs.map((d) => ({
+        agent: profilesById[d.user_id] || "Agent",
+        title: d.title || "—",
+        location: d.location_data?.city || d.location || "—",
+        date: new Date(d.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+        status: d.status === "ready" ? "Synchronisé" : "Brouillon",
+      })));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'export Excel");
+    } finally {
+      setExportingActivities(false);
+    }
   }
 
   if (loading) {
@@ -1709,6 +1816,14 @@ function SupervisorDashboardContent() {
               <option value="ready">Synchronisé</option>
               <option value="draft">Brouillon</option>
             </select>
+            <button
+              type="button"
+              onClick={() => void handleExportActivitiesXlsx()}
+              disabled={exportingActivities || filteredDocs.length === 0}
+              className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+            >
+              {exportingActivities ? "Export…" : "Exporter en Excel"}
+            </button>
           </div>
         </div>
 
