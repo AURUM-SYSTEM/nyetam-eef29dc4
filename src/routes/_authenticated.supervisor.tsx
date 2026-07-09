@@ -67,6 +67,7 @@ import {
   getAgentQualityScores,
   getDocumentDetails,
   getDataAnalystStats,
+  getParcelleTimeline,
 } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 
@@ -516,12 +517,114 @@ function SupervisorDashboard() {
 
 // ── AGRO : parcelles de l'organisation (superviseurs du module agro) ─────
 
+type ParcelleTimelineDoc = {
+  id: string;
+  title: string | null;
+  missionType: string | null;
+  fieldData: Record<string, string> | null;
+  agentName: string;
+  createdAt: string;
+  photoCount: number;
+  videoCount: number;
+  status: string | null;
+  validatedAt: string | null;
+};
+
+function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onClose: () => void }) {
+  const fetchTimeline = useServerFn(getParcelleTimeline);
+  const [parcelle, setParcelle] = useState<{ culture: string; surfaceHa: number | null; producerName: string | null; cooperativeName: string | null } | null>(null);
+  const [docs, setDocs] = useState<ParcelleTimelineDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchTimeline({ data: { parcelleId } });
+        if (cancelled) return;
+        setParcelle(res.parcelle);
+        setDocs(res.documents);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? "Échec du chargement de la parcelle");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parcelleId]);
+
+  return (
+    <TableRow>
+      <TableCell colSpan={4} className="bg-card/30">
+        {loading ? (
+          <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+        ) : error ? (
+          <p className="py-2 text-sm text-destructive">{error}</p>
+        ) : (
+          <div className="space-y-3 py-2">
+            {parcelle && (
+              <p className="text-xs text-muted-foreground">
+                {parcelle.culture}
+                {parcelle.surfaceHa != null ? ` · ${parcelle.surfaceHa} ha` : ""}
+                {" · Producteur : "}{parcelle.producerName ?? "—"}
+                {" · Coopérative : "}{parcelle.cooperativeName ?? "—"}
+              </p>
+            )}
+
+            <div>
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
+                Historique des visites ({docs.length})
+              </span>
+              {docs.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Aucun document lié à cette parcelle pour l'instant.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {docs.map((d) => (
+                    <li key={d.id} className="rounded-lg border border-border bg-input/30 p-2.5">
+                      <div className="mb-1 flex flex-wrap items-center justify-between gap-1.5">
+                        <span className="text-xs font-medium">{d.title || "Sans titre"}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {new Date(d.createdAt).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Agent : {d.agentName}
+                        {d.missionType ? ` · Mission : ${d.missionType}` : ""}
+                        {" · "}{d.photoCount} photo{d.photoCount !== 1 ? "s" : ""} · {d.videoCount} vidéo{d.videoCount !== 1 ? "s" : ""}
+                        {" · "}{d.validatedAt ? "Validé" : "En attente de validation"}
+                      </p>
+                      {d.fieldData && Object.keys(d.fieldData).length > 0 && (
+                        <ul className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
+                          {Object.entries(d.fieldData).map(([k, v]) => (
+                            <li key={k}><span className="text-foreground">{humanizeFieldKey(k)}</span> : {v}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <button type="button" onClick={onClose} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground">
+              Fermer
+            </button>
+          </div>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
 function ParcellesSection() {
   const fetchParcelles = useServerFn(listParcelles);
   const [rows, setRows] = useState<Array<{
     id: string; culture: string; surfaceHa: number | null; cooperativeName: string | null; visitCount: number;
   }>>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -562,12 +665,20 @@ function ParcellesSection() {
           </TableHeader>
           <TableBody>
             {rows.map(p => (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">{p.culture}</TableCell>
-                <TableCell className="text-muted-foreground">{p.surfaceHa != null ? `${p.surfaceHa} ha` : "—"}</TableCell>
-                <TableCell className="text-muted-foreground">{p.cooperativeName ?? "—"}</TableCell>
-                <TableCell className="text-right">{p.visitCount}</TableCell>
-              </TableRow>
+              <Fragment key={p.id}>
+                <TableRow
+                  onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                  className="cursor-pointer hover:bg-card/40"
+                >
+                  <TableCell className="font-medium">{p.culture}</TableCell>
+                  <TableCell className="text-muted-foreground">{p.surfaceHa != null ? `${p.surfaceHa} ha` : "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{p.cooperativeName ?? "—"}</TableCell>
+                  <TableCell className="text-right">{p.visitCount}</TableCell>
+                </TableRow>
+                {expandedId === p.id && (
+                  <ParcelleTimelineRow parcelleId={p.id} onClose={() => setExpandedId(null)} />
+                )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>

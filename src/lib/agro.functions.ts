@@ -974,3 +974,80 @@ export const getDataAnalystStats = createServerFn({ method: "POST" })
       cooperativeCount: cooperativeCount ?? 0,
     };
   });
+
+// ============================================================
+// Suivi de parcelle dans le temps — superviseur/admin
+// ============================================================
+
+export const getParcelleTimeline = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { parcelleId: string }) =>
+    z.object({ parcelleId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data: parcelle, error: parcErr } = await supabaseAdmin
+      .from("parcelles")
+      .select("id, culture, surface_ha, cooperative_id, producer_id, organization_id")
+      .eq("id", data.parcelleId)
+      .single();
+    if (parcErr || !parcelle || (parcelle as any).organization_id !== orgId) {
+      throw new Error("Parcelle introuvable dans votre organisation.");
+    }
+    const pc = parcelle as any;
+
+    const [{ data: coop }, { data: producer }] = await Promise.all([
+      pc.cooperative_id
+        ? supabaseAdmin.from("cooperatives").select("name").eq("id", pc.cooperative_id).single()
+        : Promise.resolve({ data: null as any }),
+      pc.producer_id
+        ? supabaseAdmin.from("producers").select("full_name").eq("id", pc.producer_id).single()
+        : Promise.resolve({ data: null as any }),
+    ]);
+
+    const { data: docs, error: docsErr } = await supabaseAdmin
+      .from("documents")
+      .select("id, title, mission_type, field_data, user_id, created_at, photo_urls, video_urls, status, validated_at")
+      .eq("parcelle_id", data.parcelleId)
+      .order("created_at", { ascending: false });
+    if (docsErr) throw new Error(docsErr.message);
+    const docRows = (docs ?? []) as Array<{
+      id: string; title: string | null; mission_type: string | null; field_data: Record<string, unknown> | null;
+      user_id: string; created_at: string; photo_urls: string[] | null; video_urls: string[] | null;
+      status: string | null; validated_at: string | null;
+    }>;
+
+    const agentIds = Array.from(new Set(docRows.map((d) => d.user_id)));
+    const agentNameById = new Map<string, string>();
+    if (agentIds.length > 0) {
+      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds);
+      for (const p of (profiles ?? []) as Array<{ id: string; full_name: string | null }>) {
+        agentNameById.set(p.id, p.full_name || "Agent");
+      }
+    }
+
+    return {
+      parcelle: {
+        id: pc.id as string,
+        culture: pc.culture as string,
+        surfaceHa: (pc.surface_ha ?? null) as number | null,
+        producerName: (producer as any)?.full_name ?? null,
+        cooperativeName: (coop as any)?.name ?? null,
+      },
+      documents: docRows.map((d) => ({
+        id: d.id,
+        title: d.title,
+        missionType: d.mission_type,
+        fieldData: d.field_data
+          ? Object.fromEntries(Object.entries(d.field_data).map(([k, v]) => [k, v == null ? "" : String(v)]))
+          : null,
+        agentName: agentNameById.get(d.user_id) ?? "Agent",
+        createdAt: d.created_at,
+        photoCount: d.photo_urls?.length ?? 0,
+        videoCount: d.video_urls?.length ?? 0,
+        status: d.status,
+        validatedAt: d.validated_at,
+      })),
+    };
+  });
