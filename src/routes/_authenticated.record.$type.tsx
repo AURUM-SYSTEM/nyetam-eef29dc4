@@ -141,9 +141,10 @@ type LocalVideo = { id: string; previewUrl: string; durationMs: number };
 type MissionFieldDef = {
   key: string;
   label: string;
-  type: "text" | "number";
+  type: "text" | "number" | "select";
   unit?: string;
   required?: boolean;
+  options?: string[];
 };
 type MissionForm = {
   mission_key: string;
@@ -917,13 +918,26 @@ function RecordPage() {
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
                   {f.label}{f.unit ? ` (${f.unit})` : ""}{f.required ? " *" : ""}
                 </span>
-                <input
-                  type={f.type === "number" ? "number" : "text"}
-                  inputMode={f.type === "number" ? "decimal" : undefined}
-                  value={fieldValues[f.key] ?? ""}
-                  onChange={e => setFieldValues(prev => ({ ...prev, [f.key]: e.target.value }))}
-                  className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
-                />
+                {f.type === "select" ? (
+                  <select
+                    value={fieldValues[f.key] ?? ""}
+                    onChange={e => setFieldValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
+                  >
+                    <option value="">— Choisir —</option>
+                    {(f.options ?? []).map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type={f.type === "number" ? "number" : "text"}
+                    inputMode={f.type === "number" ? "decimal" : undefined}
+                    value={fieldValues[f.key] ?? ""}
+                    onChange={e => setFieldValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
+                  />
+                )}
               </label>
             ))}
           </div>
