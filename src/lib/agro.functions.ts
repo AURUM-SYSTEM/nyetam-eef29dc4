@@ -974,3 +974,84 @@ export const getDataAnalystStats = createServerFn({ method: "POST" })
       cooperativeCount: cooperativeCount ?? 0,
     };
   });
+
+// ============================================================
+// Suivi détaillé d'une parcelle (historique des visites)
+// ============================================================
+
+export const getParcelleTracking = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { parcelleId: string }) =>
+    z.object({ parcelleId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    // Vérifier que la parcelle appartient bien à l'organisation
+    const { data: parcelle, error: parcelleErr } = await supabaseAdmin
+      .from("parcelles")
+      .select("id, culture, surface_ha, lat, lng, notes, created_at, producer_id, cooperative_id")
+      .eq("id", data.parcelleId)
+      .eq("organization_id", orgId)
+      .single();
+    if (parcelleErr || !parcelle) throw new Error("Parcelle introuvable ou accès refusé.");
+    const pc = parcelle as any;
+
+    // Nom du producteur lié
+    let producerName: string | null = null;
+    if (pc.producer_id) {
+      const { data: prod } = await supabaseAdmin
+        .from("producers")
+        .select("full_name")
+        .eq("id", pc.producer_id)
+        .single();
+      producerName = (prod as any)?.full_name ?? null;
+    }
+
+    // Nom de la coopérative liée
+    let cooperativeName: string | null = null;
+    if (pc.cooperative_id) {
+      const { data: coop } = await supabaseAdmin
+        .from("cooperatives")
+        .select("name")
+        .eq("id", pc.cooperative_id)
+        .single();
+      cooperativeName = (coop as any)?.name ?? null;
+    }
+
+    // Historique des visites (documents liés à cette parcelle)
+    const { data: docs, error: docsErr } = await supabaseAdmin
+      .from("documents")
+      .select("id, created_at, agent_name, status, validated_at, photo_urls, video_urls, location_data, title, type")
+      .eq("parcelle_id", data.parcelleId)
+      .order("created_at", { ascending: false });
+    if (docsErr) throw new Error("Impossible de récupérer les visites : " + docsErr.message);
+
+    const visits = ((docs ?? []) as Array<any>).map((d) => ({
+      id: d.id as string,
+      createdAt: d.created_at as string,
+      agentName: (d.agent_name ?? null) as string | null,
+      title: (d.title ?? null) as string | null,
+      type: (d.type ?? null) as string | null,
+      status: (d.status ?? null) as string | null,
+      validatedAt: (d.validated_at ?? null) as string | null,
+      photoCount: Array.isArray(d.photo_urls) ? (d.photo_urls as string[]).length : 0,
+      videoCount: Array.isArray(d.video_urls) ? (d.video_urls as string[]).length : 0,
+      locationData: (d.location_data ?? null) as { lat?: number; lng?: number; city?: string } | null,
+    }));
+
+    return {
+      parcelle: {
+        id: pc.id as string,
+        culture: pc.culture as string,
+        surfaceHa: (pc.surface_ha ?? null) as number | null,
+        lat: pc.lat as number,
+        lng: pc.lng as number,
+        notes: (pc.notes ?? null) as string | null,
+        createdAt: pc.created_at as string,
+        producerName,
+        cooperativeName,
+      },
+      visits,
+    };
+  });

@@ -22,6 +22,8 @@ import {
   AlertTriangle,
   BarChart3,
   CheckCircle2,
+  ClipboardList,
+  Eye,
   Loader2,
   Lock,
   MapPin,
@@ -67,6 +69,7 @@ import {
   getAgentQualityScores,
   getDocumentDetails,
   getDataAnalystStats,
+  getParcelleTracking,
 } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 
@@ -514,6 +517,173 @@ function SupervisorDashboard() {
   return <SupervisorDashboardContent />;
 }
 
+// ── AGRO : suivi détaillé d'une parcelle ────────────────────────────────
+
+function ParcelleTrackingRow({
+  parcelleId,
+  onClose,
+}: {
+  parcelleId: string;
+  onClose: () => void;
+}) {
+  const fetchTracking = useServerFn(getParcelleTracking);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [trackingData, setTrackingData] = useState<{
+    parcelle: {
+      id: string; culture: string; surfaceHa: number | null; lat: number; lng: number;
+      notes: string | null; createdAt: string; producerName: string | null; cooperativeName: string | null;
+    };
+    visits: Array<{
+      id: string; createdAt: string; agentName: string | null; title: string | null;
+      type: string | null; status: string | null; validatedAt: string | null;
+      photoCount: number; videoCount: number;
+      locationData: { lat?: number; lng?: number; city?: string } | null;
+    }>;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchTracking({ data: { parcelleId } });
+        if (!cancelled) setTrackingData(res);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? "Erreur de chargement");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parcelleId]);
+
+  return (
+    <TableRow>
+      <TableCell colSpan={5} className="p-0">
+        <div className="m-1 rounded-xl border-l-2 border-gold/40 bg-card/30 p-4 space-y-4">
+          {loading && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-gold" />
+            </div>
+          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {trackingData && (
+            <>
+              {/* Fiche de la parcelle */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+                <div>
+                  <span className="block text-[10px] uppercase tracking-widest text-muted-foreground">Culture</span>
+                  <p className="font-medium">{trackingData.parcelle.culture}</p>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase tracking-widest text-muted-foreground">Surface</span>
+                  <p className="font-medium">
+                    {trackingData.parcelle.surfaceHa != null ? `${trackingData.parcelle.surfaceHa} ha` : "—"}
+                  </p>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase tracking-widest text-muted-foreground">Producteur</span>
+                  <p className="font-medium">{trackingData.parcelle.producerName ?? "—"}</p>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase tracking-widest text-muted-foreground">Coopérative</span>
+                  <p className="font-medium">{trackingData.parcelle.cooperativeName ?? "—"}</p>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase tracking-widest text-muted-foreground">Coordonnées GPS</span>
+                  <a
+                    href={`https://maps.google.com/?q=${trackingData.parcelle.lat},${trackingData.parcelle.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-gold hover:underline text-sm"
+                  >
+                    <MapPin className="h-3.5 w-3.5" />
+                    {trackingData.parcelle.lat.toFixed(5)}, {trackingData.parcelle.lng.toFixed(5)}
+                  </a>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase tracking-widest text-muted-foreground">Enregistrée le</span>
+                  <p className="font-medium">
+                    {new Date(trackingData.parcelle.createdAt).toLocaleDateString("fr-FR")}
+                  </p>
+                </div>
+                {trackingData.parcelle.notes && (
+                  <div className="col-span-2 sm:col-span-3">
+                    <span className="block text-[10px] uppercase tracking-widest text-muted-foreground">Notes</span>
+                    <p className="text-muted-foreground">{trackingData.parcelle.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Historique des visites */}
+              <div>
+                <h4 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                  <ClipboardList className="h-3.5 w-3.5 text-gold" />
+                  Historique des visites ({trackingData.visits.length})
+                </h4>
+                {trackingData.visits.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucune visite enregistrée pour cette parcelle.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {trackingData.visits.map((v) => (
+                      <div
+                        key={v.id}
+                        className="rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-sm"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{v.agentName ?? "Agent inconnu"}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(v.createdAt).toLocaleDateString("fr-FR", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </span>
+                          </div>
+                          <span
+                            className={
+                              v.validatedAt
+                                ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-400"
+                                : "rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-400"
+                            }
+                          >
+                            {v.validatedAt ? "Validé" : "En attente"}
+                          </span>
+                        </div>
+                        {(v.photoCount > 0 || v.videoCount > 0 || v.locationData?.city) && (
+                          <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                            {v.photoCount > 0 && (
+                              <span>{v.photoCount} photo{v.photoCount > 1 ? "s" : ""}</span>
+                            )}
+                            {v.videoCount > 0 && (
+                              <span>{v.videoCount} vidéo{v.videoCount > 1 ? "s" : ""}</span>
+                            )}
+                            {v.locationData?.city && <span>{v.locationData.city}</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Fermer
+          </button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 // ── AGRO : parcelles de l'organisation (superviseurs du module agro) ─────
 
 function ParcellesSection() {
@@ -522,6 +692,7 @@ function ParcellesSection() {
     id: string; culture: string; surfaceHa: number | null; cooperativeName: string | null; visitCount: number;
   }>>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedParcelleId, setExpandedParcelleId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -558,16 +729,47 @@ function ParcellesSection() {
               <TableHead>Surface</TableHead>
               <TableHead>Coopérative</TableHead>
               <TableHead className="text-right">Visites</TableHead>
+              <TableHead className="text-right">Suivi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map(p => (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">{p.culture}</TableCell>
-                <TableCell className="text-muted-foreground">{p.surfaceHa != null ? `${p.surfaceHa} ha` : "—"}</TableCell>
-                <TableCell className="text-muted-foreground">{p.cooperativeName ?? "—"}</TableCell>
-                <TableCell className="text-right">{p.visitCount}</TableCell>
-              </TableRow>
+              <Fragment key={p.id}>
+                <TableRow
+                  className="cursor-pointer hover:bg-card/40"
+                  onClick={() => setExpandedParcelleId(expandedParcelleId === p.id ? null : p.id)}
+                >
+                  <TableCell className="font-medium">{p.culture}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {p.surfaceHa != null ? `${p.surfaceHa} ha` : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{p.cooperativeName ?? "—"}</TableCell>
+                  <TableCell className="text-right">{p.visitCount}</TableCell>
+                  <TableCell className="text-right">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedParcelleId(expandedParcelleId === p.id ? null : p.id);
+                      }}
+                      className={
+                        expandedParcelleId === p.id
+                          ? "rounded-lg bg-gold/15 px-2.5 py-1 text-xs text-gold"
+                          : "rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                      }
+                      title="Voir le suivi de la parcelle"
+                    >
+                      <Eye className="inline h-3.5 w-3.5" />
+                    </button>
+                  </TableCell>
+                </TableRow>
+                {expandedParcelleId === p.id && (
+                  <ParcelleTrackingRow
+                    parcelleId={p.id}
+                    onClose={() => setExpandedParcelleId(null)}
+                  />
+                )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>
