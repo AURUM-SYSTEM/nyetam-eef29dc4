@@ -907,13 +907,12 @@ function OrientationsSection() {
   const fetchReports = useServerFn(listAdvisorReports);
   const markTreated = useServerFn(markAdvisorReportTreated);
 
-  const [analysis, setAnalysis] = useState<string | null>(null);
-  const [count, setCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [reports, setReports] = useState<AdvisorReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(true);
   const [treatingId, setTreatingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   async function loadReports() {
     setReportsLoading(true);
@@ -935,10 +934,8 @@ function OrientationsSection() {
   async function handleGenerate() {
     setLoading(true);
     try {
-      const res = await generate({ data: undefined as any });
-      setAnalysis(res.analysis);
-      setCount(res.count);
-      void loadReports();
+      await generate({ data: undefined as any });
+      await loadReports();
     } catch (e: any) {
       toast.error(e?.message ?? "Échec de la génération de l'analyse");
     } finally {
@@ -971,20 +968,8 @@ function OrientationsSection() {
           disabled={loading}
           className="rounded-lg btn-gold px-4 py-2 text-sm disabled:opacity-40"
         >
-          {loading ? "Génération…" : analysis ? "Régénérer" : "Générer l'analyse"}
+          {loading ? "Génération…" : "Générer l'analyse"}
         </button>
-        {analysis && (
-          <div>
-            {count != null && (
-              <p className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">
-                Basé sur {count} document{count !== 1 ? "s" : ""}
-              </p>
-            )}
-            <p className="whitespace-pre-line rounded-lg border border-border bg-card/30 p-3 text-sm">
-              {analysis}
-            </p>
-          </div>
-        )}
 
         <div>
           <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Historique des analyses</span>
@@ -994,36 +979,46 @@ function OrientationsSection() {
             <p className="text-xs text-muted-foreground">Aucune analyse générée pour l'instant.</p>
           ) : (
             <ul className="space-y-2">
-              {reports.map((r) => (
-                <li key={r.id} className="rounded-lg border border-border bg-card/30 p-2.5">
-                  <div className="mb-1 flex flex-wrap items-center justify-between gap-1.5">
-                    <span className="text-[11px] text-muted-foreground">
-                      {new Date(r.createdAt).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                      {" · "}{r.documentsAnalyzed} document{r.documentsAnalyzed !== 1 ? "s" : ""}
-                    </span>
-                    <span className={r.status === "traite" ? "rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-emerald-500/15 text-emerald-400" : "rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-amber-500/15 text-amber-400"}>
-                      {r.status === "traite" ? "Traité" : "À traiter"}
-                    </span>
-                  </div>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{r.analysis}</p>
-                  {r.status === "a_traiter" ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleMarkTreated(r.id)}
-                      disabled={treatingId === r.id}
-                      className="mt-2 rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+              {reports.map((r) => {
+                const expanded = expandedId === r.id;
+                return (
+                  <li key={r.id} className="rounded-lg border border-border bg-card/30 p-2.5">
+                    <div
+                      onClick={() => setExpandedId(expanded ? null : r.id)}
+                      className="cursor-pointer"
                     >
-                      {treatingId === r.id ? "…" : "Marquer comme traité"}
-                    </button>
-                  ) : (
-                    r.treatedByName && (
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        Traité par {r.treatedByName}{r.treatedAt ? ` le ${new Date(r.treatedAt).toLocaleDateString("fr-FR")}` : ""}
+                      <div className="mb-1 flex flex-wrap items-center justify-between gap-1.5">
+                        <span className="text-[11px] text-muted-foreground">
+                          {new Date(r.createdAt).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          {" · "}{r.documentsAnalyzed} document{r.documentsAnalyzed !== 1 ? "s" : ""}
+                        </span>
+                        <span className={r.status === "traite" ? "rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-emerald-500/15 text-emerald-400" : "rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-amber-500/15 text-amber-400"}>
+                          {r.status === "traite" ? "Traité" : "À traiter"}
+                        </span>
+                      </div>
+                      <p className={expanded ? "whitespace-pre-line text-xs text-muted-foreground" : "line-clamp-2 text-xs text-muted-foreground"}>
+                        {r.analysis}
                       </p>
-                    )
-                  )}
-                </li>
-              ))}
+                    </div>
+                    {r.status === "a_traiter" ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); void handleMarkTreated(r.id); }}
+                        disabled={treatingId === r.id}
+                        className="mt-2 rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+                      >
+                        {treatingId === r.id ? "…" : "Marquer comme traité"}
+                      </button>
+                    ) : (
+                      r.treatedByName && (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          Traité par {r.treatedByName}{r.treatedAt ? ` le ${new Date(r.treatedAt).toLocaleDateString("fr-FR")}` : ""}
+                        </p>
+                      )
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
