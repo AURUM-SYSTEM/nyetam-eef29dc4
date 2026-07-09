@@ -222,7 +222,10 @@ function RecordPage() {
     setFieldValues({});
   }, [missionKey]);
 
-  // ── AGRO : liaison parcelle (visite_parcelle / recensement_plantations) ──
+  // ── AGRO : liaison parcelle (recensement_plantations / visite_parcelle / suivi_parcelle) ──
+  // Comportement fixe et exclusif par mission — jamais de bascule manuelle :
+  //   - recensement_plantations : toujours le formulaire de création.
+  //   - visite_parcelle / suivi_parcelle : toujours la liste des parcelles existantes.
   const fetchParcelles = useServerFn(listParcelles);
   const fetchCooperatives = useServerFn(listCooperatives);
   const fetchProducers = useServerFn(listProducers);
@@ -230,9 +233,10 @@ function RecordPage() {
   const createParc = useServerFn(createParcelle);
   const logUsedExisting = useServerFn(logUsedExistingParcelle);
 
-  const isParcelleMission =
-    moduleFromProfile === "agro" &&
-    (missionKey === "visite_parcelle" || missionKey === "recensement_plantations");
+  const isParcelleCreationMission = moduleFromProfile === "agro" && missionKey === "recensement_plantations";
+  const isParcelleSelectionMission =
+    moduleFromProfile === "agro" && (missionKey === "visite_parcelle" || missionKey === "suivi_parcelle");
+  const isParcelleMission = isParcelleCreationMission || isParcelleSelectionMission;
 
   const [parcelleMode, setParcelleMode] = useState<"existing" | "new">("existing");
   const [parcelleList, setParcelleList] = useState<Array<{
@@ -251,13 +255,15 @@ function RecordPage() {
   const [creatingParcelle, setCreatingParcelle] = useState(false);
   const [forceReason, setForceReason] = useState("");
 
-  // Changement de mission → repartir d'un état parcelle neutre
+  // Changement de mission → repartir d'un état parcelle neutre, avec le
+  // mode fixé par la mission (jamais un choix libre de l'agent).
   useEffect(() => {
-    setParcelleMode("existing");
+    setParcelleMode(isParcelleCreationMission ? "new" : "existing");
     setSelectedParcelleId("");
     setDupParcelle(null);
     setCreatedParcelleId(null);
     setForceReason("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionKey]);
 
   // Chargement des parcelles et coopératives de l'organisation (en ligne uniquement)
@@ -756,11 +762,12 @@ function RecordPage() {
         </div>
       </section>
 
-      {/* AGRO — liaison à une parcelle (avant la saisie audio/texte) */}
+      {/* AGRO — liaison à une parcelle (avant la saisie audio/texte) — comportement
+          fixe et exclusif selon la mission, aucune bascule manuelle */}
       {isParcelleMission && (
         <section className="mt-4 glass-card rounded-2xl p-4">
           <h2 className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
-            <Sprout className="h-3.5 w-3.5" /> Parcelle
+            <Sprout className="h-3.5 w-3.5" /> Parcelle{isParcelleSelectionMission ? " *" : ""}
           </h2>
 
           {!online ? (
@@ -769,27 +776,14 @@ function RecordPage() {
             </p>
           ) : (
             <>
-              <div className="mb-3 grid grid-cols-2 gap-2">
-                {(["existing", "new"] as const).map(mode => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setParcelleMode(mode)}
-                    className={parcelleMode === mode
-                      ? "rounded-lg border border-gold bg-gold/10 px-3 py-2 text-sm text-gold"
-                      : "rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:text-foreground"}
-                  >
-                    {mode === "existing" ? "Parcelle existante" : "Nouvelle parcelle"}
-                  </button>
-                ))}
-              </div>
-
               {parcelleMode === "existing" ? (
                 parcellesLoading ? (
                   <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin text-gold" /></div>
                 ) : parcelleList.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Aucune parcelle enregistrée pour l'instant — passez sur « Nouvelle parcelle ».
+                    {isParcelleSelectionMission
+                      ? "Aucune parcelle enregistrée pour l'instant — utilisez d'abord la mission « Recensement des plantations » pour en créer une."
+                      : "Aucune parcelle enregistrée pour l'instant."}
                   </p>
                 ) : (
                   <select
