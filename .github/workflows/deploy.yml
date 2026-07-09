@@ -1,0 +1,140 @@
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Normalize and check Supabase config
+        # Nettoie les valeurs issues des secrets GitHub (espaces, retours à la
+        # ligne, guillemets collés lors d'un copier/coller depuis .env), valide
+        # leur format, et les expose aux étapes suivantes via GITHUB_ENV.
+        # Échoue avec un message explicite si une valeur reste invalide.
+        run: |
+          norm() {
+            local v="$1"
+            v="${v//$'\r'/}"; v="${v//$'\n'/}"
+            v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+            case "$v" in
+              '"'*'"') v="${v#\"}"; v="${v%\"}" ;;
+              "'"*"'") v="${v#\'}"; v="${v%\'}" ;;
+            esac
+            printf '%s' "$v"
+          }
+          check_url() {
+            local u; u="$(norm "$2")"
+            [ -z "$u" ] && u="https://drmcdgfifmemytrvgvqb.supabase.co"
+            case "$u" in
+              https://*|http://*) ;;
+              *.supabase.co) u="https://$u" ;;
+              *)
+                # L'URL du projet est publique et constante : un secret GitHub
+                # invalide ne doit pas casser le déploiement — on avertit et
+                # on utilise la valeur connue.
+                echo "::warning::Le secret GitHub $1 contient une valeur qui n'est pas une URL — utilisation de l'URL publique du projet à la place. Corrigez ou supprimez ce secret."
+                u="https://drmcdgfifmemytrvgvqb.supabase.co" ;;
+            esac
+            echo "$1=$u" >> "$GITHUB_ENV"
+            echo "$1 : $u"
+          }
+          check_pub_key() {
+            local k; k="$(norm "$2")"
+            case "$k" in
+              sb_publishable_*) ;;
+              *) echo "::error::$1 n'est pas au format sb_publishable_… (valeur obsolète ou mal collée) — corriger le secret GitHub"; exit 1 ;;
+            esac
+            echo "$1=$k" >> "$GITHUB_ENV"
+            echo "$1 : ${k:0:22}…"
+          }
+          check_url CLEAN_VITE_SUPABASE_URL "$RAW_VITE_SUPABASE_URL"
+          check_url CLEAN_SUPABASE_URL "$RAW_SUPABASE_URL"
+          check_pub_key CLEAN_VITE_SUPABASE_PUBLISHABLE_KEY "$RAW_VITE_SUPABASE_PUBLISHABLE_KEY"
+          check_pub_key CLEAN_SUPABASE_PUBLISHABLE_KEY "$RAW_SUPABASE_PUBLISHABLE_KEY"
+          srk="$(norm "$RAW_SUPABASE_SERVICE_ROLE_KEY")"
+          case "$srk" in
+            sb_secret_*) ;;
+            *) echo "::error::SUPABASE_SERVICE_ROLE_KEY n'est pas au format sb_secret_… — corriger le secret GitHub"; exit 1 ;;
+          esac
+          echo "CLEAN_SUPABASE_SERVICE_ROLE_KEY=$srk" >> "$GITHUB_ENV"
+          gem="$(norm "$RAW_GEMINI_API_KEY")"
+          if [ -z "$gem" ]; then
+            echo "::error::Le secret GitHub GEMINI_API_KEY est vide ou absent — à renseigner dans Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+          case "$gem" in
+            AIza*) ;;
+            *) echo "::warning::GEMINI_API_KEY n'a pas le préfixe habituel AIza… — la validation en direct ci-dessous fait foi." ;;
+          esac
+          # Validation en direct auprès de l'API Google : une clé invalide
+          # doit bloquer le déploiement ici, pas casser en production.
+          code=$(curl -sS -o /tmp/gemini-check.json -w "%{http_code}" --max-time 20 \
+            -H "x-goog-api-key: $gem" \
+            "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1" || echo "000")
+          if [ "$code" != "200" ]; then
+            echo "::error::GEMINI_API_KEY refusée par l'API Google (HTTP $code) : $(head -c 200 /tmp/gemini-check.json 2>/dev/null)"
+            exit 1
+          fi
+          echo "GEMINI_API_KEY validée par l'API Google (HTTP 200)"
+          echo "CLEAN_GEMINI_API_KEY=$gem" >> "$GITHUB_ENV"
+        env:
+          RAW_VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          RAW_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          RAW_VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_TGEoFkxjlF1X26RAXNvssg_G6b_lEyj' }}
+          RAW_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_TGEoFkxjlF1X26RAXNvssg_G6b_lEyj' }}
+          RAW_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RAW_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Deploy to Cloudflare
+        run: npm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Valeurs nettoyées et validées ci-dessus, intégrées au bundle client
+          # par Vite pendant le build (npm run deploy = vite build + deploy).
+          VITE_SUPABASE_URL: ${{ env.CLEAN_VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.CLEAN_VITE_SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: Push runtime secrets to the Worker
+        run: |
+          put() { printf '%s' "$2" | npx wrangler secret put "$1" --name tanstack-start-app; }
+          put SUPABASE_URL "$CLEAN_SUPABASE_URL"
+          put SUPABASE_PUBLISHABLE_KEY "$CLEAN_SUPABASE_PUBLISHABLE_KEY"
+          put SUPABASE_SERVICE_ROLE_KEY "$CLEAN_SUPABASE_SERVICE_ROLE_KEY"
+          put GEMINI_API_KEY "$CLEAN_GEMINI_API_KEY"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: List secrets actually present on the Worker
+        # Preuve indépendante de l'étape ci-dessus : ce que Cloudflare dit
+        # avoir réellement, pas ce que le script a essayé de pousser.
+        run: npx wrangler secret list --name tanstack-start-app
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Confirm live deployment timestamp on Cloudflare
+        # Preuve indépendante du wrangler deploy ci-dessus : interroge
+        # directement l'historique des déploiements Cloudflare (horodatage
+        # serveur, pas une inférence depuis les logs CI).
+        run: npx wrangler deployments list --name tanstack-start-app | head -20
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

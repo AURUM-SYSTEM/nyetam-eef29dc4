@@ -1,0 +1,9 @@
+ALTER TABLE public.documents
+  ADD COLUMN IF NOT EXISTS doc_date date,
+  ADD COLUMN IF NOT EXISTS doc_time time,
+  ADD COLUMN IF NOT EXISTS agent_name text DEFAULT '' NOT NULL,
+  ADD COLUMN IF NOT EXISTS location text DEFAULT '' NOT NULL,
+  ADD COLUMN IF NOT EXISTS reference text DEFAULT '' NOT NULL,
+  ADD COLUMN IF NOT EXISTS observations text DEFAULT '' NOT NULL,
+  ADD COLUMN IF NOT EXISTS signature_name text DEFAULT '' NOT NULL,
+  ADD COLUMN IF NOT EXISTS lang text DEFAULT 'fr' NOT NULL;
