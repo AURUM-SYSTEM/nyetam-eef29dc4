@@ -1,13 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Plus, Mic, Trash2, ChevronRight, CloudOff, Settings, Info, User, Users } from "lucide-react";
+import { FileText, Plus, Mic, Trash2, ChevronRight, CloudOff, Settings, Info, User, Users, LayoutDashboard, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { PendingQueue } from "@/components/PendingQueue";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { InstallGuide } from "@/components/InstallGuide";
 import { useOnline } from "@/hooks/use-online";
 import { useI18n } from "@/i18n";
+import { useAuth } from "@/hooks/use-auth";
 
 type DocRow = {
   id: string;
@@ -54,7 +56,21 @@ function HomePage() {
   const navigate = useNavigate();
   const online = useOnline();
   const { t, lang } = useI18n();
+  const { session } = useAuth();
   const queryClient = useQueryClient();
+
+  // Accès rapide dashboards — réservé platform_admin (un seul appel has_role).
+  // admin/supervisor classiques n'atterrissent jamais ici : ils sont déjà
+  // redirigés par le layout _authenticated avant que cet écran ne s'affiche.
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  useEffect(() => {
+    if (!session?.user) return;
+    let cancelled = false;
+    supabase.rpc("has_role", { _user: session.user.id, _role: "platform_admin" }).then(({ data }) => {
+      if (!cancelled) setIsPlatformAdmin(Boolean(data));
+    });
+    return () => { cancelled = true; };
+  }, [session?.user?.id]);
 
   const { data: docs, isLoading } = useQuery({
     queryKey: ["documents"],
@@ -87,7 +103,19 @@ function HomePage() {
     <div className="px-5 pt-8 pb-32">
       {/* Top bar */}
       <div className="mb-6 flex items-center justify-between gap-2">
-        <LanguageSwitcher compact />
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher compact />
+          {isPlatformAdmin && (
+            <div className="flex items-center gap-1">
+              <Link to="/supervisor" aria-label="Superviseur" title="Superviseur" className="rounded-lg border border-gold/40 bg-gold/10 p-2 text-gold hover:bg-gold/20">
+                <LayoutDashboard className="h-4 w-4" />
+              </Link>
+              <Link to="/admin" aria-label="Admin" title="Admin" className="rounded-lg border border-gold/40 bg-gold/10 p-2 text-gold hover:bg-gold/20">
+                <ShieldCheck className="h-4 w-4" />
+              </Link>
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <Link to="/recensements" aria-label="Recensements" className="rounded-lg border border-border bg-card/50 p-2 text-muted-foreground hover:text-foreground">
             <Users className="h-4 w-4" />
