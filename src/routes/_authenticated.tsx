@@ -11,6 +11,25 @@ export const Route = createFileRoute("/_authenticated")({
       const redirectPath = location.pathname + (location.searchStr || "");
       throw redirect({ to: "/login", search: { redirect: redirectPath } });
     }
+
+    // Redirection par rôle — uniquement sur l'écran d'accueil de collecte.
+    // platform_admin garde un accès libre à tout (collecte ET dashboards).
+    // Un admin/superviseur qui navigue explicitement ailleurs (/profile,
+    // /settings...) n'est jamais redirigé : seule la racine "/" est concernée.
+    if (location.pathname === "/") {
+      const userId = data.session.user.id;
+      const { data: isPlatformAdmin } = await supabase.rpc("has_role", {
+        _user: userId,
+        _role: "platform_admin",
+      });
+      if (!isPlatformAdmin) {
+        const { data: isAdmin } = await supabase.rpc("has_role", { _user: userId, _role: "admin" });
+        if (isAdmin) throw redirect({ to: "/admin" });
+
+        const { data: isSupervisor } = await supabase.rpc("has_role", { _user: userId, _role: "supervisor" });
+        if (isSupervisor) throw redirect({ to: "/supervisor" });
+      }
+    }
   },
   component: AuthLayout,
 });
