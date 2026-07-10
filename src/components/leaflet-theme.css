@@ -1,0 +1,52 @@
+/* Habillage des cartes Leaflet pour rester dans le thème AURUM (noir/or).
+ * Chargé uniquement avec le composant LeafletMaps (import dynamique) — ne
+ * pèse donc jamais sur les pages qui n'affichent pas de carte.
+ * Utilise les variables CSS globales (--gold, --card, --border,
+ * --foreground) pour rester cohérent en thème clair comme sombre. */
+
+.aurum-leaflet {
+  background: var(--card);
+}
+
+.aurum-leaflet .leaflet-tile-pane {
+  filter: brightness(0.82) saturate(0.55) hue-rotate(-8deg);
+}
+
+:root.light .aurum-leaflet .leaflet-tile-pane {
+  filter: saturate(0.75) brightness(1.02);
+}
+
+.aurum-leaflet .leaflet-control-zoom a {
+  background: var(--card);
+  color: var(--gold);
+  border-color: color-mix(in oklch, var(--gold) 35%, transparent);
+}
+
+.aurum-leaflet .leaflet-control-zoom a:hover {
+  background: color-mix(in oklch, var(--gold) 15%, var(--card));
+}
+
+.aurum-leaflet .leaflet-popup-content-wrapper,
+.aurum-leaflet .leaflet-popup-tip {
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid color-mix(in oklch, var(--gold) 35%, transparent);
+}
+
+.aurum-leaflet .leaflet-popup-content strong {
+  color: var(--gold);
+}
+
+.aurum-leaflet .leaflet-control-attribution {
+  background: color-mix(in oklch, var(--card) 80%, transparent);
+  color: var(--muted-foreground);
+}
+
+.aurum-leaflet .leaflet-control-attribution a {
+  color: var(--gold);
+}
+
+.aurum-marker {
+  background: transparent;
+  border: none;
+}

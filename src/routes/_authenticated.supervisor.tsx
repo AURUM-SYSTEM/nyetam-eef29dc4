@@ -70,8 +70,10 @@ import {
   getParcelleTimeline,
   getEudrCompliance,
   attestEudrCompliance,
+  getParcelleMapInfo,
 } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
+import type { SupervisorMapMarker } from "@/components/LeafletMaps";
 
 export const Route = createFileRoute("/_authenticated/supervisor")({
   component: SupervisorPage,
@@ -93,6 +95,7 @@ type DocRow = {
   status: string | null;
   location: string | null;
   location_data: { lat?: number; lng?: number; city?: string } | null;
+  parcelle_id: string | null;
   created_at: string;
 };
 
@@ -174,7 +177,7 @@ function useSupervisorData() {
 
     const { data: docsData, error: docsError } = await supabase
       .from("documents")
-      .select("id, user_id, module_type, title, status, location, location_data, created_at")
+      .select("id, user_id, module_type, title, status, location, location_data, parcelle_id, created_at")
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -210,14 +213,46 @@ function useSupervisorData() {
   return { docs, profilesById, loading, error, reload: load };
 }
 
-// ── Petite carte en CSS pur ──────────────────────────────────────────────
+// ── Carte de supervision — Leaflet/OpenStreetMap, chargée dynamiquement ──
 
-function MiniMap({ docs }: { docs: DocRow[] }) {
-  const points = docs
-    .map((d) => ({ id: d.id, module_type: d.module_type, ...d.location_data }))
-    .filter((p): p is { id: string; module_type: string | null; lat: number; lng: number; city?: string } =>
-      typeof p.lat === "number" && typeof p.lng === "number",
-    );
+function SupervisorMap({ docs }: { docs: DocRow[] }) {
+  const fetchParcelleInfo = useServerFn(getParcelleMapInfo);
+  const [leafletMod, setLeafletMod] = useState<typeof import("@/components/LeafletMaps") | null>(null);
+  const [parcelleInfoById, setParcelleInfoById] = useState<Record<string, { culture: string; producerName: string | null; cooperativeName: string | null }>>({});
+
+  const points = useMemo(
+    () => docs
+      .map((d) => ({ id: d.id, module_type: d.module_type, parcelle_id: d.parcelle_id, ...d.location_data }))
+      .filter((p): p is { id: string; module_type: ModuleType | null; parcelle_id: string | null; lat: number; lng: number; city?: string } =>
+        typeof p.lat === "number" && typeof p.lng === "number",
+      ),
+    [docs],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    import("@/components/LeafletMaps").then((m) => { if (!cancelled) setLeafletMod(m); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const ids = Array.from(new Set(points.map((p) => p.parcelle_id).filter((x): x is string => !!x)));
+    if (ids.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchParcelleInfo({ data: { parcelleIds: ids } });
+        if (cancelled) return;
+        const map: Record<string, { culture: string; producerName: string | null; cooperativeName: string | null }> = {};
+        for (const p of res.parcelles) map[p.id] = p;
+        setParcelleInfoById(map);
+      } catch {
+        // silencieux : la carte reste utilisable sans l'enrichissement parcelle
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs]);
 
   if (points.length === 0) {
     return (
@@ -227,37 +262,30 @@ function MiniMap({ docs }: { docs: DocRow[] }) {
     );
   }
 
-  const lats = points.map((p) => p.lat);
-  const lngs = points.map((p) => p.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-
-  const pad = 0.06;
-  const spanLat = Math.max(maxLat - minLat, 0.5);
-  const spanLng = Math.max(maxLng - minLng, 0.5);
-
-  return (
-    <div className="relative h-64 w-full overflow-hidden rounded-xl border border-border bg-secondary/40">
-      <div className="absolute inset-3 rounded-lg border border-dashed border-border/60" />
-      {points.map((p) => {
-        const x = pad + ((p.lng - minLng) / spanLng) * (1 - 2 * pad);
-        const y = pad + (1 - (p.lat - minLat) / spanLat) * (1 - 2 * pad);
-        return (
-          <div
-            key={p.id}
-            title={`${moduleLabel(p.module_type)}${p.city ? " · " + p.city : ""}`}
-            className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-background/80 transition-transform hover:scale-150"
-            style={{ left: `${x * 100}%`, top: `${y * 100}%`, backgroundColor: moduleColor(p.module_type) }}
-          />
-        );
-      })}
-      <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded bg-background/70 px-2 py-1 text-[10px] text-muted-foreground backdrop-blur">
-        <MapPin className="h-3 w-3" /> {points.length} points
+  if (!leafletMod) {
+    return (
+      <div className="flex h-64 w-full items-center justify-center rounded-xl border border-border bg-secondary/40">
+        <Loader2 className="h-5 w-5 animate-spin text-gold" />
       </div>
-    </div>
-  );
+    );
+  }
+
+  const markers: SupervisorMapMarker[] = points.map((p) => {
+    const info = p.parcelle_id ? parcelleInfoById[p.parcelle_id] : undefined;
+    return {
+      id: p.id,
+      lat: p.lat,
+      lng: p.lng,
+      moduleColor: moduleColor(p.module_type),
+      moduleLabel: moduleLabel(p.module_type),
+      city: p.city ?? null,
+      culture: info?.culture ?? null,
+      producerName: info?.producerName ?? null,
+      cooperativeName: info?.cooperativeName ?? null,
+    };
+  });
+
+  return <leafletMod.SupervisorLeafletMap markers={markers} />;
 }
 
 // ── Formulaire compact de demande de modification ────────────────────────
@@ -532,40 +560,24 @@ type ParcelleTimelineDoc = {
   validatedAt: string | null;
 };
 
-// Petit polygone SVG — même esprit que MiniMap (projection lat/lng dans une
-// boîte englobante), mais tracé en lignes reliant les points du périmètre
-// plutôt qu'un nuage de points.
-function ParcelleBoundarySvg({ points }: { points: Array<{ lat: number; lng: number }> }) {
-  if (points.length < 3) return null;
-  const lats = points.map(p => p.lat);
-  const lngs = points.map(p => p.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const spanLat = Math.max(maxLat - minLat, 0.00001);
-  const spanLng = Math.max(maxLng - minLng, 0.00001);
-  const pad = 8;
-  const size = 100;
-  const toXY = (p: { lat: number; lng: number }) => ({
-    x: pad + ((p.lng - minLng) / spanLng) * (size - 2 * pad),
-    y: pad + (1 - (p.lat - minLat) / spanLat) * (size - 2 * pad),
-  });
-  const xy = points.map(toXY);
+// Carte Leaflet d'une parcelle — polygone réel si un périmètre existe,
+// sinon simple marqueur au point GPS. Chargée dynamiquement (voir
+// LeafletMaps.tsx) ; rien tant que le module n'est pas résolu.
+function ParcelleMap({ lat, lng, boundaryPoints }: {
+  lat: number | null; lng: number | null; boundaryPoints: Array<{ lat: number; lng: number }> | null;
+}) {
+  const [leafletMod, setLeafletMod] = useState<typeof import("@/components/LeafletMaps") | null>(null);
 
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="h-32 w-32 shrink-0 rounded-lg border border-border bg-secondary/40">
-      <polygon
-        points={xy.map(p => `${p.x},${p.y}`).join(" ")}
-        fill="color-mix(in oklch, var(--gold) 22%, transparent)"
-        stroke="var(--gold)"
-        strokeWidth="1.5"
-      />
-      {xy.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r="1.8" fill="var(--gold)" />
-      ))}
-    </svg>
-  );
+  useEffect(() => {
+    let cancelled = false;
+    import("@/components/LeafletMaps").then((m) => { if (!cancelled) setLeafletMod(m); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!leafletMod) {
+    return <div className="h-36 w-36 shrink-0 rounded-lg border border-border bg-secondary/40" />;
+  }
+  return <leafletMod.ParcelleLeafletMap lat={lat} lng={lng} boundaryPoints={boundaryPoints} />;
 }
 
 type ParcelleEudrState = {
@@ -678,9 +690,7 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
           <div className="space-y-3 py-2">
             {parcelle && (
               <div className="flex items-start gap-3">
-                {parcelle.boundaryPoints && parcelle.boundaryPoints.length >= 3 && (
-                  <ParcelleBoundarySvg points={parcelle.boundaryPoints} />
-                )}
+                <ParcelleMap lat={parcelle.lat} lng={parcelle.lng} boundaryPoints={parcelle.boundaryPoints} />
                 <p className="text-xs text-muted-foreground">
                   {parcelle.culture}
                   {parcelle.surfaceHa != null ? ` · ${parcelle.surfaceHa} ha` : ""}
@@ -1923,7 +1933,7 @@ function SupervisorDashboardContent() {
 
       <section className="glass-card mb-6 rounded-2xl p-5">
         <h2 className="mb-3 font-display text-lg">Répartition géographique</h2>
-        <MiniMap docs={docs} />
+        <SupervisorMap docs={docs} />
         <div className="mt-3 flex flex-wrap gap-3">
           {moduleOptions.map((m) => (
             <div key={m} className="flex items-center gap-1.5 text-xs text-muted-foreground">

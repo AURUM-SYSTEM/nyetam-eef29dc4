@@ -83,6 +83,25 @@ function PermissionDeniedBanner({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+// Aperçu carte du périmètre en cours de capture — chargé dynamiquement
+// (voir LeafletMaps.tsx) pour ne jamais alourdir l'écran de saisie quand
+// l'agent n'utilise pas ce mode.
+function PerimeterMapPreview({ points }: { points: Array<{ lat: number; lng: number }> }) {
+  const [leafletMod, setLeafletMod] = useState<typeof import("@/components/LeafletMaps") | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import("@/components/LeafletMaps").then((m) => { if (!cancelled) setLeafletMod(m); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (points.length === 0) return null;
+  if (!leafletMod) {
+    return <div className="h-40 w-full rounded-lg border border-border bg-secondary/40" />;
+  }
+  return <leafletMod.PerimeterLeafletMap points={points} />;
+}
+
 function pickMimeType(): string {
   if (typeof MediaRecorder === "undefined") return "";
   const candidates = [
@@ -883,33 +902,37 @@ function RecordPage() {
                           Périmètre fermé — {boundaryPoints.length} points, surface estimée :{" "}
                           {computePolygonAreaHectares(boundaryPoints).toFixed(2)} ha
                         </p>
+                        <PerimeterMapPreview points={boundaryPoints} />
                         <button type="button" onClick={handleResetBoundary}
                           className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
                           Reprendre le périmètre
                         </button>
                       </div>
                     ) : (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void handleAddBoundaryPoint()}
-                          disabled={capturingBoundaryPoint}
-                          className="flex items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
-                        >
-                          {capturingBoundaryPoint ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
-                          Ajouter un point
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleFinishBoundary}
-                          disabled={boundaryPoints.length < 3}
-                          className="rounded-lg btn-gold px-3 py-2 text-sm disabled:opacity-40"
-                        >
-                          Terminer le périmètre
-                        </button>
-                        <span className="text-xs text-muted-foreground">
-                          {boundaryPoints.length} point{boundaryPoints.length !== 1 ? "s" : ""} capturé{boundaryPoints.length !== 1 ? "s" : ""}
-                        </span>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleAddBoundaryPoint()}
+                            disabled={capturingBoundaryPoint}
+                            className="flex items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                          >
+                            {capturingBoundaryPoint ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
+                            Ajouter un point
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleFinishBoundary}
+                            disabled={boundaryPoints.length < 3}
+                            className="rounded-lg btn-gold px-3 py-2 text-sm disabled:opacity-40"
+                          >
+                            Terminer le périmètre
+                          </button>
+                          <span className="text-xs text-muted-foreground">
+                            {boundaryPoints.length} point{boundaryPoints.length !== 1 ? "s" : ""} capturé{boundaryPoints.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <PerimeterMapPreview points={boundaryPoints} />
                       </div>
                     )}
                   </div>

@@ -1200,3 +1200,44 @@ export const attestEudrCompliance = createServerFn({ method: "POST" })
 
     return { success: true as const };
   });
+
+// ============================================================
+// Infos parcelle pour la carte de supervision (popup marqueur)
+// ============================================================
+
+export const getParcelleMapInfo = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { parcelleIds: string[] }) =>
+    z.object({ parcelleIds: z.array(z.string().uuid()).max(500) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    if (data.parcelleIds.length === 0) return { parcelles: [] as Array<{ id: string; culture: string; producerName: string | null; cooperativeName: string | null }> };
+
+    const { data: rows, error } = await supabaseAdmin
+      .from("parcelles")
+      .select("id, culture, cooperative_id, producer_id")
+      .in("id", data.parcelleIds)
+      .eq("organization_id", orgId);
+    if (error) throw new Error(error.message);
+    const parcelles = (rows ?? []) as Array<{ id: string; culture: string; cooperative_id: string | null; producer_id: string | null }>;
+
+    const coopIds = Array.from(new Set(parcelles.map((p) => p.cooperative_id).filter((x): x is string => !!x)));
+    const producerIds = Array.from(new Set(parcelles.map((p) => p.producer_id).filter((x): x is string => !!x)));
+
+    const [{ data: coops }, { data: producers }] = await Promise.all([
+      coopIds.length > 0 ? supabaseAdmin.from("cooperatives").select("id, name").in("id", coopIds) : Promise.resolve({ data: [] as any[] }),
+      producerIds.length > 0 ? supabaseAdmin.from("producers").select("id, full_name").in("id", producerIds) : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const coopNameById = new Map(((coops ?? []) as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]));
+    const producerNameById = new Map(((producers ?? []) as Array<{ id: string; full_name: string }>).map((p) => [p.id, p.full_name]));
+
+    return {
+      parcelles: parcelles.map((p) => ({
+        id: p.id,
+        culture: p.culture,
+        cooperativeName: p.cooperative_id ? (coopNameById.get(p.cooperative_id) ?? null) : null,
+        producerName: p.producer_id ? (producerNameById.get(p.producer_id) ?? null) : null,
+      })),
+    };
+  });
