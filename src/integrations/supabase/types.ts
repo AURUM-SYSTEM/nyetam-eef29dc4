@@ -651,7 +651,7 @@ export type Database = {
       sweep_expired_modification_requests: { Args: never; Returns: undefined }
     }
     Enums: {
-      app_role: "agent" | "supervisor" | "admin"
+      app_role: "agent" | "supervisor" | "admin" | "platform_admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -779,7 +779,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["agent", "supervisor", "admin"],
+      app_role: ["agent", "supervisor", "admin", "platform_admin"],
     },
   },
 } as const

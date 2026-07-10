@@ -165,15 +165,15 @@ export const createOrganizationWithAdmin = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    // Permission de bootstrap : admin de n'importe quelle organisation,
-    // pas seulement la sienne — has_role ne prend pas d'organisation en
-    // paramètre, c'est déjà une vérification globale par conception.
-    const { data: isAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+    // Réservé aux administrateurs de plateforme (rôle global, non lié à une
+    // organisation) — un admin d'organisation classique ne peut plus créer
+    // de nouvelles organisations.
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
       _user: context.userId,
-      _role: "admin",
+      _role: "platform_admin",
     });
     if (roleErr) throw new Error("Vérification du rôle impossible : " + roleErr.message);
-    if (!isAdmin) throw new Error("Accès réservé aux administrateurs.");
+    if (!isPlatformAdmin) throw new Error("Seul un administrateur de plateforme peut créer une organisation.");
 
     const orgName = data.orgName.trim();
 
@@ -252,6 +252,152 @@ export const createOrganizationWithAdmin = createServerFn({ method: "POST" })
       orgName,
       adminEmail: data.adminEmail,
     };
+  });
+
+// ============================================================
+// Statut "administrateur de plateforme" (pour affichage conditionnel côté UI)
+// ============================================================
+
+export const checkPlatformAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: isPlatformAdmin, error } = await context.supabase.rpc("has_role", {
+      _user: context.userId,
+      _role: "platform_admin",
+    });
+    if (error) throw new Error("Vérification du rôle impossible : " + error.message);
+    return { isPlatformAdmin: Boolean(isPlatformAdmin) };
+  });
+
+// ============================================================
+// Liste de toutes les organisations (réservé platform_admin)
+// ============================================================
+
+export const listAllOrganizations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId,
+      _role: "platform_admin",
+    });
+    if (roleErr) throw new Error("Vérification du rôle impossible : " + roleErr.message);
+    if (!isPlatformAdmin) throw new Error("Seul un administrateur de plateforme peut consulter la liste des organisations.");
+
+    const { data: orgs, error: orgsErr } = await supabaseAdmin
+      .from("organizations")
+      .select("id, name, type, module_type, created_at")
+      .order("created_at", { ascending: false });
+    if (orgsErr) throw new Error(orgsErr.message);
+
+    const { data: profiles, error: profErr } = await supabaseAdmin
+      .from("profiles")
+      .select("organization_id");
+    if (profErr) throw new Error(profErr.message);
+
+    const userCounts = new Map<string, number>();
+    for (const p of (profiles ?? []) as Array<{ organization_id: string | null }>) {
+      if (!p.organization_id) continue;
+      userCounts.set(p.organization_id, (userCounts.get(p.organization_id) ?? 0) + 1);
+    }
+
+    return {
+      organizations: ((orgs ?? []) as Array<{
+        id: string;
+        name: string;
+        type: string;
+        module_type: string;
+        created_at: string;
+      }>).map((o) => ({
+        id: o.id,
+        name: o.name,
+        type: o.type,
+        moduleType: o.module_type,
+        createdAt: o.created_at,
+        userCount: userCounts.get(o.id) ?? 0,
+      })),
+    };
+  });
+
+// ============================================================
+// Supprimer une organisation (réservé platform_admin)
+//
+// Le comportement réel de ON DELETE CASCADE sur les clés étrangères
+// organization_id n'a pas pu être vérifié directement dans ce contexte
+// (aucun accès d'introspection au schéma en production). Par prudence, on
+// refuse donc explicitement la suppression tant que des données actives
+// (utilisateurs, parcelles, producteurs, etc.) sont encore rattachées à
+// l'organisation, plutôt que de compter sur un cascade non confirmé.
+// audit_log est volontairement exclu de cette vérification : organization_id
+// y est nullable, il s'agit de données historiques non "vivantes", et
+// chaque organisation y a toujours au moins une entrée (sa propre création),
+// ce qui rendrait toute suppression impossible si on l'incluait.
+// ============================================================
+
+const ORG_DEPENDENCY_TABLES: Array<{ table: string; label: string }> = [
+  { table: "profiles", label: "utilisateur(s)" },
+  { table: "user_roles", label: "rôle(s) attribué(s)" },
+  { table: "parcelles", label: "parcelle(s)" },
+  { table: "cooperatives", label: "coopérative(s)" },
+  { table: "producers", label: "producteur(s)" },
+  { table: "mission_forms", label: "formulaire(s) de mission personnalisé(s)" },
+  { table: "duplicate_alerts", label: "alerte(s) de doublon" },
+  { table: "agro_advisor_reports", label: "rapport(s) Agro Advisor" },
+  { table: "modification_requests", label: "demande(s) de modification" },
+];
+
+export const deleteOrganization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { organizationId: string }) =>
+    z.object({ organizationId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId,
+      _role: "platform_admin",
+    });
+    if (roleErr) throw new Error("Vérification du rôle impossible : " + roleErr.message);
+    if (!isPlatformAdmin) throw new Error("Seul un administrateur de plateforme peut supprimer une organisation.");
+
+    const { data: org, error: orgErr } = await supabaseAdmin
+      .from("organizations")
+      .select("id, name")
+      .eq("id", data.organizationId)
+      .single();
+    if (orgErr || !org) throw new Error("Organisation introuvable.");
+    const orgName = (org as any).name as string;
+
+    const blocking: string[] = [];
+    for (const dep of ORG_DEPENDENCY_TABLES) {
+      const { count, error } = await supabaseAdmin
+        .from(dep.table as any)
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", data.organizationId);
+      if (error) throw new Error(error.message);
+      if ((count ?? 0) > 0) blocking.push(`${count} ${dep.label}`);
+    }
+    if (blocking.length > 0) {
+      throw new Error(
+        `Impossible de supprimer « ${orgName} » : elle contient encore ${blocking.join(", ")}. Retirez-les d'abord.`,
+      );
+    }
+
+    const { error: delErr } = await supabaseAdmin.from("organizations").delete().eq("id", data.organizationId);
+    if (delErr) throw new Error(delErr.message);
+
+    try {
+      await supabaseAdmin.from("audit_log").insert({
+        organization_id: null,
+        actor_id: context.userId,
+        action: "deletion",
+        entity_type: "organization",
+        entity_id: data.organizationId,
+        old_value: { name: orgName } as any,
+      } as any);
+    } catch (e) {
+      console.warn("audit_log organization deletion failed (non bloquant)", e);
+    }
+
+    return { success: true as const, organizationName: orgName };
   });
 
 // ============================================================

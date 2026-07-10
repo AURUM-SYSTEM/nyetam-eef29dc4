@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, UserPlus, XCircle } from "lucide-react";
+import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, Trash2, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin } from "@/lib/admin.functions";
+import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { BackofficeShell } from "@/components/BackofficeShell";
@@ -61,6 +61,15 @@ type ModRequest = {
   expiresAt: string;
 };
 
+type OrgSummary = {
+  id: string;
+  name: string;
+  type: string;
+  moduleType: string;
+  createdAt: string;
+  userCount: number;
+};
+
 type AdminState =
   | { status: "checking" }
   | { status: "denied" }
@@ -91,8 +100,12 @@ function AdminDashboard() {
   const [inviteRole, setInviteRole] = useState("agent");
   const [inviting, setInviting] = useState(false);
 
-  // ── Création d'une nouvelle organisation (bootstrap) ──
+  // ── Création / suppression d'organisations (réservé platform_admin) ──
   const createOrg = useServerFn(createOrganizationWithAdmin);
+  const checkPlatformAdminFn = useServerFn(checkPlatformAdmin);
+  const listOrgsFn = useServerFn(listAllOrganizations);
+  const deleteOrgFn = useServerFn(deleteOrganization);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
   const [newOrgName, setNewOrgName] = useState("");
   const [newOrgType, setNewOrgType] = useState("generic");
@@ -100,6 +113,9 @@ function AdminDashboard() {
   const [newOrgAdminEmail, setNewOrgAdminEmail] = useState("");
   const [newOrgAdminName, setNewOrgAdminName] = useState("");
   const [creatingOrg, setCreatingOrg] = useState(false);
+  const [allOrgs, setAllOrgs] = useState<OrgSummary[]>([]);
+  const [loadingOrgs, setLoadingOrgs] = useState(false);
+  const [deletingOrgId, setDeletingOrgId] = useState<string | null>(null);
 
   // ── Paramètres de l'organisation ──
   const [orgLoaded, setOrgLoaded] = useState(false);
@@ -184,6 +200,42 @@ function AdminDashboard() {
     }
   }
 
+  async function loadPlatformAdminStatus() {
+    try {
+      const res = await checkPlatformAdminFn({ data: undefined as any });
+      setIsPlatformAdmin(res.isPlatformAdmin);
+      if (res.isPlatformAdmin) void loadAllOrgs();
+    } catch {
+      setIsPlatformAdmin(false);
+    }
+  }
+
+  async function loadAllOrgs() {
+    setLoadingOrgs(true);
+    try {
+      const res = await listOrgsFn({ data: undefined as any });
+      setAllOrgs(res.organizations);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec du chargement des organisations");
+    } finally {
+      setLoadingOrgs(false);
+    }
+  }
+
+  async function handleDeleteOrg(org: OrgSummary) {
+    if (!window.confirm(`Supprimer définitivement l'organisation « ${org.name} » ? Cette action est irréversible.`)) return;
+    setDeletingOrgId(org.id);
+    try {
+      await deleteOrgFn({ data: { organizationId: org.id } });
+      toast.success(`Organisation « ${org.name} » supprimée`);
+      setAllOrgs(prev => prev.filter(o => o.id !== org.id));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la suppression");
+    } finally {
+      setDeletingOrgId(null);
+    }
+  }
+
   async function loadRequests() {
     setLoadingRequests(true);
     try {
@@ -201,6 +253,7 @@ function AdminDashboard() {
     void loadUsers();
     void loadRequests();
     void loadOrgSettings();
+    void loadPlatformAdminStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
@@ -252,6 +305,7 @@ function AdminDashboard() {
       setNewOrgName(""); setNewOrgType("generic"); setNewOrgModule("generic");
       setNewOrgAdminEmail(""); setNewOrgAdminName("");
       setShowCreateOrg(false);
+      void loadAllOrgs();
     } catch (e: any) {
       toast.error(e?.message ?? "Échec de la création de l'organisation");
     } finally {
@@ -322,22 +376,24 @@ function AdminDashboard() {
         </p>
       </header>
 
-      <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className={`mb-4 grid grid-cols-1 gap-2 ${isPlatformAdmin ? "sm:grid-cols-2" : ""}`}>
         <button
           onClick={() => setShowInvite(v => !v)}
           className="flex w-full items-center justify-center gap-2 rounded-xl btn-gold px-4 py-3 text-sm"
         >
           <UserPlus className="h-4 w-4" /> Inviter un nouvel agent
         </button>
-        <button
-          onClick={() => setShowCreateOrg(v => !v)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold/40 px-4 py-3 text-sm text-gold hover:bg-gold/10"
-        >
-          <Building2 className="h-4 w-4" /> Créer une nouvelle organisation
-        </button>
+        {isPlatformAdmin && (
+          <button
+            onClick={() => setShowCreateOrg(v => !v)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold/40 px-4 py-3 text-sm text-gold hover:bg-gold/10"
+          >
+            <Building2 className="h-4 w-4" /> Créer une nouvelle organisation
+          </button>
+        )}
       </div>
 
-      {showCreateOrg && (
+      {isPlatformAdmin && showCreateOrg && (
         <form onSubmit={submitCreateOrg} className="glass-card mb-6 space-y-3 rounded-2xl p-4">
           <label className="block">
             <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Nom de l'organisation</span>
@@ -376,6 +432,41 @@ function AdminDashboard() {
             Créer
           </button>
         </form>
+      )}
+
+      {isPlatformAdmin && (
+        <section className="glass-card mb-6 rounded-2xl p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
+            <Building2 className="h-3.5 w-3.5" /> Toutes les organisations ({allOrgs.length})
+          </h2>
+
+          {loadingOrgs ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+          ) : allOrgs.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Aucune organisation pour l'instant.</p>
+          ) : (
+            <div className="space-y-2">
+              {allOrgs.map(o => (
+                <div key={o.id} className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card/40 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{o.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {ORG_TYPE_LABELS[o.type] ?? o.type} · {MODULE_LABELS[o.moduleType] ?? o.moduleType} · {o.userCount} utilisateur(s)
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => void handleDeleteOrg(o)}
+                    disabled={deletingOrgId === o.id}
+                    className="flex shrink-0 items-center gap-1 rounded-lg border border-destructive/30 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-40"
+                  >
+                    {deletingOrgId === o.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Supprimer
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       {showInvite && (
