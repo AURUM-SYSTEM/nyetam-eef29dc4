@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings } from "@/lib/admin.functions";
+import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { BackofficeShell } from "@/components/BackofficeShell";
@@ -34,6 +34,13 @@ const ROLE_LABELS: Record<string, string> = {
 };
 const MODULES = ["generic", "agro", "health", "ngo"];
 const ROLES = ["agent", "supervisor", "admin"];
+const ORG_TYPE_LABELS: Record<string, string> = {
+  agriculture: "Agriculture",
+  health: "Santé",
+  ngo: "ONG",
+  generic: "Générique",
+};
+const ORG_TYPES = ["agriculture", "health", "ngo", "generic"];
 
 type OrgUser = {
   id: string;
@@ -83,6 +90,16 @@ function AdminDashboard() {
   const [inviteModule, setInviteModule] = useState("generic");
   const [inviteRole, setInviteRole] = useState("agent");
   const [inviting, setInviting] = useState(false);
+
+  // ── Création d'une nouvelle organisation (bootstrap) ──
+  const createOrg = useServerFn(createOrganizationWithAdmin);
+  const [showCreateOrg, setShowCreateOrg] = useState(false);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [newOrgType, setNewOrgType] = useState("generic");
+  const [newOrgModule, setNewOrgModule] = useState("generic");
+  const [newOrgAdminEmail, setNewOrgAdminEmail] = useState("");
+  const [newOrgAdminName, setNewOrgAdminName] = useState("");
+  const [creatingOrg, setCreatingOrg] = useState(false);
 
   // ── Paramètres de l'organisation ──
   const [orgLoaded, setOrgLoaded] = useState(false);
@@ -218,6 +235,30 @@ function AdminDashboard() {
     }
   }
 
+  async function submitCreateOrg(e: React.FormEvent) {
+    e.preventDefault();
+    setCreatingOrg(true);
+    try {
+      const res = await createOrg({
+        data: {
+          orgName: newOrgName.trim(),
+          orgType: newOrgType,
+          moduleType: newOrgModule,
+          adminEmail: newOrgAdminEmail.trim(),
+          adminFullName: newOrgAdminName.trim(),
+        },
+      });
+      toast.success(`Organisation créée — un email d'invitation a été envoyé à ${res.adminEmail} pour qu'il devienne administrateur de ${res.orgName}.`);
+      setNewOrgName(""); setNewOrgType("generic"); setNewOrgModule("generic");
+      setNewOrgAdminEmail(""); setNewOrgAdminName("");
+      setShowCreateOrg(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la création de l'organisation");
+    } finally {
+      setCreatingOrg(false);
+    }
+  }
+
   async function changeModule(userId: string, moduleType: string) {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, moduleType } : u));
     try {
@@ -281,12 +322,61 @@ function AdminDashboard() {
         </p>
       </header>
 
-      <button
-        onClick={() => setShowInvite(v => !v)}
-        className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl btn-gold px-4 py-3 text-sm"
-      >
-        <UserPlus className="h-4 w-4" /> Inviter un nouvel agent
-      </button>
+      <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button
+          onClick={() => setShowInvite(v => !v)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl btn-gold px-4 py-3 text-sm"
+        >
+          <UserPlus className="h-4 w-4" /> Inviter un nouvel agent
+        </button>
+        <button
+          onClick={() => setShowCreateOrg(v => !v)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold/40 px-4 py-3 text-sm text-gold hover:bg-gold/10"
+        >
+          <Building2 className="h-4 w-4" /> Créer une nouvelle organisation
+        </button>
+      </div>
+
+      {showCreateOrg && (
+        <form onSubmit={submitCreateOrg} className="glass-card mb-6 space-y-3 rounded-2xl p-4">
+          <label className="block">
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Nom de l'organisation</span>
+            <input required value={newOrgName} onChange={e => setNewOrgName(e.target.value)}
+              className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Type</span>
+              <select value={newOrgType} onChange={e => setNewOrgType(e.target.value)}
+                className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+                {ORG_TYPES.map(t => <option key={t} value={t}>{ORG_TYPE_LABELS[t]}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Module principal</span>
+              <select value={newOrgModule} onChange={e => setNewOrgModule(e.target.value)}
+                className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+                {MODULES.map(m => <option key={m} value={m}>{MODULE_LABELS[m]}</option>)}
+              </select>
+            </label>
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Email de l'administrateur</span>
+            <input type="email" required value={newOrgAdminEmail} onChange={e => setNewOrgAdminEmail(e.target.value)}
+              className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Nom complet de l'administrateur</span>
+            <input required value={newOrgAdminName} onChange={e => setNewOrgAdminName(e.target.value)}
+              className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+          </label>
+          <button type="submit" disabled={creatingOrg}
+            className="flex w-full items-center justify-center gap-2 rounded-xl btn-gold px-4 py-2.5 text-sm disabled:opacity-40">
+            {creatingOrg ? <Loader2 className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />}
+            Créer
+          </button>
+        </form>
+      )}
 
       {showInvite && (
         <form onSubmit={submitInvite} className="glass-card mb-6 space-y-3 rounded-2xl p-4">

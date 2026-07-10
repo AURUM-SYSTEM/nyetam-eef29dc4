@@ -12,6 +12,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const MODULE_TYPES = ["agro", "health", "ngo", "generic"] as const;
+// organizations.type — distinct de module_type ("agro" vs "agriculture"),
+// voir src/lib/organization-context.ts (même liste, dupliquée ici pour
+// rester cohérent avec le style du reste de ce fichier).
+const ORG_TYPES = ["agriculture", "health", "ngo", "generic"] as const;
 const APP_ROLES = ["agent", "supervisor", "admin"] as const;
 // Modules de conformité — extensions optionnelles d'un module métier (EUDR
 // est une extension d'agro), jamais un module à part entière.
@@ -132,6 +136,122 @@ export const inviteAgent = createServerFn({ method: "POST" })
     if (roleErr) throw new Error(roleErr.message);
 
     return { success: true, userId: newUserId, email: data.email };
+  });
+
+// ============================================================
+// Créer une nouvelle organisation, avec son premier administrateur
+// (invité par email) — action de "bootstrap" : l'appelant doit déjà être
+// admin d'AU MOINS une organisation, mais l'action n'est pas restreinte à
+// celle-ci puisqu'on en crée une nouvelle, indépendante. L'appelant n'est
+// jamais ajouté comme admin de la nouvelle organisation — seul le nouvel
+// administrateur invité l'est.
+// ============================================================
+
+export const createOrganizationWithAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    orgName: string;
+    orgType: string;
+    moduleType: string;
+    adminEmail: string;
+    adminFullName: string;
+  }) =>
+    z.object({
+      orgName: z.string().min(1).max(200),
+      orgType: z.enum(ORG_TYPES),
+      moduleType: z.enum(MODULE_TYPES),
+      adminEmail: z.string().email(),
+      adminFullName: z.string().min(1).max(200),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    // Permission de bootstrap : admin de n'importe quelle organisation,
+    // pas seulement la sienne — has_role ne prend pas d'organisation en
+    // paramètre, c'est déjà une vérification globale par conception.
+    const { data: isAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId,
+      _role: "admin",
+    });
+    if (roleErr) throw new Error("Vérification du rôle impossible : " + roleErr.message);
+    if (!isAdmin) throw new Error("Accès réservé aux administrateurs.");
+
+    const orgName = data.orgName.trim();
+
+    const { data: org, error: orgErr } = await supabaseAdmin
+      .from("organizations")
+      .insert({
+        name: orgName,
+        type: data.orgType,
+        module_type: data.moduleType,
+        enabled_modules: [data.moduleType],
+      } as any)
+      .select("id")
+      .single();
+    if (orgErr) throw new Error(orgErr.message);
+    const newOrgId = (org as any).id as string;
+
+    const appUrl = process.env.PUBLIC_APP_URL || "https://nyetam.lovable.app";
+    const { data: invited, error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      data.adminEmail,
+      {
+        data: {
+          full_name: data.adminFullName,
+          organization_name: orgName,
+          organization_type: data.orgType,
+          module_type: data.moduleType,
+        },
+        redirectTo: `${appUrl}/accept-invite`,
+      } as any,
+    );
+    if (inviteErr) {
+      // L'organisation ne doit pas rester orpheline sans administrateur si
+      // l'invitation échoue.
+      await supabaseAdmin.from("organizations").delete().eq("id", newOrgId);
+      throw new Error(inviteErr.message);
+    }
+
+    const newUserId = (invited as any)?.user?.id;
+    if (!newUserId) {
+      await supabaseAdmin.from("organizations").delete().eq("id", newOrgId);
+      throw new Error("Invitation envoyée mais identifiant utilisateur introuvable.");
+    }
+
+    // Le trigger handle_new_user crée déjà le profil depuis les métadonnées
+    // ci-dessus ; on complète juste organization_id, comme pour inviteAgent.
+    await supabaseAdmin.from("profiles").update({ organization_id: newOrgId }).eq("id", newUserId);
+
+    // Uniquement le nouvel administrateur invité — jamais l'appelant.
+    const { error: newAdminRoleErr } = await supabaseAdmin.from("user_roles").insert({
+      user_id: newUserId,
+      organization_id: newOrgId,
+      role: "admin",
+    } as any);
+    if (newAdminRoleErr) throw new Error(newAdminRoleErr.message);
+
+    try {
+      await supabaseAdmin.from("audit_log").insert({
+        organization_id: newOrgId,
+        actor_id: context.userId,
+        action: "creation",
+        entity_type: "organization",
+        entity_id: newOrgId,
+        new_value: {
+          name: orgName,
+          type: data.orgType,
+          module_type: data.moduleType,
+          admin_email: data.adminEmail,
+        } as any,
+      } as any);
+    } catch (e) {
+      console.warn("audit_log organization creation failed (non bloquant)", e);
+    }
+
+    return {
+      success: true as const,
+      organizationId: newOrgId,
+      orgName,
+      adminEmail: data.adminEmail,
+    };
   });
 
 // ============================================================
