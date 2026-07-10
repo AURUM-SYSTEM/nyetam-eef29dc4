@@ -139,14 +139,6 @@ export const Route = createFileRoute("/_authenticated/record/$type")({
 
 
 const VALID_TYPES = new Set<DocType>(["rapport", "pv", "mission_terrain", "enquete", "auto", "field_entry"]);
-const TYPE_LABELS: Record<string, string> = {
-  auto: "Détection automatique",
-  field_entry: "Saisie terrain",
-  mission_terrain: "Mission terrain",
-  rapport: "Mission terrain",
-  pv: "Procès-verbal",
-  enquete: "Enquête",
-};
 
 const MAX_VIDEO_SECONDS = 60;
 
@@ -738,12 +730,12 @@ function RecordPage() {
 
   return (
     <div className="px-5 pt-8 pb-32">
-      <Link to="/new" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> {t("common.back")}
       </Link>
       <header className="mt-6">
         <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-          {t("record.step")} — {TYPE_LABELS[docType] ?? "Document"}
+          {t("record.step")}
         </p>
         <h1 className="mt-2 font-display text-3xl">{t("record.title")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -761,8 +753,11 @@ function RecordPage() {
         </div>
       )}
 
-      {/* Sélecteur de mission (généré dynamiquement, jamais codé en dur) */}
-      {missionForms.length > 1 && (
+      {/* Mission active (générée dynamiquement, jamais codée en dur) — un menu
+          déroulant n'apparaît que si le module a réellement plusieurs
+          missions ; sinon l'unique mission disponible est sélectionnée
+          automatiquement et affichée en lecture seule. */}
+      {missionForms.length > 1 ? (
         <section className="mt-6 glass-card rounded-2xl p-4">
           <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">Type de mission</h2>
           <select
@@ -775,7 +770,12 @@ function RecordPage() {
             ))}
           </select>
         </section>
-      )}
+      ) : missionForms.length === 1 ? (
+        <section className="mt-6 glass-card rounded-2xl p-4">
+          <h2 className="mb-1 text-xs uppercase tracking-widest text-gold-soft">Mission</h2>
+          <p className="font-display text-lg">{missionForms[0].mission_label}</p>
+        </section>
+      ) : null}
 
       {/* Metadata */}
       <section className="mt-6 glass-card rounded-2xl p-4">
@@ -1005,7 +1005,7 @@ function RecordPage() {
       {!missionFormsLoading && missionFields.length > 0 && (
         <section className="mt-4 glass-card rounded-2xl p-4">
           <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">
-            {activeMission?.mission_label ?? "Informations spécifiques"}
+            Informations spécifiques
           </h2>
           <div className="grid grid-cols-2 gap-3">
             {missionFields.map(f => (

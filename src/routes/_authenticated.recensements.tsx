@@ -127,7 +127,8 @@ function MyRecordsPage() {
               Aucune saisie pour l'instant.
             </p>
             <Link
-              to="/new"
+              to="/record/$type"
+              params={{ type: "field_entry" }}
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg btn-gold px-4 py-2 text-xs"
             >
               <Users className="h-3.5 w-3.5" /> Nouvelle saisie

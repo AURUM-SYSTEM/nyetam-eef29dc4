@@ -125,7 +125,7 @@ function HomePage() {
       <InstallGuide />
 
       <button
-        onClick={() => navigate({ to: "/new" })}
+        onClick={() => navigate({ to: "/record/$type", params: { type: "field_entry" } })}
         className="group relative w-full overflow-hidden rounded-2xl btn-gold px-6 py-5 text-left"
       >
         <div className="flex items-center justify-between">

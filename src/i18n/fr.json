@@ -62,17 +62,8 @@
     "pending": "Documents en attente",
     "draft": "Brouillon"
   },
-  "new": {
-    "step": "Étape 1 / 3",
-    "title": "Type de document",
-    "subtitle": "Choisissez le format que l'IA doit produire à partir de votre enregistrement.",
-    "rapport": "Rapport",
-    "rapportDesc": "Document narratif et analytique — observations terrain, constats, recommandations.",
-    "pv": "Procès-verbal",
-    "pvDesc": "Procès-verbal formel — faits, déclarations, conclusion. Style juridique sobre."
-  },
   "record": {
-    "step": "Étape 2 / 3",
+    "step": "Nouvelle saisie",
     "title": "Enregistrement",
     "sub_audio": "Parlez clairement. L'audio est sauvegardé localement, la transcription IA se lance dès la reconnexion.",
     "sub_manual": "Saisissez ou collez votre texte. La génération démarrera dès que possible.",

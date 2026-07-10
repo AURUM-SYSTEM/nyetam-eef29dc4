@@ -21,7 +21,6 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedRecensementsRouteImport } from './routes/_authenticated.recensements'
 import { Route as AuthenticatedRecensementRouteImport } from './routes/_authenticated.recensement'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated.profile'
-import { Route as AuthenticatedNewRouteImport } from './routes/_authenticated.new'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated.admin'
 import { Route as AuthenticatedRecordTypeRouteImport } from './routes/_authenticated.record.$type'
 import { Route as AuthenticatedDocumentIdRouteImport } from './routes/_authenticated.document.$id'
@@ -87,11 +86,6 @@ const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedNewRoute = AuthenticatedNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -116,7 +110,6 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/welcome': typeof WelcomeRoute
   '/admin': typeof AuthenticatedAdminRoute
-  '/new': typeof AuthenticatedNewRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/recensement': typeof AuthenticatedRecensementRoute
   '/recensements': typeof AuthenticatedRecensementsRoute
@@ -132,7 +125,6 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/welcome': typeof WelcomeRoute
   '/admin': typeof AuthenticatedAdminRoute
-  '/new': typeof AuthenticatedNewRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/recensement': typeof AuthenticatedRecensementRoute
   '/recensements': typeof AuthenticatedRecensementsRoute
@@ -151,7 +143,6 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/welcome': typeof WelcomeRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
-  '/_authenticated/new': typeof AuthenticatedNewRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/recensement': typeof AuthenticatedRecensementRoute
   '/_authenticated/recensements': typeof AuthenticatedRecensementsRoute
@@ -171,7 +162,6 @@ export interface FileRouteTypes {
     | '/register'
     | '/welcome'
     | '/admin'
-    | '/new'
     | '/profile'
     | '/recensement'
     | '/recensements'
@@ -187,7 +177,6 @@ export interface FileRouteTypes {
     | '/register'
     | '/welcome'
     | '/admin'
-    | '/new'
     | '/profile'
     | '/recensement'
     | '/recensements'
@@ -205,7 +194,6 @@ export interface FileRouteTypes {
     | '/register'
     | '/welcome'
     | '/_authenticated/admin'
-    | '/_authenticated/new'
     | '/_authenticated/profile'
     | '/_authenticated/recensement'
     | '/_authenticated/recensements'
@@ -311,13 +299,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/new': {
-      id: '/_authenticated/new'
-      path: '/new'
-      fullPath: '/new'
-      preLoaderRoute: typeof AuthenticatedNewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -344,7 +325,6 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
-  AuthenticatedNewRoute: typeof AuthenticatedNewRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRecensementRoute: typeof AuthenticatedRecensementRoute
   AuthenticatedRecensementsRoute: typeof AuthenticatedRecensementsRoute
@@ -357,7 +337,6 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
-  AuthenticatedNewRoute: AuthenticatedNewRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRecensementRoute: AuthenticatedRecensementRoute,
   AuthenticatedRecensementsRoute: AuthenticatedRecensementsRoute,

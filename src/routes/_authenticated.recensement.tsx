@@ -262,7 +262,7 @@ function RecensementPage() {
 
   return (
     <div className="px-5 pt-8 pb-32">
-      <Link to="/new" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Retour
       </Link>
 

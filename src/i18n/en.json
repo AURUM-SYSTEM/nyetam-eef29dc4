@@ -62,17 +62,8 @@
     "pending": "Pending documents",
     "draft": "Draft"
   },
-  "new": {
-    "step": "Step 1 / 3",
-    "title": "Document type",
-    "subtitle": "Choose the format the AI should produce from your recording.",
-    "rapport": "Report",
-    "rapportDesc": "Narrative and analytical document — field observations, findings, recommendations.",
-    "pv": "Minutes (PV)",
-    "pvDesc": "Formal minutes — facts, statements, conclusion. Sober legal style."
-  },
   "record": {
-    "step": "Step 2 / 3",
+    "step": "New entry",
     "title": "Recording",
     "sub_audio": "Speak clearly. Audio is saved locally; AI transcription runs as soon as you're back online.",
     "sub_manual": "Type or paste your text. Generation will start as soon as possible.",
