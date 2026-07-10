@@ -117,6 +117,14 @@ export type ParcelleTraceabilityData = {
     videoCount: number;
     validatedAt: string | null;
   }>;
+  // Section EUDR — omise du PDF si null (extension désactivée pour
+  // l'organisation, ou parcelle sans attestation).
+  eudrAttestation?: {
+    deforestationFree: boolean;
+    attestedByName: string;
+    attestedAt: string;
+    notes: string | null;
+  } | null;
 };
 
 export async function exportParcelleTraceabilityPdf(data: ParcelleTraceabilityData) {
@@ -228,6 +236,39 @@ export async function exportParcelleTraceabilityPdf(data: ParcelleTraceabilityDa
     pdf.setDrawColor(235, 235, 235);
     pdf.setLineWidth(0.4);
     pdf.line(margin, y - 4, margin + contentWidth, y - 4);
+  }
+
+  if (data.eudrAttestation) {
+    y += 16;
+    ensureSpace(70);
+    pdf.setFont("times", "bold");
+    pdf.setFontSize(12);
+    pdf.setTextColor(120, 95, 30);
+    const eudrHeading = "ATTESTATION DE CONFORMITÉ EUDR";
+    pdf.text(eudrHeading, margin, y);
+    pdf.setDrawColor(201, 168, 76);
+    pdf.setLineWidth(0.6);
+    pdf.line(margin, y + 3, margin + pdf.getTextWidth(eudrHeading), y + 3);
+    y += 18;
+
+    const eudr = data.eudrAttestation;
+    const eudrInfos: Array<[string, string]> = [
+      ["Statut", eudr.deforestationFree ? "Absence de déforestation confirmée" : "Non conforme"],
+      ["Date", new Date(eudr.attestedAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })],
+      ["Attestant", eudr.attestedByName],
+      ["Notes", eudr.notes || "—"],
+    ];
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    for (const [label, value] of eudrInfos) {
+      ensureSpace(16);
+      pdf.setTextColor(140, 140, 140);
+      pdf.text(label.toUpperCase(), margin, y);
+      pdf.setTextColor(20, 20, 20);
+      const val = pdf.splitTextToSize(value, contentWidth - 100);
+      pdf.text(val, margin + 100, y);
+      y += Math.max(14, val.length * 12);
+    }
   }
 
   drawAurumPdfFooter(pdf);

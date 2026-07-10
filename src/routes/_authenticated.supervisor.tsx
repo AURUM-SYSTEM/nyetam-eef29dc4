@@ -68,6 +68,8 @@ import {
   getDocumentDetails,
   getDataAnalystStats,
   getParcelleTimeline,
+  getEudrCompliance,
+  attestEudrCompliance,
 } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 
@@ -566,18 +568,31 @@ function ParcelleBoundarySvg({ points }: { points: Array<{ lat: number; lng: num
   );
 }
 
+type ParcelleEudrState = {
+  deforestationFree: boolean | null;
+  attestedByName: string | null;
+  attestedAt: string | null;
+  notes: string | null;
+};
+
 function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onClose: () => void }) {
   const fetchTimeline = useServerFn(getParcelleTimeline);
+  const attest = useServerFn(attestEudrCompliance);
   const [parcelle, setParcelle] = useState<{
     culture: string; surfaceHa: number | null; surfaceHaCalculated: number | null;
     boundaryPoints: Array<{ lat: number; lng: number }> | null;
     lat: number | null; lng: number | null;
     producerName: string | null; cooperativeName: string | null;
+    eudr: ParcelleEudrState;
   } | null>(null);
   const [docs, setDocs] = useState<ParcelleTimelineDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [eudrEnabled, setEudrEnabled] = useState(false);
+  const [eudrChecked, setEudrChecked] = useState(false);
+  const [eudrNotesInput, setEudrNotesInput] = useState("");
+  const [attesting, setAttesting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -587,6 +602,9 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
         if (cancelled) return;
         setParcelle(res.parcelle);
         setDocs(res.documents);
+        setEudrEnabled(res.eudrEnabled);
+        setEudrChecked(res.parcelle.eudr.deforestationFree === true);
+        setEudrNotesInput(res.parcelle.eudr.notes ?? "");
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? "Échec du chargement de la parcelle");
       } finally {
@@ -596,6 +614,20 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parcelleId]);
+
+  async function handleAttest() {
+    setAttesting(true);
+    try {
+      await attest({ data: { parcelleId, deforestationFree: eudrChecked, notes: eudrNotesInput.trim() || undefined } });
+      const res = await fetchTimeline({ data: { parcelleId } });
+      setParcelle(res.parcelle);
+      toast.success("Attestation enregistrée");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'attestation");
+    } finally {
+      setAttesting(false);
+    }
+  }
 
   async function handleExportPdf() {
     if (!parcelle) return;
@@ -619,6 +651,14 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
           videoCount: d.videoCount,
           validatedAt: d.validatedAt,
         })),
+        eudrAttestation: eudrEnabled && parcelle.eudr.attestedAt
+          ? {
+              deforestationFree: parcelle.eudr.deforestationFree === true,
+              attestedByName: parcelle.eudr.attestedByName ?? "—",
+              attestedAt: parcelle.eudr.attestedAt,
+              notes: parcelle.eudr.notes,
+            }
+          : null,
       });
     } catch (e: any) {
       toast.error(e?.message ?? "Échec de l'export PDF");
@@ -686,6 +726,45 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
               )}
             </div>
 
+            {eudrEnabled && parcelle && (
+              <div className="rounded-xl border border-border bg-card/30 p-3">
+                <span className="mb-2 block text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Conformité EUDR
+                </span>
+                <label className="mb-2 flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={eudrChecked}
+                    onChange={(e) => setEudrChecked(e.target.checked)}
+                    className="accent-[var(--gold)]"
+                  />
+                  Absence de déforestation attestée
+                </label>
+                <textarea
+                  value={eudrNotesInput}
+                  onChange={(e) => setEudrNotesInput(e.target.value)}
+                  placeholder="Notes (optionnel)"
+                  rows={2}
+                  className="mb-2 w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAttest()}
+                  disabled={attesting}
+                  className="rounded-lg btn-gold px-3 py-1.5 text-xs disabled:opacity-40"
+                >
+                  {attesting ? "Enregistrement…" : "Attester"}
+                </button>
+                {parcelle.eudr.attestedAt && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Dernière attestation : {parcelle.eudr.deforestationFree ? "absence de déforestation confirmée" : "non conforme"}
+                    {" · par "}{parcelle.eudr.attestedByName ?? "—"}
+                    {" · le "}{new Date(parcelle.eudr.attestedAt).toLocaleDateString("fr-FR")}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button
                 type="button"
@@ -730,6 +809,24 @@ function ParcellesSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Lien direct depuis la section Conformité EUDR ("lien vers leur fiche") :
+  // déplie et centre la ligne correspondante quand l'URL contient
+  // #parcelle-row-<id>, au chargement comme au clic (hashchange).
+  useEffect(() => {
+    function checkHash() {
+      const match = window.location.hash.match(/^#parcelle-row-(.+)$/);
+      const id = match?.[1];
+      if (!id) return;
+      setExpandedId(id);
+      requestAnimationFrame(() => {
+        document.getElementById(`parcelle-row-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    }
+    checkHash();
+    window.addEventListener("hashchange", checkHash);
+    return () => window.removeEventListener("hashchange", checkHash);
+  }, [rows]);
+
   return (
     <section className="glass-card mb-6 rounded-2xl p-5">
       <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
@@ -755,6 +852,7 @@ function ParcellesSection() {
             {rows.map(p => (
               <Fragment key={p.id}>
                 <TableRow
+                  id={`parcelle-row-${p.id}`}
                   onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                   className="cursor-pointer hover:bg-card/40"
                 >
@@ -1418,6 +1516,100 @@ function DataAnalystSection() {
   );
 }
 
+// ── AGRO : conformité EUDR — extension optionnelle du module agro ────────
+// N'affiche strictement rien si 'eudr' n'est pas dans
+// enabled_compliance_modules de l'organisation (vérifié côté serveur par
+// getEudrCompliance, qui renvoie eudrEnabled: false sans rien calculer).
+
+type EudrNonCompliantParcelle = {
+  id: string;
+  culture: string;
+  missingPolygon: boolean;
+  missingAttestation: boolean;
+};
+
+function EudrComplianceSection() {
+  const fetchCompliance = useServerFn(getEudrCompliance);
+  const [loading, setLoading] = useState(true);
+  const [enabled, setEnabled] = useState(false);
+  const [readinessRate, setReadinessRate] = useState(0);
+  const [totalParcelles, setTotalParcelles] = useState(0);
+  const [compliantCount, setCompliantCount] = useState(0);
+  const [nonCompliant, setNonCompliant] = useState<EudrNonCompliantParcelle[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchCompliance({ data: undefined as any });
+        if (cancelled) return;
+        setEnabled(res.eudrEnabled);
+        if (res.eudrEnabled) {
+          setReadinessRate(res.readinessRate);
+          setTotalParcelles(res.totalParcelles);
+          setCompliantCount(res.compliantCount);
+          setNonCompliant(res.nonCompliantParcelles);
+        }
+      } catch {
+        // silencieux : section purement informative, et n'existe que si
+        // l'extension EUDR est activée pour l'organisation
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Rien pendant le chargement (pas de flash d'un état "désactivé") et
+  // rien du tout si l'extension n'est pas activée pour l'organisation.
+  if (loading || !enabled) return null;
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
+        <ShieldAlert className="h-4 w-4 text-gold" /> Conformité EUDR
+      </h2>
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="rounded-lg border border-border bg-card/30 px-4 py-3 text-center">
+            <p className="font-display text-2xl text-gold">{readinessRate}%</p>
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Score de préparation</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {compliantCount} / {totalParcelles} parcelle{totalParcelles !== 1 ? "s" : ""} avec polygone GPS et attestation d'absence de déforestation.
+          </p>
+        </div>
+
+        <div>
+          <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
+            Parcelles non conformes ({nonCompliant.length})
+          </span>
+          {nonCompliant.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Toutes les parcelles sont conformes.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {nonCompliant.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card/30 px-3 py-2 text-xs">
+                  <a href={`#parcelle-row-${p.id}`} className="font-medium text-foreground hover:text-gold hover:underline">
+                    {p.culture}
+                  </a>
+                  <span className="text-muted-foreground">
+                    {[
+                      p.missingPolygon ? "Sans polygone GPS" : null,
+                      p.missingAttestation ? "Sans attestation" : null,
+                    ].filter(Boolean).join(" · ")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── AGRO : qualité des données — alertes de doublons GPS ─────────────────
 
 const RISK_LABELS: Record<string, string> = { low: "Faible", medium: "Moyen", high: "Élevé" };
@@ -1770,6 +1962,9 @@ function SupervisorDashboardContent() {
 
       {/* AGRO — Data Analyst (complétude, validation, volumes) */}
       {profile?.module_type === "agro" && <DataAnalystSection />}
+
+      {/* AGRO — Conformité EUDR (extension optionnelle, n'affiche rien si désactivée) */}
+      {profile?.module_type === "agro" && <EudrComplianceSection />}
 
       {/* AGRO — Assistant Agro (questions libres) et Agro Advisor (synthèse) — deux blocs distincts */}
       {profile?.module_type === "agro" && (

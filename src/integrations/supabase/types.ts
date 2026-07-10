@@ -322,6 +322,7 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string | null
+          enabled_compliance_modules: string[]
           enabled_modules: string[]
           id: string
           modification_request_delay_hours: number
@@ -331,6 +332,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          enabled_compliance_modules?: string[]
           enabled_modules?: string[]
           id?: string
           modification_request_delay_hours?: number
@@ -340,6 +342,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          enabled_compliance_modules?: string[]
           enabled_modules?: string[]
           id?: string
           modification_request_delay_hours?: number
@@ -355,6 +358,10 @@ export type Database = {
           cooperative_id: string | null
           created_at: string
           culture: string
+          eudr_attested_at: string | null
+          eudr_attested_by: string | null
+          eudr_deforestation_free: boolean | null
+          eudr_notes: string | null
           id: string
           lat: number
           lng: number
@@ -370,6 +377,10 @@ export type Database = {
           cooperative_id?: string | null
           created_at?: string
           culture: string
+          eudr_attested_at?: string | null
+          eudr_attested_by?: string | null
+          eudr_deforestation_free?: boolean | null
+          eudr_notes?: string | null
           id?: string
           lat: number
           lng: number
@@ -385,6 +396,10 @@ export type Database = {
           cooperative_id?: string | null
           created_at?: string
           culture?: string
+          eudr_attested_at?: string | null
+          eudr_attested_by?: string | null
+          eudr_deforestation_free?: boolean | null
+          eudr_notes?: string | null
           id?: string
           lat?: number
           lng?: number

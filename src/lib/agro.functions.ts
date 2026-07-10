@@ -1008,7 +1008,7 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
 
     const { data: parcelle, error: parcErr } = await supabaseAdmin
       .from("parcelles")
-      .select("id, culture, surface_ha, surface_ha_calculated, boundary_points, lat, lng, cooperative_id, producer_id, organization_id")
+      .select("id, culture, surface_ha, surface_ha_calculated, boundary_points, lat, lng, cooperative_id, producer_id, organization_id, eudr_deforestation_free, eudr_attested_by, eudr_attested_at, eudr_notes")
       .eq("id", data.parcelleId)
       .single();
     if (parcErr || !parcelle || (parcelle as any).organization_id !== orgId) {
@@ -1016,12 +1016,22 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
     }
     const pc = parcelle as any;
 
-    const [{ data: coop }, { data: producer }] = await Promise.all([
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("enabled_compliance_modules")
+      .eq("id", orgId)
+      .single();
+    const eudrEnabled = (((org as any)?.enabled_compliance_modules ?? []) as string[]).includes("eudr");
+
+    const [{ data: coop }, { data: producer }, { data: attester }] = await Promise.all([
       pc.cooperative_id
         ? supabaseAdmin.from("cooperatives").select("name").eq("id", pc.cooperative_id).single()
         : Promise.resolve({ data: null as any }),
       pc.producer_id
         ? supabaseAdmin.from("producers").select("full_name").eq("id", pc.producer_id).single()
+        : Promise.resolve({ data: null as any }),
+      pc.eudr_attested_by
+        ? supabaseAdmin.from("profiles").select("full_name").eq("id", pc.eudr_attested_by).single()
         : Promise.resolve({ data: null as any }),
     ]);
 
@@ -1047,6 +1057,7 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
     }
 
     return {
+      eudrEnabled,
       parcelle: {
         id: pc.id as string,
         culture: pc.culture as string,
@@ -1057,6 +1068,12 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
         lng: (pc.lng ?? null) as number | null,
         producerName: (producer as any)?.full_name ?? null,
         cooperativeName: (coop as any)?.name ?? null,
+        eudr: {
+          deforestationFree: (pc.eudr_deforestation_free ?? null) as boolean | null,
+          attestedByName: (attester as any)?.full_name ?? null,
+          attestedAt: (pc.eudr_attested_at ?? null) as string | null,
+          notes: (pc.eudr_notes ?? null) as string | null,
+        },
       },
       documents: docRows.map((d) => ({
         id: d.id,
@@ -1073,4 +1090,113 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
         validatedAt: d.validated_at,
       })),
     };
+  });
+
+// ============================================================
+// Conformité EUDR — extension optionnelle du module agro, jamais un
+// module à part. N'a d'effet que si 'eudr' figure dans
+// organizations.enabled_compliance_modules ; sinon renvoie eudrEnabled:
+// false et rien d'autre n'est calculé.
+// ============================================================
+
+function hasValidBoundary(boundaryPoints: unknown): boolean {
+  return Array.isArray(boundaryPoints) && boundaryPoints.length >= 3;
+}
+
+export const getEudrCompliance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("enabled_compliance_modules")
+      .eq("id", orgId)
+      .single();
+    const eudrEnabled = (((org as any)?.enabled_compliance_modules ?? []) as string[]).includes("eudr");
+    if (!eudrEnabled) {
+      return { eudrEnabled: false as const };
+    }
+
+    const { data: parcelles, error } = await supabaseAdmin
+      .from("parcelles")
+      .select("id, culture, boundary_points, eudr_deforestation_free")
+      .eq("organization_id", orgId);
+    if (error) throw new Error(error.message);
+    const rows = (parcelles ?? []) as Array<{
+      id: string; culture: string; boundary_points: unknown; eudr_deforestation_free: boolean | null;
+    }>;
+
+    const total = rows.length;
+    const isCompliant = (p: (typeof rows)[number]) => hasValidBoundary(p.boundary_points) && p.eudr_deforestation_free === true;
+    const compliantCount = rows.filter(isCompliant).length;
+    const readinessRate = total > 0 ? Math.round((compliantCount / total) * 100) : 0;
+
+    return {
+      eudrEnabled: true as const,
+      totalParcelles: total,
+      compliantCount,
+      readinessRate,
+      nonCompliantParcelles: rows.filter((p) => !isCompliant(p)).map((p) => ({
+        id: p.id,
+        culture: p.culture,
+        missingPolygon: !hasValidBoundary(p.boundary_points),
+        missingAttestation: p.eudr_deforestation_free !== true,
+      })),
+    };
+  });
+
+export const attestEudrCompliance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { parcelleId: string; deforestationFree: boolean; notes?: string }) =>
+    z.object({
+      parcelleId: z.string().uuid(),
+      deforestationFree: z.boolean(),
+      notes: z.string().max(1000).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data: parcelle, error: parcErr } = await supabaseAdmin
+      .from("parcelles")
+      .select("id, organization_id")
+      .eq("id", data.parcelleId)
+      .single();
+    if (parcErr || !parcelle || (parcelle as any).organization_id !== orgId) {
+      throw new Error("Parcelle introuvable dans votre organisation.");
+    }
+
+    const notes = data.notes?.trim() || null;
+    const { error } = await supabaseAdmin
+      .from("parcelles")
+      .update({
+        eudr_deforestation_free: data.deforestationFree,
+        eudr_attested_by: context.userId,
+        eudr_attested_at: new Date().toISOString(),
+        eudr_notes: notes,
+      } as any)
+      .eq("id", data.parcelleId);
+    if (error) throw new Error(error.message);
+
+    // Journalisation — jamais bloquante. Réutilise action "modification" /
+    // entity_type "parcelle" (déjà éprouvés) plutôt qu'une nouvelle valeur
+    // d'enum non vérifiable sur la base réelle.
+    try {
+      await supabaseAdmin.from("audit_log").insert({
+        organization_id: orgId,
+        actor_id: context.userId,
+        action: "modification",
+        entity_type: "parcelle",
+        entity_id: data.parcelleId,
+        new_value: {
+          eudr_deforestation_free: data.deforestationFree,
+          eudr_notes: notes,
+        } as any,
+      } as any);
+    } catch (e) {
+      console.warn("audit_log eudr attestation failed (non bloquant)", e);
+    }
+
+    return { success: true as const };
   });

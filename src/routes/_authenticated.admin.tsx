@@ -88,6 +88,7 @@ function AdminDashboard() {
   const [orgLoaded, setOrgLoaded] = useState(false);
   const [orgName, setOrgName] = useState("");
   const [orgModules, setOrgModules] = useState<string[]>(MODULES);
+  const [orgComplianceModules, setOrgComplianceModules] = useState<string[]>([]);
   const [orgDelay, setOrgDelay] = useState<number>(48);
   const [savingOrg, setSavingOrg] = useState(false);
 
@@ -100,6 +101,7 @@ function AdminDashboard() {
       const org = await fetchOrgSettings({ data: undefined as any });
       setOrgName(org.name);
       setOrgModules(org.enabled_modules);
+      setOrgComplianceModules(org.enabled_compliance_modules);
       setOrgDelay(org.modification_request_delay_hours);
       setOrgLoaded(true);
       // Le module pré-sélectionné du formulaire d'invitation doit rester
@@ -112,6 +114,10 @@ function AdminDashboard() {
 
   function toggleOrgModule(m: string) {
     setOrgModules(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]));
+  }
+
+  function toggleEudrCompliance() {
+    setOrgComplianceModules(prev => (prev.includes("eudr") ? prev.filter(x => x !== "eudr") : [...prev, "eudr"]));
   }
 
   async function submitOrgSettings(e: React.FormEvent) {
@@ -130,6 +136,7 @@ function AdminDashboard() {
         data: {
           name: orgName.trim(),
           enabledModules: orgModules,
+          enabledComplianceModules: orgComplianceModules,
           modificationRequestDelayHours: Math.max(1, Math.round(orgDelay)),
         },
       });
@@ -396,6 +403,26 @@ function AdminDashboard() {
               {orgModules.length === 0 && (
                 <p className="mt-1 text-xs text-destructive">Au moins un module doit rester activé.</p>
               )}
+            </div>
+
+            <div>
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Extensions de conformité</span>
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                  orgComplianceModules.includes("eudr") ? "border-gold bg-gold/10 text-gold" : "border-border text-muted-foreground"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={orgComplianceModules.includes("eudr")}
+                  onChange={toggleEudrCompliance}
+                  className="accent-[var(--gold)]"
+                />
+                Conformité EUDR
+              </label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Extension du module Agriculture — n'apparaît que si ce module est activé.
+              </p>
             </div>
 
             <label className="block">

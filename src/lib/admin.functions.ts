@@ -13,6 +13,9 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const MODULE_TYPES = ["agro", "health", "ngo", "generic"] as const;
 const APP_ROLES = ["agent", "supervisor", "admin"] as const;
+// Modules de conformité — extensions optionnelles d'un module métier (EUDR
+// est une extension d'agro), jamais un module à part entière.
+const COMPLIANCE_MODULES = ["eudr"] as const;
 type ModuleTypeStr = (typeof MODULE_TYPES)[number];
 
 async function assertAdminAndGetOrg(supabase: any, userId: string): Promise<string> {
@@ -143,7 +146,7 @@ export const getOrgSettings = createServerFn({ method: "POST" })
 
     const { data: org, error } = await supabaseAdmin
       .from("organizations")
-      .select("id, name, enabled_modules, modification_request_delay_hours")
+      .select("id, name, enabled_modules, enabled_compliance_modules, modification_request_delay_hours")
       .eq("id", orgId)
       .single();
     if (error || !org) throw new Error("Organisation introuvable.");
@@ -152,19 +155,26 @@ export const getOrgSettings = createServerFn({ method: "POST" })
       id: (org as any).id as string,
       name: ((org as any).name ?? "") as string,
       enabled_modules: (((org as any).enabled_modules ?? [...MODULE_TYPES]) as string[]),
+      enabled_compliance_modules: (((org as any).enabled_compliance_modules ?? []) as string[]),
       modification_request_delay_hours: (org as any).modification_request_delay_hours as number,
     };
   });
 
 export const updateOrgSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { name?: string; enabledModules?: string[]; modificationRequestDelayHours?: number }) =>
+  .inputValidator((d: {
+    name?: string;
+    enabledModules?: string[];
+    enabledComplianceModules?: string[];
+    modificationRequestDelayHours?: number;
+  }) =>
     z.object({
       name: z.string().min(1).max(200).optional(),
       enabledModules: z
         .array(z.enum(MODULE_TYPES))
         .min(1, "Au moins un module doit rester activé.")
         .optional(),
+      enabledComplianceModules: z.array(z.enum(COMPLIANCE_MODULES)).optional(),
       modificationRequestDelayHours: z.number().int().min(1).max(720).optional(),
     }).parse(d),
   )
@@ -174,6 +184,9 @@ export const updateOrgSettings = createServerFn({ method: "POST" })
     const patch: Record<string, unknown> = {};
     if (data.name !== undefined) patch.name = data.name.trim();
     if (data.enabledModules !== undefined) patch.enabled_modules = Array.from(new Set(data.enabledModules));
+    if (data.enabledComplianceModules !== undefined) {
+      patch.enabled_compliance_modules = Array.from(new Set(data.enabledComplianceModules));
+    }
     if (data.modificationRequestDelayHours !== undefined) {
       patch.modification_request_delay_hours = data.modificationRequestDelayHours;
     }
