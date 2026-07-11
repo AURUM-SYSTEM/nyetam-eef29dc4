@@ -9,7 +9,7 @@
 //      pas sûr à évaluer côté serveur ; le chargement dynamique dans un
 //      useEffect garantit qu'il ne s'exécute jamais pendant le rendu SSR.
 import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polygon, LayersControl, LayerGroup, Pane, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polygon, LayersControl, LayerGroup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./leaflet-theme.css";
@@ -24,8 +24,10 @@ const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
 // Couche de référence (noms de lieux, routes, frontières) superposée à
 // l'imagerie satellite — Esri ne fournit ces labels que via ce service
 // séparé (contrairement à OSM qui les intègre déjà à ses tuiles "Plan").
+// Les deux TileLayer partagent le même pane Leaflet par défaut (tilePane) ;
+// `zIndex` (option native de GridLayer, pas une pane séparée) suffit à
+// garantir que les labels se dessinent au-dessus de l'imagerie.
 const SATELLITE_LABELS_TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
-const SATELLITE_LABELS_PANE = "aurum-satellite-labels";
 
 // Bascule Plan / Satellite — OpenStreetMap reste la vue par défaut. La
 // couche de labels n'existe qu'à l'intérieur du groupe "Satellite" : elle
@@ -38,13 +40,8 @@ function BaseLayers() {
       </LayersControl.BaseLayer>
       <LayersControl.BaseLayer name="Satellite">
         <LayerGroup>
-          <TileLayer attribution={SATELLITE_ATTRIBUTION} url={SATELLITE_TILE_URL} />
-          {/* zIndex 450 : au-dessus des tuiles (tilePane=200) et en dessous
-              des marqueurs (markerPane=600) — les labels ne doivent jamais
-              masquer les points de la carte. */}
-          <Pane name={SATELLITE_LABELS_PANE} style={{ zIndex: 450 }}>
-            <TileLayer url={SATELLITE_LABELS_TILE_URL} />
-          </Pane>
+          <TileLayer attribution={SATELLITE_ATTRIBUTION} url={SATELLITE_TILE_URL} zIndex={1} />
+          <TileLayer url={SATELLITE_LABELS_TILE_URL} zIndex={2} />
         </LayerGroup>
       </LayersControl.BaseLayer>
     </LayersControl>
