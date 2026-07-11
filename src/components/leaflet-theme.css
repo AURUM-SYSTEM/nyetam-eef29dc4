@@ -26,6 +26,20 @@
   background: color-mix(in oklch, var(--gold) 15%, var(--card));
 }
 
+.aurum-leaflet .leaflet-control-layers {
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid color-mix(in oklch, var(--gold) 35%, transparent);
+}
+
+.aurum-leaflet .leaflet-control-layers-toggle {
+  filter: invert(0.8);
+}
+
+.aurum-leaflet .leaflet-control-layers-selector {
+  accent-color: var(--gold);
+}
+
 .aurum-leaflet .leaflet-popup-content-wrapper,
 .aurum-leaflet .leaflet-popup-tip {
   background: var(--card);

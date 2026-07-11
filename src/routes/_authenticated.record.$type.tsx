@@ -268,7 +268,7 @@ function RecordPage() {
   const [forceReason, setForceReason] = useState("");
 
   // Capture de périmètre (polygone) — complément du point unique existant.
-  const [boundaryPoints, setBoundaryPoints] = useState<Array<{ lat: number; lng: number }>>([]);
+  const [boundaryPoints, setBoundaryPoints] = useState<Array<{ lat: number; lng: number; accuracy?: number }>>([]);
   const [boundaryClosed, setBoundaryClosed] = useState(false);
   const [capturingBoundaryPoint, setCapturingBoundaryPoint] = useState(false);
 
@@ -359,7 +359,10 @@ function RecordPage() {
     try {
       const p = await captureGps();
       if (!p) { toast.error("Position GPS indisponible"); return; }
-      setBoundaryPoints(prev => [...prev, { lat: p.lat, lng: p.lng }]);
+      setBoundaryPoints(prev => [...prev, { lat: p.lat, lng: p.lng, accuracy: p.accuracy }]);
+      if (p.accuracy != null && p.accuracy > 20) {
+        toast.warning(`Précision faible pour ce point (±${Math.round(p.accuracy)}m) — essayez un endroit plus dégagé si possible.`);
+      }
     } finally {
       setCapturingBoundaryPoint(false);
     }
@@ -800,9 +803,15 @@ function RecordPage() {
             >
               {gpsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
               {gps
-                ? `GPS capturé : ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}`
+                ? `GPS capturé : ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}${gps.accuracy != null ? ` (précision ±${Math.round(gps.accuracy)}m)` : ""}`
                 : "Capturer ma position GPS"}
             </button>
+            {gps && gps.accuracy != null && gps.accuracy > 20 && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-amber-400">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                Précision faible — essayez un endroit plus dégagé, loin des bâtiments et arbres.
+              </p>
+            )}
           </div>
           <label className="block">
             <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">{t("record.meta_date")}</span>
@@ -930,8 +939,21 @@ function RecordPage() {
                           </button>
                           <span className="text-xs text-muted-foreground">
                             {boundaryPoints.length} point{boundaryPoints.length !== 1 ? "s" : ""} capturé{boundaryPoints.length !== 1 ? "s" : ""}
+                            {(() => {
+                              const last = boundaryPoints[boundaryPoints.length - 1];
+                              return last?.accuracy != null ? ` (précision ±${Math.round(last.accuracy)}m)` : "";
+                            })()}
                           </span>
                         </div>
+                        {(() => {
+                          const last = boundaryPoints[boundaryPoints.length - 1];
+                          return last?.accuracy != null && last.accuracy > 20 ? (
+                            <p className="flex items-center gap-1.5 text-[11px] text-amber-400">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              Précision faible — essayez un endroit plus dégagé, loin des bâtiments et arbres.
+                            </p>
+                          ) : null;
+                        })()}
                         <PerimeterMapPreview points={boundaryPoints} />
                       </div>
                     )}

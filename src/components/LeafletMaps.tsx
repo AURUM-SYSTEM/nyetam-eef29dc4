@@ -9,13 +9,31 @@
 //      pas sûr à évaluer côté serveur ; le chargement dynamique dans un
 //      useEffect garantit qu'il ne s'exécute jamais pendant le rendu SSR.
 import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polygon, LayersControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./leaflet-theme.css";
 
 const TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+// Vue satellite optionnelle — Esri World Imagery, gratuite, sans clé API.
+const SATELLITE_TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
+
+// Bascule Plan / Satellite — OpenStreetMap reste la vue par défaut.
+function BaseLayers() {
+  return (
+    <LayersControl position="topright">
+      <LayersControl.BaseLayer checked name="Plan">
+        <TileLayer attribution={ATTRIBUTION} url={TILE_URL} />
+      </LayersControl.BaseLayer>
+      <LayersControl.BaseLayer name="Satellite">
+        <TileLayer attribution={SATELLITE_ATTRIBUTION} url={SATELLITE_TILE_URL} />
+      </LayersControl.BaseLayer>
+    </LayersControl>
+  );
+}
 
 function coloredDivIcon(color: string): L.DivIcon {
   return L.divIcon({
@@ -72,7 +90,7 @@ export function SupervisorLeafletMap({ markers }: { markers: SupervisorMapMarker
       scrollWheelZoom={false}
       className="aurum-leaflet h-64 w-full rounded-xl border border-border"
     >
-      <TileLayer attribution={ATTRIBUTION} url={TILE_URL} />
+      <BaseLayers />
       <FitBounds points={points} />
       {markers.map((m) => (
         <Marker key={m.id} position={[m.lat, m.lng]} icon={coloredDivIcon(m.moduleColor)}>
@@ -121,7 +139,7 @@ export function ParcelleLeafletMap({
       dragging={hasPolygon}
       className="aurum-leaflet h-36 w-36 shrink-0 rounded-lg border border-border"
     >
-      <TileLayer attribution={ATTRIBUTION} url={TILE_URL} />
+      <BaseLayers />
       <FitBounds points={points} />
       {hasPolygon ? (
         <Polygon positions={points} pathOptions={{ color: "#C9A84C", fillColor: "#C9A84C", fillOpacity: 0.25, weight: 2 }} />

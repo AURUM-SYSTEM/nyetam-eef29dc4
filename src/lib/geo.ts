@@ -33,7 +33,7 @@ export async function captureGps(timeoutMs = 10_000): Promise<CapturedLocation |
         clearTimeout(t);
         done(null);
       },
-      { enableHighAccuracy: false, timeout: timeoutMs, maximumAge: 5 * 60_000 },
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 5 * 60_000 },
     );
   });
 }
