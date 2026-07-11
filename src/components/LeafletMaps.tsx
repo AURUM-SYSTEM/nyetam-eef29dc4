@@ -9,7 +9,7 @@
 //      pas sûr à évaluer côté serveur ; le chargement dynamique dans un
 //      useEffect garantit qu'il ne s'exécute jamais pendant le rendu SSR.
 import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polygon, LayersControl, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polygon, LayersControl, LayerGroup, Pane, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./leaflet-theme.css";
@@ -21,7 +21,15 @@ const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">Op
 const SATELLITE_TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const SATELLITE_ATTRIBUTION = "Tiles &copy; Esri";
 
-// Bascule Plan / Satellite — OpenStreetMap reste la vue par défaut.
+// Couche de référence (noms de lieux, routes, frontières) superposée à
+// l'imagerie satellite — Esri ne fournit ces labels que via ce service
+// séparé (contrairement à OSM qui les intègre déjà à ses tuiles "Plan").
+const SATELLITE_LABELS_TILE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
+const SATELLITE_LABELS_PANE = "aurum-satellite-labels";
+
+// Bascule Plan / Satellite — OpenStreetMap reste la vue par défaut. La
+// couche de labels n'existe qu'à l'intérieur du groupe "Satellite" : elle
+// s'active/se désactive donc automatiquement avec lui, jamais séparément.
 function BaseLayers() {
   return (
     <LayersControl position="topright">
@@ -29,7 +37,15 @@ function BaseLayers() {
         <TileLayer attribution={ATTRIBUTION} url={TILE_URL} />
       </LayersControl.BaseLayer>
       <LayersControl.BaseLayer name="Satellite">
-        <TileLayer attribution={SATELLITE_ATTRIBUTION} url={SATELLITE_TILE_URL} />
+        <LayerGroup>
+          <TileLayer attribution={SATELLITE_ATTRIBUTION} url={SATELLITE_TILE_URL} />
+          {/* zIndex 450 : au-dessus des tuiles (tilePane=200) et en dessous
+              des marqueurs (markerPane=600) — les labels ne doivent jamais
+              masquer les points de la carte. */}
+          <Pane name={SATELLITE_LABELS_PANE} style={{ zIndex: 450 }}>
+            <TileLayer url={SATELLITE_LABELS_TILE_URL} />
+          </Pane>
+        </LayerGroup>
       </LayersControl.BaseLayer>
     </LayersControl>
   );
