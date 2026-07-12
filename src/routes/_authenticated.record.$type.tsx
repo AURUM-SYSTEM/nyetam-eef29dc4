@@ -5,7 +5,8 @@ import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudO
 import { toast } from "sonner";
 import {
   saveAudio, enqueue, savePhoto, saveVideo, saveMissionFormsCache, getMissionFormsCache,
-  type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm,
+  saveParcellesCache, getParcellesCache,
+  type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm, type CachedParcelle,
 } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
@@ -265,10 +266,16 @@ function RecordPage() {
   const isParcelleMission = isParcelleCreationMission || isParcelleSelectionMission;
 
   const [parcelleMode, setParcelleMode] = useState<"existing" | "new">("existing");
-  const [parcelleList, setParcelleList] = useState<Array<{
-    id: string; culture: string; surfaceHa: number | null; cooperativeName: string | null;
-  }>>([]);
+  const [parcelleList, setParcelleList] = useState<CachedParcelle[]>([]);
   const [parcellesLoading, setParcellesLoading] = useState(false);
+  // Missions "existing_only" (visite_parcelle / suivi_parcelle) uniquement :
+  // hors-ligne sans aucun cache local, la sélection de parcelle — pourtant
+  // obligatoire pour ces missions — est tout simplement impossible. On le
+  // signale explicitement plutôt que de laisser passer une saisie orpheline.
+  const [parcellesOfflineNoCache, setParcellesOfflineNoCache] = useState(false);
+  // Bloque le démarrage/l'envoi de la saisie : la mission exige une parcelle
+  // liée, mais la liste n'a jamais été téléchargée et le réseau est absent.
+  const parcelleSelectionUnavailable = isParcelleSelectionMission && parcellesOfflineNoCache;
   const [selectedParcelleId, setSelectedParcelleId] = useState("");
   const [coopNames, setCoopNames] = useState<string[]>([]);
   const [producerNames, setProducerNames] = useState<string[]>([]);
@@ -299,13 +306,23 @@ function RecordPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionKey]);
 
-  // Chargement des parcelles et coopératives de l'organisation (en ligne uniquement)
+  // Chargement des parcelles et coopératives de l'organisation.
+  // recensement_plantations (create_only) : comportement inchangé — chargé
+  // en ligne uniquement, silencieux et non bloquant hors-ligne (la mission
+  // ne nécessite pas de liste, juste des suggestions coop/producteur).
+  // visite_parcelle / suivi_parcelle (existing_only) : réseau d'abord, repli
+  // sur le cache IndexedDB (offline-store.ts) — la liste est indispensable
+  // à la sélection obligatoire, donc mise en cache à chaque succès réseau
+  // et relue hors-ligne, avec un message explicite si aucun cache n'existe.
+  const parcellesCacheKey = profile?.id ?? "default";
   useEffect(() => {
-    if (!isParcelleMission || !online) return;
+    if (!isParcelleMission) return;
     let cancelled = false;
     (async () => {
       setParcellesLoading(true);
+      if (isParcelleSelectionMission) setParcellesOfflineNoCache(false);
       try {
+        if (!online) throw new Error("offline");
         const [p, c, pr] = await Promise.all([
           fetchParcelles({ data: undefined as any }),
           fetchCooperatives({ data: undefined as any }),
@@ -315,15 +332,33 @@ function RecordPage() {
         setParcelleList(p.parcelles);
         setCoopNames(c.cooperatives.map(x => x.name));
         setProducerNames(pr.producers.map(x => x.fullName));
+        if (isParcelleSelectionMission) {
+          setParcellesOfflineNoCache(false);
+          void saveParcellesCache(parcellesCacheKey, p.parcelles);
+        }
       } catch {
-        // silencieux : la saisie reste possible sans liaison parcelle
+        if (!isParcelleSelectionMission) {
+          // recensement_plantations hors-ligne : pas de liste requise, juste
+          // pas de suggestions coop/producteur — comportement inchangé.
+          if (!cancelled) setParcelleList([]);
+        } else {
+          const cached = await getParcellesCache(parcellesCacheKey);
+          if (cancelled) return;
+          if (cached) {
+            setParcelleList(cached);
+            setParcellesOfflineNoCache(false);
+          } else {
+            setParcelleList([]);
+            setParcellesOfflineNoCache(true);
+          }
+        }
       } finally {
         if (!cancelled) setParcellesLoading(false);
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isParcelleMission, online]);
+  }, [isParcelleMission, isParcelleSelectionMission, online, parcellesCacheKey]);
 
   // Vérification automatique des doublons GPS dès qu'une position est capturée
   // en mode "Nouvelle parcelle"
@@ -661,6 +696,10 @@ function RecordPage() {
 
   async function start() {
     if (!supported) return;
+    if (parcelleSelectionUnavailable) {
+      toast.error("Connecte-toi au moins une fois en ligne pour télécharger la liste de tes parcelles avant de saisir cette mission.");
+      return;
+    }
     const stream = await ensureMicAccess();
     if (!stream) return;
     const mime = pickMimeType();
@@ -724,6 +763,10 @@ function RecordPage() {
   async function submitManual() {
     const tx = manualText.trim();
     if (!tx) { toast.error("Texte vide."); return; }
+    if (parcelleSelectionUnavailable) {
+      toast.error("Connecte-toi au moins une fois en ligne pour télécharger la liste de tes parcelles avant de saisir cette mission.");
+      return;
+    }
     setSaving(true);
     try {
       await enqueue({
@@ -855,7 +898,14 @@ function RecordPage() {
             <Sprout className="h-3.5 w-3.5" /> Parcelle{isParcelleSelectionMission ? " *" : ""}
           </h2>
 
-          {!online ? (
+          {isParcelleSelectionMission && parcellesOfflineNoCache ? (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+              <CloudOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+              <p className="text-sm text-amber-300">
+                Connecte-toi au moins une fois en ligne pour télécharger la liste de tes parcelles. La saisie pour cette mission est bloquée tant qu'aucune parcelle n'est disponible.
+              </p>
+            </div>
+          ) : isParcelleCreationMission && !online ? (
             <p className="text-sm text-muted-foreground">
               La liaison à une parcelle nécessite une connexion. La saisie reste possible : le document ne sera simplement pas rattaché à une parcelle.
             </p>
@@ -1186,7 +1236,7 @@ function RecordPage() {
           <div className="mt-8 flex flex-col items-center">
             <button
               onClick={recording ? stopAndSave : start}
-              disabled={!supported || saving}
+              disabled={!supported || saving || (!recording && parcelleSelectionUnavailable)}
               className={`flex h-32 w-32 items-center justify-center rounded-full transition ${
                 recording ? "bg-destructive pulse-rec" : "btn-gold"
               } disabled:opacity-40`}
@@ -1209,7 +1259,7 @@ function RecordPage() {
           />
           <button
             onClick={submitManual}
-            disabled={saving || !manualText.trim()}
+            disabled={saving || !manualText.trim() || parcelleSelectionUnavailable}
             className="mt-4 w-full rounded-xl btn-gold px-6 py-4 text-base disabled:opacity-40"
           >
             {t("record.manual_submit")}

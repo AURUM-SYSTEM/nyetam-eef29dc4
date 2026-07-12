@@ -19,11 +19,15 @@
 // DB_VERSION 6 : ajout de l'object store `missionFormsCache` — dernière
 // copie connue de `mission_forms` par module, pour que l'écran de saisie
 // reste utilisable hors-ligne (voir useMissionForms).
+// DB_VERSION 7 : ajout de l'object store `parcellesCache` — dernière copie
+// connue de listParcelles par agent, pour que la sélection obligatoire de
+// parcelle (missions visite_parcelle / suivi_parcelle) reste possible
+// hors-ligne (voir useParcellesCache dans _authenticated.record.$type.tsx).
 // ─────────────────────────────────────────────────────────────────────────────
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "aurum-offline";
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 export type DocType =
   | "rapport"
@@ -95,6 +99,21 @@ export type MissionForm = {
 type MissionFormsCacheRecord = {
   moduleType: string;
   forms: MissionForm[];
+  cachedAt: number;
+};
+
+// ── Parcelles (AGRO) — liste de l'organisation retournée par listParcelles,
+// nécessaire à la sélection obligatoire des missions visite_parcelle /
+// suivi_parcelle.
+export type CachedParcelle = {
+  id: string;
+  culture: string;
+  surfaceHa: number | null;
+  cooperativeName: string | null;
+};
+type ParcellesCacheRecord = {
+  userId: string;
+  parcelles: CachedParcelle[];
   cachedAt: number;
 };
 
@@ -172,6 +191,9 @@ function getDB() {
         if (!db.objectStoreNames.contains("missionFormsCache")) {
           db.createObjectStore("missionFormsCache", { keyPath: "moduleType" });
         }
+        if (!db.objectStoreNames.contains("parcellesCache")) {
+          db.createObjectStore("parcellesCache", { keyPath: "userId" });
+        }
       },
     });
   }
@@ -243,6 +265,18 @@ export async function getMissionFormsCache(moduleType: string): Promise<MissionF
   const db = await getDB();
   const rec = (await db.get("missionFormsCache", moduleType)) as MissionFormsCacheRecord | undefined;
   return rec?.forms;
+}
+
+export async function saveParcellesCache(userId: string, parcelles: CachedParcelle[]) {
+  const db = await getDB();
+  const rec: ParcellesCacheRecord = { userId, parcelles, cachedAt: Date.now() };
+  await db.put("parcellesCache", rec);
+}
+
+export async function getParcellesCache(userId: string): Promise<CachedParcelle[] | undefined> {
+  const db = await getDB();
+  const rec = (await db.get("parcellesCache", userId)) as ParcellesCacheRecord | undefined;
+  return rec?.parcelles;
 }
 
 export async function enqueue(
