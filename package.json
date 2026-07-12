@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "postbuild": "node scripts/generate-sw-manifest.mjs",
     "build:dev": "vite build --mode development",
     "preview": "wrangler dev",
     "deploy": "npm run build && wrangler deploy",

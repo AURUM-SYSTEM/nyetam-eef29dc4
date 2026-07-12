@@ -1,24 +1,29 @@
 /* AURUM service worker — additive offline shell.
  * Strategy:
- *   - Install: fetch "/" fresh, discover every same-origin JS/CSS bundle it
- *     references (script/link tags — entry chunk, vendor chunks, route
- *     chunks preloaded via modulepreload) and cache all of them alongside
- *     the HTML itself. This is what makes offline work after a SINGLE
- *     online visit — without it, only the HTML shell was cached and the JS
- *     it depends on was cached lazily (or never, if the entry bundle loaded
- *     before the SW existed), so a fresh offline load rendered a blank page.
+ *   - Install: precache "/" plus *every* hashed JS/CSS bundle the build
+ *     produced, listed in /asset-manifest.json (regenerated on every build
+ *     by scripts/generate-sw-manifest.mjs — never hand-maintained, so it
+ *     can't drift out of sync with the hashed filenames). This matters
+ *     because the app is code-split per route: only precaching the chunks
+ *     referenced by "/" left every other route's chunk (e.g. /login) to be
+ *     cached lazily on first visit — if that visit never happened online,
+ *     a dynamic import() for that chunk had no fallback and threw "Failed
+ *     to fetch dynamically imported module" the moment it was needed
+ *     offline (e.g. a redirect to /login triggered while offline).
+ *     Falls back to scraping "/" for referenced .js/.css if the manifest
+ *     is missing (e.g. a dev build that skipped the postbuild step).
  *   - HTML navigations: Network-first → cache fallback → /offline.html
  *   - Same-origin static assets (js/css/img/font): Stale-while-revalidate
  *   - Everything else (Supabase, APIs, cross-origin): passthrough
  * Cache name is versioned so we can purge old shells on update.
  */
-const CACHE = "aurum-cache-v2";
+const CACHE = "aurum-cache-v3";
 const OFFLINE_URL = "/offline.html";
+const ASSET_MANIFEST_URL = "/asset-manifest.json";
 const STATIC_PRECACHE = [OFFLINE_URL, "/manifest.json", "/icon-192.png", "/icon-512.png"];
 
-// Same-origin script/link URLs referenced by the app shell HTML — this is
-// how the entry bundle, its vendor chunks and any modulepreload'd route
-// chunks get discovered without needing a build-time asset manifest.
+// Same-origin script/link URLs referenced by the app shell HTML — fallback
+// discovery used only if the build-generated asset manifest is unavailable.
 function extractShellAssetUrls(html) {
   const urls = new Set();
   const re = /(?:src|href)="(\/[^"?#]+\.(?:js|css))"/g;
@@ -27,24 +32,45 @@ function extractShellAssetUrls(html) {
   return Array.from(urls);
 }
 
+async function cacheAll(cache, urls) {
+  await Promise.all(
+    urls.map((u) =>
+      fetch(u, { cache: "no-store" })
+        .then((r) => (r.ok ? cache.put(u, r) : null))
+        .catch(() => {})
+    )
+  );
+}
+
 async function precacheAppShell(cache) {
   try {
     const res = await fetch("/", { cache: "no-store" });
-    if (!res.ok) return;
-    const html = await res.clone().text();
-    await cache.put("/", res);
-    const assetUrls = extractShellAssetUrls(html);
-    await Promise.all(
-      assetUrls.map((u) =>
-        fetch(u, { cache: "no-store" })
-          .then((r) => (r.ok ? cache.put(u, r) : null))
-          .catch(() => {})
-      )
-    );
+    if (res.ok) await cache.put("/", res);
   } catch {
-    // Offline at install time (or first install ever) — nothing to precache
-    // yet, the runtime stale-while-revalidate handler will fill the cache
-    // in as the app is used online.
+    // Offline at install time (or first install ever) — "/" will be cached
+    // opportunistically the next time it's fetched online.
+  }
+
+  try {
+    const manifestRes = await fetch(ASSET_MANIFEST_URL, { cache: "no-store" });
+    if (manifestRes.ok) {
+      const { assets } = await manifestRes.json();
+      if (Array.isArray(assets) && assets.length > 0) {
+        await cacheAll(cache, assets);
+        return;
+      }
+    }
+  } catch {
+    // Fall through to HTML-scrape discovery below.
+  }
+
+  // Fallback: no usable manifest — discover assets from "/"'s own markup.
+  try {
+    const cachedRoot = await cache.match("/");
+    const html = cachedRoot ? await cachedRoot.clone().text() : null;
+    if (html) await cacheAll(cache, extractShellAssetUrls(html));
+  } catch {
+    // Nothing more we can do offline-first here.
   }
 }
 
