@@ -16,11 +16,14 @@
 //
 // DB_VERSION 5 : ajout de l'object store `videos` (courtes preuves vidéo
 // terrain, ≤ 60s) — additif, ne modifie aucun store existant.
+// DB_VERSION 6 : ajout de l'object store `missionFormsCache` — dernière
+// copie connue de `mission_forms` par module, pour que l'écran de saisie
+// reste utilisable hors-ligne (voir useMissionForms).
 // ─────────────────────────────────────────────────────────────────────────────
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "aurum-offline";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 export type DocType =
   | "rapport"
@@ -71,6 +74,28 @@ export type GpsLocation = {
   lng: number;
   accuracy?: number;
   capturedAt?: number;
+};
+
+// ── Formulaires de mission (mission_forms) — configurés en base, jamais
+// codés en dur. Un module peut avoir plusieurs missions ; chaque mission
+// définit ses propres champs (voir _authenticated.record.$type.tsx).
+export type MissionFieldDef = {
+  key: string;
+  label: string;
+  type: "text" | "number" | "select";
+  unit?: string;
+  required?: boolean;
+  options?: string[];
+};
+export type MissionForm = {
+  mission_key: string;
+  mission_label: string;
+  fields: MissionFieldDef[];
+};
+type MissionFormsCacheRecord = {
+  moduleType: string;
+  forms: MissionForm[];
+  cachedAt: number;
 };
 
 export type QueueMeta = {
@@ -144,6 +169,9 @@ function getDB() {
         if (!db.objectStoreNames.contains("videos")) {
           db.createObjectStore("videos", { keyPath: "id" });
         }
+        if (!db.objectStoreNames.contains("missionFormsCache")) {
+          db.createObjectStore("missionFormsCache", { keyPath: "moduleType" });
+        }
       },
     });
   }
@@ -203,6 +231,18 @@ export async function getVideo(id: string): Promise<VideoRecord | undefined> {
 export async function deleteVideo(id: string) {
   const db = await getDB();
   await db.delete("videos", id);
+}
+
+export async function saveMissionFormsCache(moduleType: string, forms: MissionForm[]) {
+  const db = await getDB();
+  const rec: MissionFormsCacheRecord = { moduleType, forms, cachedAt: Date.now() };
+  await db.put("missionFormsCache", rec);
+}
+
+export async function getMissionFormsCache(moduleType: string): Promise<MissionForm[] | undefined> {
+  const db = await getDB();
+  const rec = (await db.get("missionFormsCache", moduleType)) as MissionFormsCacheRecord | undefined;
+  return rec?.forms;
 }
 
 export async function enqueue(

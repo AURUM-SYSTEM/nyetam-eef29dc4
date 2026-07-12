@@ -4,8 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2, Camera, Video, X, VideoOff, AlertTriangle, CheckCircle2, Sprout } from "lucide-react";
 import { toast } from "sonner";
 import {
-  saveAudio, enqueue, savePhoto, saveVideo,
-  type QueueMeta, type DocType, type GpsLocation, type ModuleType,
+  saveAudio, enqueue, savePhoto, saveVideo, saveMissionFormsCache, getMissionFormsCache,
+  type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm,
 } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
@@ -150,42 +150,56 @@ type LocalVideo = { id: string; previewUrl: string; durationMs: number };
 // Un module peut avoir plusieurs missions ; chaque mission définit ses
 // propres champs. Voir docs/ARCHITECTURE — principe "Collecte guidée par
 // le contexte".
-type MissionFieldDef = {
-  key: string;
-  label: string;
-  type: "text" | "number" | "select";
-  unit?: string;
-  required?: boolean;
-  options?: string[];
-};
-type MissionForm = {
-  mission_key: string;
-  mission_label: string;
-  fields: MissionFieldDef[];
-};
-
+//
+// Réseau d'abord, repli sur le cache IndexedDB (offline-store.ts) :
+// - En ligne, la requête réussit → on affiche le résultat et on rafraîchit
+//   silencieusement le cache local pour la prochaine fois hors-ligne.
+// - Hors-ligne (ou erreur réseau) avec un cache existant → on sert ce cache
+//   sans bloquer l'agent.
+// - Hors-ligne sans aucun cache (tout premier lancement, jamais été en
+//   ligne) → aucun formulaire à proposer, on l'indique clairement plutôt
+//   que de laisser l'écran silencieusement vide.
 function useMissionForms(moduleType: ModuleType | undefined) {
   const [forms, setForms] = useState<MissionForm[]>([]);
   const [loading, setLoading] = useState(true);
+  const [offlineNoCache, setOfflineNoCache] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    const mt = moduleType ?? "generic";
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("mission_forms")
-        .select("mission_key, mission_label, fields")
-        .eq("module_type", moduleType ?? "generic")
-        .order("sort_order", { ascending: true });
-      if (!cancelled) {
-        if (!error && data) setForms(data as unknown as MissionForm[]);
+      setOfflineNoCache(false);
+      try {
+        const { data, error } = await supabase
+          .from("mission_forms")
+          .select("mission_key, mission_label, fields")
+          .eq("module_type", mt)
+          .order("sort_order", { ascending: true });
+        if (error) throw error;
+        const fetched = (data ?? []) as unknown as MissionForm[];
+        if (cancelled) return;
+        setForms(fetched);
+        setOfflineNoCache(false);
+        setLoading(false);
+        void saveMissionFormsCache(mt, fetched);
+      } catch {
+        const cached = await getMissionFormsCache(mt);
+        if (cancelled) return;
+        if (cached) {
+          setForms(cached);
+          setOfflineNoCache(false);
+        } else {
+          setForms([]);
+          setOfflineNoCache(true);
+        }
         setLoading(false);
       }
     })();
     return () => { cancelled = true; };
   }, [moduleType]);
 
-  return { forms, loading };
+  return { forms, loading, offlineNoCache };
 }
 
 function RecordPage() {
@@ -198,7 +212,7 @@ function RecordPage() {
   const online = useOnline();
   const { t, lang } = useI18n();
 
-  const { forms: missionForms, loading: missionFormsLoading } = useMissionForms(moduleFromProfile);
+  const { forms: missionForms, loading: missionFormsLoading, offlineNoCache: missionFormsOfflineNoCache } = useMissionForms(moduleFromProfile);
   const [missionKey, setMissionKey] = useState<string>("");
 
   useEffect(() => {
@@ -760,7 +774,14 @@ function RecordPage() {
           déroulant n'apparaît que si le module a réellement plusieurs
           missions ; sinon l'unique mission disponible est sélectionnée
           automatiquement et affichée en lecture seule. */}
-      {missionForms.length > 1 ? (
+      {missionFormsOfflineNoCache ? (
+        <section className="mt-6 flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <CloudOff className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+          <p className="text-sm text-amber-300">
+            Connecte-toi au moins une fois en ligne pour télécharger les formulaires de mission.
+          </p>
+        </section>
+      ) : missionForms.length > 1 ? (
         <section className="mt-6 glass-card rounded-2xl p-4">
           <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">Type de mission</h2>
           <select
