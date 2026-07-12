@@ -5,7 +5,7 @@ import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudO
 import { toast } from "sonner";
 import {
   saveAudio, enqueue, savePhoto, saveVideo, saveMissionFormsCache, getMissionFormsCache,
-  saveParcellesCache, getParcellesCache,
+  saveParcellesCache, getParcellesCache, saveRecordDraft, getRecordDraft, clearRecordDraft,
   type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm, type CachedParcelle,
 } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
@@ -218,11 +218,45 @@ function RecordPage() {
   const { forms: missionForms, loading: missionFormsLoading, offlineNoCache: missionFormsOfflineNoCache } = useMissionForms(moduleFromProfile);
   const [missionKey, setMissionKey] = useState<string>("");
 
+  // Brouillon persistant (mission active, champs saisis, métadonnées) — tenté
+  // une seule fois au montage, avant toute sélection par défaut. Corrige un
+  // bug où un simple rechargement de page réinitialisait systématiquement la
+  // mission vers la première par défaut (ex. "Recensement des plantations"),
+  // empêchant en pratique toute saisie sur "Visite de parcelle"/"Suivi de
+  // parcelle" après un rechargement.
+  const [draftCheckDone, setDraftCheckDone] = useState(false);
   useEffect(() => {
+    (async () => {
+      try {
+        const draft = await getRecordDraft();
+        debugLog("[DRAFT DEBUG] getRecordDraft on mount", { found: !!draft, missionKey: draft?.missionKey });
+        if (draft) {
+          if (draft.missionKey) setMissionKey(draft.missionKey);
+          if (draft.fieldValues) setFieldValues(draft.fieldValues);
+          if (draft.agentName) setAgentName(draft.agentName);
+          if (draft.location) setLocation(draft.location);
+          if (draft.docDate) setDocDate(draft.docDate);
+          if (draft.docTime) setDocTime(draft.docTime);
+          if (draft.gps) setGps(draft.gps);
+        }
+      } catch {
+        // Pas de brouillon récupérable — on repart d'un état neutre.
+      } finally {
+        setDraftCheckDone(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // Attend la tentative de restauration du brouillon avant de retomber sur
+    // la première mission par défaut, sinon le défaut gagnerait toujours la
+    // course contre la lecture (asynchrone) du brouillon.
+    if (!draftCheckDone) return;
     if (missionForms.length > 0 && !missionKey) {
       setMissionKey(missionForms[0].mission_key);
     }
-  }, [missionForms, missionKey]);
+  }, [missionForms, missionKey, draftCheckDone]);
 
   const activeMission = missionForms.find(m => m.mission_key === missionKey);
 
@@ -263,10 +297,24 @@ function RecordPage() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
 
-  // Réinitialise les valeurs saisies si l'agent change de mission
+  // Note : la réinitialisation des champs saisis quand l'agent change de
+  // mission se fait directement dans le onChange du sélecteur de mission
+  // (pas ici via un effet générique sur `missionKey`) — sinon cet effet se
+  // déclencherait aussi lors de la restauration d'un brouillon persistant et
+  // effacerait les champs qu'on vient tout juste de restaurer.
+
+  // Persiste le brouillon en continu (mission, champs, métadonnées) —
+  // silencieusement, sans bloquer l'agent. Attend la tentative de
+  // restauration initiale pour ne pas écraser un brouillon existant avec
+  // l'état neutre du tout premier rendu.
   useEffect(() => {
-    setFieldValues({});
-  }, [missionKey]);
+    if (!draftCheckDone) return;
+    debugLog("[DRAFT DEBUG] saveRecordDraft", { missionKey });
+    void saveRecordDraft({
+      missionKey, fieldValues, agentName, location, docDate, docTime,
+      gps: gps ?? undefined,
+    });
+  }, [draftCheckDone, missionKey, fieldValues, agentName, location, docDate, docTime, gps]);
 
   // ── AGRO : liaison parcelle (recensement_plantations / visite_parcelle / suivi_parcelle) ──
   // Comportement fixe et exclusif par mission — jamais de bascule manuelle :
@@ -792,6 +840,7 @@ function RecordPage() {
         meta: buildMeta(),
       });
       toast.success(online ? "Enregistré — synchronisation en cours" : "Enregistré localement — sync à la reconnexion");
+      void clearRecordDraft();
       navigate({ to: "/" });
     } catch (e: any) {
       toast.error(e?.message ?? "Erreur sauvegarde locale");
@@ -815,6 +864,7 @@ function RecordPage() {
         meta: buildMeta(),
       });
       toast.success(online ? "Ajouté — synchronisation en cours" : "Ajouté à la file — sync à la reconnexion");
+      void clearRecordDraft();
       navigate({ to: "/" });
     } catch (e: any) {
       toast.error(e?.message ?? "Erreur");
@@ -869,7 +919,7 @@ function RecordPage() {
           <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">Type de mission</h2>
           <select
             value={missionKey}
-            onChange={e => setMissionKey(e.target.value)}
+            onChange={e => { setMissionKey(e.target.value); setFieldValues({}); }}
             className="w-full rounded-lg border border-border bg-input/50 px-3 py-2.5 text-sm outline-none focus:border-gold"
           >
             {missionForms.map(m => (

@@ -23,12 +23,20 @@
 // connue de listParcelles par agent, pour que la sélection obligatoire de
 // parcelle (missions visite_parcelle / suivi_parcelle) reste possible
 // hors-ligne (voir useParcellesCache dans _authenticated.record.$type.tsx).
+// DB_VERSION 8 : ajout de l'object store `recordDraft` — persiste la
+// mission active, les champs saisis et les métadonnées de l'écran de
+// saisie en cours, restaurés au chargement. Corrige un bug où un simple
+// rechargement de page réinitialisait systématiquement la mission vers la
+// première par défaut (ex. "Recensement des plantations"), empêchant de
+// facto toute saisie sur "Visite de parcelle"/"Suivi de parcelle" après un
+// rechargement — la sélection ne survivait jamais assez longtemps pour
+// que la logique de liaison parcelle (et son cache hors-ligne) s'applique.
 // ─────────────────────────────────────────────────────────────────────────────
 import { openDB, type IDBPDatabase } from "idb";
 import { debugLog, debugWarn, debugError } from "./debug-log";
 
 const DB_NAME = "aurum-offline";
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 
 export type DocType =
   | "rapport"
@@ -117,6 +125,22 @@ type ParcellesCacheRecord = {
   parcelles: CachedParcelle[];
   cachedAt: number;
 };
+
+// ── Brouillon de l'écran de saisie (_authenticated.record.$type.tsx) —
+// mission active, champs saisis et métadonnées, persistés en continu et
+// restaurés au chargement afin qu'un rechargement de page (accidentel ou
+// après une coupure réseau) ne réinitialise plus la mission choisie.
+export type RecordDraft = {
+  missionKey: string;
+  fieldValues: Record<string, string>;
+  agentName: string;
+  location: string;
+  docDate: string;
+  docTime: string;
+  gps?: GpsLocation;
+  updatedAt: number;
+};
+type RecordDraftRecord = RecordDraft & { id: "current" };
 
 export type QueueMeta = {
   agentName?: string;
@@ -212,6 +236,9 @@ function getDB() {
         }
         if (!db.objectStoreNames.contains("parcellesCache")) {
           db.createObjectStore("parcellesCache", { keyPath: "userId" });
+        }
+        if (!db.objectStoreNames.contains("recordDraft")) {
+          db.createObjectStore("recordDraft", { keyPath: "id" });
         }
       },
     });
@@ -314,6 +341,25 @@ export async function getParcellesCache(userId: string): Promise<CachedParcelle[
     debugWarn("[IDB DEBUG] getParcellesCache MISS — all keys currently in store:", allKeys);
   }
   return rec?.parcelles;
+}
+
+export async function saveRecordDraft(draft: Omit<RecordDraft, "updatedAt">) {
+  const db = await getDB();
+  const rec: RecordDraftRecord = { ...draft, id: "current", updatedAt: Date.now() };
+  await db.put("recordDraft", rec);
+}
+
+export async function getRecordDraft(): Promise<RecordDraft | undefined> {
+  const db = await getDB();
+  const rec = (await db.get("recordDraft", "current")) as RecordDraftRecord | undefined;
+  if (!rec) return undefined;
+  const { id: _id, ...draft } = rec;
+  return draft;
+}
+
+export async function clearRecordDraft() {
+  const db = await getDB();
+  await db.delete("recordDraft", "current");
 }
 
 export async function enqueue(
