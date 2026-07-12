@@ -14,6 +14,7 @@ import { useSyncEngine } from "@/hooks/use-sync-engine";
 import { I18nProvider, useI18n } from "@/i18n";
 import { applyTheme, getTheme } from "@/lib/profile-store";
 import { registerServiceWorker } from "@/lib/register-sw";
+import { registerChunkErrorReload } from "@/lib/chunk-reload";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -119,7 +120,7 @@ function SyncEngineMount() {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  useEffect(() => { applyTheme(getTheme()); registerServiceWorker(); }, []);
+  useEffect(() => { applyTheme(getTheme()); registerServiceWorker(); registerChunkErrorReload(); }, []);
   return (
     <I18nProvider>
       <QueryClientProvider client={queryClient}>
