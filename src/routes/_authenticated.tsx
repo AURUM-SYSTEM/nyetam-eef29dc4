@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getSessionOnce } from "@/integrations/supabase/session-once";
 import { useAuth } from "@/hooks/use-auth";
 import { withTimeout, TIMEOUT } from "@/lib/with-timeout";
 
@@ -10,7 +11,11 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location }) => {
     if (typeof window === "undefined") return;
 
-    const result = await withTimeout(supabase.auth.getSession(), SESSION_CHECK_TIMEOUT_MS);
+    // getSessionOnce() partage l'appel réseau avec AuthProvider (use-auth.ts)
+    // — sans ça, les deux déclenchaient chacun leur propre vérification lente
+    // (jusqu'à 5s chacun), perçues comme un double délai avant que la page ne
+    // s'affiche.
+    const result = await withTimeout(getSessionOnce(), SESSION_CHECK_TIMEOUT_MS);
     if (result === TIMEOUT) {
       // Pas de réponse rapide (typiquement hors-ligne, pendant que le SDK
       // Supabase retente un rafraîchissement de jeton en arrière-plan) — on
@@ -51,9 +56,14 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthLayout() {
-  const { loading, session } = useAuth();
+  const { loading, session, profile } = useAuth();
 
-  if (loading && !session) {
+  // Un profil déjà en cache (localStorage, restauré instantanément par
+  // AuthProvider) suffit à afficher l'écran tout de suite — inutile
+  // d'attendre la confirmation réseau de la session avant de rendre une UI
+  // que l'agent a déjà vue par le passé. La vérification fraîche continue
+  // en arrière-plan et met à jour session/profile normalement à l'arrivée.
+  if (loading && !session && !profile) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-gold" />

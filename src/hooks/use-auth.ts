@@ -1,6 +1,7 @@
 import { createContext, createElement, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { getSessionOnce } from "@/integrations/supabase/session-once";
 import { withTimeout, TIMEOUT } from "@/lib/with-timeout";
 
 const SESSION_INIT_TIMEOUT_MS = 5000;
@@ -106,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // indéfini, indiscernable de "l'app ne charge pas". Passé le délai, on
     // arrête d'attendre et on laisse l'app démarrer sans session confirmée ;
     // onAuthStateChange la mettra à jour dès qu'elle sera disponible.
-    withTimeout(supabase.auth.getSession(), SESSION_INIT_TIMEOUT_MS).then((result) => {
+    withTimeout(getSessionOnce(), SESSION_INIT_TIMEOUT_MS).then((result) => {
       if (result === TIMEOUT) {
         setLoading(false);
         return;
