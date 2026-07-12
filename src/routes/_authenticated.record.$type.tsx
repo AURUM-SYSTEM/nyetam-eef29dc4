@@ -315,9 +315,19 @@ function RecordPage() {
   // à la sélection obligatoire, donc mise en cache à chaque succès réseau
   // et relue hors-ligne, avec un message explicite si aucun cache n'existe.
   const parcellesCacheKey = profile?.id ?? "default";
+
+  // DEBUG TEMPORAIRE — trace le timing exact de résolution de `profile` par
+  // rapport aux appels réseau/cache ci-dessous. À retirer une fois la cause
+  // du cache parcelles vide hors-ligne confirmée.
+  useEffect(() => {
+    console.log("[PARCELLES DEBUG] profile/online changed", { profileId: profile?.id, parcellesCacheKey, online });
+  }, [profile?.id, parcellesCacheKey, online]);
+
   useEffect(() => {
     if (!isParcelleMission) return;
     let cancelled = false;
+    const keyAtRunStart = parcellesCacheKey;
+    console.log("[PARCELLES DEBUG] effect run start", { keyAtRunStart, isParcelleSelectionMission, online, profileId: profile?.id });
     (async () => {
       setParcellesLoading(true);
       if (isParcelleSelectionMission) setParcellesOfflineNoCache(false);
@@ -328,21 +338,31 @@ function RecordPage() {
           fetchCooperatives({ data: undefined as any }),
           fetchProducers({ data: undefined as any }),
         ]);
-        if (cancelled) return;
+        if (cancelled) {
+          console.log("[PARCELLES DEBUG] fetch succeeded but effect run was CANCELLED (superseded by a re-run) — nothing saved", { keyAtRunStart });
+          return;
+        }
+        console.log("[PARCELLES DEBUG] listParcelles fetch SUCCESS", { keyAtRunStart, count: p.parcelles.length, parcelles: p.parcelles });
         setParcelleList(p.parcelles);
         setCoopNames(c.cooperatives.map(x => x.name));
         setProducerNames(pr.producers.map(x => x.fullName));
         if (isParcelleSelectionMission) {
           setParcellesOfflineNoCache(false);
-          void saveParcellesCache(parcellesCacheKey, p.parcelles);
+          console.log("[PARCELLES DEBUG] about to call saveParcellesCache", { keyAtRunStart, count: p.parcelles.length });
+          saveParcellesCache(keyAtRunStart, p.parcelles)
+            .then(() => console.log("[PARCELLES DEBUG] saveParcellesCache promise RESOLVED", { keyAtRunStart }))
+            .catch((err) => console.error("[PARCELLES DEBUG] saveParcellesCache promise REJECTED", { keyAtRunStart, err }));
         }
-      } catch {
+      } catch (err) {
+        console.log("[PARCELLES DEBUG] entered catch branch", { keyAtRunStart, online, isParcelleSelectionMission, err: err instanceof Error ? err.message : err });
         if (!isParcelleSelectionMission) {
           // recensement_plantations hors-ligne : pas de liste requise, juste
           // pas de suggestions coop/producteur — comportement inchangé.
           if (!cancelled) setParcelleList([]);
         } else {
-          const cached = await getParcellesCache(parcellesCacheKey);
+          console.log("[PARCELLES DEBUG] about to call getParcellesCache", { keyAtRunStart });
+          const cached = await getParcellesCache(keyAtRunStart);
+          console.log("[PARCELLES DEBUG] getParcellesCache returned", { keyAtRunStart, cached });
           if (cancelled) return;
           if (cached) {
             setParcelleList(cached);
