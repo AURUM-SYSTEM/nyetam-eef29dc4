@@ -17,6 +17,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
 import { listParcelles, listCooperatives, listProducers, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
+import { debugLog, debugError } from "@/lib/debug-log";
+import { DebugLogPanel } from "@/components/DebugLogPanel";
 
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
@@ -320,14 +322,14 @@ function RecordPage() {
   // rapport aux appels réseau/cache ci-dessous. À retirer une fois la cause
   // du cache parcelles vide hors-ligne confirmée.
   useEffect(() => {
-    console.log("[PARCELLES DEBUG] profile/online changed", { profileId: profile?.id, parcellesCacheKey, online });
+    debugLog("[PARCELLES DEBUG] profile/online changed", { profileId: profile?.id, parcellesCacheKey, online });
   }, [profile?.id, parcellesCacheKey, online]);
 
   useEffect(() => {
     if (!isParcelleMission) return;
     let cancelled = false;
     const keyAtRunStart = parcellesCacheKey;
-    console.log("[PARCELLES DEBUG] effect run start", { keyAtRunStart, isParcelleSelectionMission, online, profileId: profile?.id });
+    debugLog("[PARCELLES DEBUG] effect run start", { keyAtRunStart, isParcelleSelectionMission, online, profileId: profile?.id });
     (async () => {
       setParcellesLoading(true);
       if (isParcelleSelectionMission) setParcellesOfflineNoCache(false);
@@ -339,30 +341,30 @@ function RecordPage() {
           fetchProducers({ data: undefined as any }),
         ]);
         if (cancelled) {
-          console.log("[PARCELLES DEBUG] fetch succeeded but effect run was CANCELLED (superseded by a re-run) — nothing saved", { keyAtRunStart });
+          debugLog("[PARCELLES DEBUG] fetch succeeded but effect run was CANCELLED (superseded by a re-run) — nothing saved", { keyAtRunStart });
           return;
         }
-        console.log("[PARCELLES DEBUG] listParcelles fetch SUCCESS", { keyAtRunStart, count: p.parcelles.length, parcelles: p.parcelles });
+        debugLog("[PARCELLES DEBUG] listParcelles fetch SUCCESS", { keyAtRunStart, count: p.parcelles.length, parcelles: p.parcelles });
         setParcelleList(p.parcelles);
         setCoopNames(c.cooperatives.map(x => x.name));
         setProducerNames(pr.producers.map(x => x.fullName));
         if (isParcelleSelectionMission) {
           setParcellesOfflineNoCache(false);
-          console.log("[PARCELLES DEBUG] about to call saveParcellesCache", { keyAtRunStart, count: p.parcelles.length });
+          debugLog("[PARCELLES DEBUG] about to call saveParcellesCache", { keyAtRunStart, count: p.parcelles.length });
           saveParcellesCache(keyAtRunStart, p.parcelles)
-            .then(() => console.log("[PARCELLES DEBUG] saveParcellesCache promise RESOLVED", { keyAtRunStart }))
-            .catch((err) => console.error("[PARCELLES DEBUG] saveParcellesCache promise REJECTED", { keyAtRunStart, err }));
+            .then(() => debugLog("[PARCELLES DEBUG] saveParcellesCache promise RESOLVED", { keyAtRunStart }))
+            .catch((err) => debugError("[PARCELLES DEBUG] saveParcellesCache promise REJECTED", { keyAtRunStart, err }));
         }
       } catch (err) {
-        console.log("[PARCELLES DEBUG] entered catch branch", { keyAtRunStart, online, isParcelleSelectionMission, err: err instanceof Error ? err.message : err });
+        debugLog("[PARCELLES DEBUG] entered catch branch", { keyAtRunStart, online, isParcelleSelectionMission, err: err instanceof Error ? err.message : err });
         if (!isParcelleSelectionMission) {
           // recensement_plantations hors-ligne : pas de liste requise, juste
           // pas de suggestions coop/producteur — comportement inchangé.
           if (!cancelled) setParcelleList([]);
         } else {
-          console.log("[PARCELLES DEBUG] about to call getParcellesCache", { keyAtRunStart });
+          debugLog("[PARCELLES DEBUG] about to call getParcellesCache", { keyAtRunStart });
           const cached = await getParcellesCache(keyAtRunStart);
-          console.log("[PARCELLES DEBUG] getParcellesCache returned", { keyAtRunStart, cached });
+          debugLog("[PARCELLES DEBUG] getParcellesCache returned", { keyAtRunStart, cached });
           if (cancelled) return;
           if (cached) {
             setParcelleList(cached);
@@ -809,6 +811,7 @@ function RecordPage() {
   const vss = String(videoElapsed % 60).padStart(2, "0");
 
   return (
+    <>
     <div className="px-5 pt-8 pb-32">
       <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> {t("common.back")}
@@ -1296,5 +1299,7 @@ function RecordPage() {
         </button>
       </div>
     </div>
+    <DebugLogPanel />
+    </>
   );
 }

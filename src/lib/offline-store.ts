@@ -25,6 +25,7 @@
 // hors-ligne (voir useParcellesCache dans _authenticated.record.$type.tsx).
 // ─────────────────────────────────────────────────────────────────────────────
 import { openDB, type IDBPDatabase } from "idb";
+import { debugLog, debugWarn, debugError } from "./debug-log";
 
 const DB_NAME = "aurum-offline";
 const DB_VERSION = 7;
@@ -180,16 +181,16 @@ function getDB() {
     // bloquerait silencieusement tout appel getDB() en aval (aucune erreur
     // visible, juste un cache qui semble ne jamais s'écrire). À retirer une
     // fois la cause confirmée.
-    console.log("[IDB DEBUG] opening DB", DB_NAME, "version", DB_VERSION);
+    debugLog("[IDB DEBUG] opening DB", DB_NAME, "version", DB_VERSION);
     _db = openDB(DB_NAME, DB_VERSION, {
       blocked(currentVersion, blockedVersion) {
-        console.error("[IDB DEBUG] openDB BLOCKED — une autre connexion (onglet ?) garde une version antérieure ouverte", { currentVersion, blockedVersion });
+        debugError("[IDB DEBUG] openDB BLOCKED — une autre connexion (onglet ?) garde une version antérieure ouverte", { currentVersion, blockedVersion });
       },
       blocking(currentVersion, blockedVersion) {
-        console.warn("[IDB DEBUG] this connection is BLOCKING a future upgrade", { currentVersion, blockedVersion });
+        debugWarn("[IDB DEBUG] this connection is BLOCKING a future upgrade", { currentVersion, blockedVersion });
       },
       terminated() {
-        console.error("[IDB DEBUG] IndexedDB connection TERMINATED unexpectedly");
+        debugError("[IDB DEBUG] IndexedDB connection TERMINATED unexpectedly");
       },
       upgrade(db) {
         if (!db.objectStoreNames.contains("audios")) {
@@ -217,8 +218,8 @@ function getDB() {
     // DEBUG TEMPORAIRE — ne change rien au comportement (même promesse
     // retournée), juste de la visibilité sur l'issue réelle de l'ouverture.
     _db
-      .then((db) => console.log("[IDB DEBUG] openDB resolved OK, version", db.version, "stores", Array.from(db.objectStoreNames)))
-      .catch((err) => console.error("[IDB DEBUG] openDB REJECTED", err));
+      .then((db) => debugLog("[IDB DEBUG] openDB resolved OK, version", db.version, "stores", Array.from(db.objectStoreNames)))
+      .catch((err) => debugError("[IDB DEBUG] openDB REJECTED", err));
   }
   return _db;
 }
@@ -293,24 +294,24 @@ export async function getMissionFormsCache(moduleType: string): Promise<MissionF
 export async function saveParcellesCache(userId: string, parcelles: CachedParcelle[]) {
   // DEBUG TEMPORAIRE — diagnostic du cache parcelles hors-ligne. À retirer
   // une fois la cause confirmée.
-  console.log("[IDB DEBUG] saveParcellesCache called", { userId, count: parcelles.length });
+  debugLog("[IDB DEBUG] saveParcellesCache called", { userId, count: parcelles.length });
   const db = await getDB();
   const rec: ParcellesCacheRecord = { userId, parcelles, cachedAt: Date.now() };
   await db.put("parcellesCache", rec);
-  console.log("[IDB DEBUG] saveParcellesCache put() completed", { userId, count: parcelles.length });
+  debugLog("[IDB DEBUG] saveParcellesCache put() completed", { userId, count: parcelles.length });
 }
 
 export async function getParcellesCache(userId: string): Promise<CachedParcelle[] | undefined> {
-  console.log("[IDB DEBUG] getParcellesCache called", { userId });
+  debugLog("[IDB DEBUG] getParcellesCache called", { userId });
   const db = await getDB();
   const rec = (await db.get("parcellesCache", userId)) as ParcellesCacheRecord | undefined;
-  console.log("[IDB DEBUG] getParcellesCache result", { userId, found: !!rec, record: rec });
+  debugLog("[IDB DEBUG] getParcellesCache result", { userId, found: !!rec, record: rec });
   if (!rec) {
     // DEBUG TEMPORAIRE — si le store contient des clés mais pas celle
     // demandée, ça confirme un décalage de clé (écriture sous un autre id)
     // plutôt qu'un cache jamais écrit du tout.
     const allKeys = await db.getAllKeys("parcellesCache");
-    console.warn("[IDB DEBUG] getParcellesCache MISS — all keys currently in store:", allKeys);
+    debugWarn("[IDB DEBUG] getParcellesCache MISS — all keys currently in store:", allKeys);
   }
   return rec?.parcelles;
 }
