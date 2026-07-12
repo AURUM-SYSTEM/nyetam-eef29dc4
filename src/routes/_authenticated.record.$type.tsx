@@ -225,6 +225,23 @@ function RecordPage() {
   }, [missionForms, missionKey]);
 
   const activeMission = missionForms.find(m => m.mission_key === missionKey);
+
+  // DEBUG TEMPORAIRE — confirme la valeur RÉELLE de mission_key reçue de
+  // mission_forms (pas une supposition) : isParcelleSelectionMission compare
+  // missionKey aux littéraux "visite_parcelle"/"suivi_parcelle" codés en dur
+  // (aucun entity_mode n'existe dans le schéma actuel — vérifié par grep).
+  // Si la vraie clé stockée diffère de ces littéraux, la comparaison échoue
+  // silencieusement même quand le libellé affiché est correct. À retirer
+  // avec le reste de cette instrumentation une fois la cause confirmée.
+  useEffect(() => {
+    debugLog("[MISSION DEBUG] active mission", {
+      missionKey,
+      activeMissionKey: activeMission?.mission_key,
+      activeMissionLabel: activeMission?.mission_label,
+      allMissionForms: missionForms.map(m => ({ key: m.mission_key, label: m.mission_label })),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missionKey, missionForms]);
   const missionFields = activeMission?.fields ?? [];
 
   const [supported, setSupported] = useState(true);
