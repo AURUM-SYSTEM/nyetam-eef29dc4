@@ -12,11 +12,15 @@ import { debugLog, debugWarn } from "./debug-log";
 const RELOAD_FLAG_KEY = "aurum.chunk-reload-attempted";
 const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i;
 
-function isChunkLoadError(message: string): boolean {
+export function isChunkLoadError(message: string): boolean {
   return CHUNK_ERROR_RE.test(message);
 }
 
-function reloadOnce(source: string, message: string) {
+// Exporté séparément : le routeur (errorComponent dans __root.tsx) attrape
+// ces erreurs via sa PROPRE limite d'erreur React — elles ne remontent
+// jamais jusqu'aux écouteurs globaux window.onerror/unhandledrejection
+// ci-dessous, qui ne suffisent donc pas à eux seuls.
+export function reloadOnChunkError(source: string, message: string) {
   let alreadyTried = false;
   try { alreadyTried = sessionStorage.getItem(RELOAD_FLAG_KEY) === "1"; } catch {}
 
@@ -38,11 +42,11 @@ export function registerChunkErrorReload() {
   window.addEventListener("unhandledrejection", (event) => {
     const reason = event.reason as unknown;
     const message = reason instanceof Error ? reason.message : String(reason ?? "");
-    if (isChunkLoadError(message)) reloadOnce("unhandledrejection", message);
+    if (isChunkLoadError(message)) reloadOnChunkError("unhandledrejection", message);
   });
 
   window.addEventListener("error", (event) => {
-    if (isChunkLoadError(event.message || "")) reloadOnce("error", event.message);
+    if (isChunkLoadError(event.message || "")) reloadOnChunkError("error", event.message);
   });
 
   // Page stable après quelques secondes → on réarme la protection anti-

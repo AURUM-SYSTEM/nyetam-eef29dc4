@@ -8,13 +8,14 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { SyncStatus } from "@/components/SyncStatus";
 import { useSyncEngine } from "@/hooks/use-sync-engine";
 import { I18nProvider, useI18n } from "@/i18n";
 import { applyTheme, getTheme } from "@/lib/profile-store";
 import { registerServiceWorker } from "@/lib/register-sw";
-import { registerChunkErrorReload } from "@/lib/chunk-reload";
+import { registerChunkErrorReload, isChunkLoadError, reloadOnChunkError } from "@/lib/chunk-reload";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -37,6 +38,26 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+
+  // Le routeur attrape les échecs de import() dynamique (chunk introuvable,
+  // typiquement un nouveau déploiement pendant que l'onglet restait ouvert)
+  // via sa propre limite d'erreur React — ça ne remonte jamais jusqu'aux
+  // écouteurs globaux window.onerror/unhandledrejection (registerChunkErrorReload
+  // dans __root.tsx), qui ne suffisent donc pas à eux seuls pour ce cas.
+  const chunkError = isChunkLoadError(error.message);
+  useEffect(() => {
+    if (chunkError) reloadOnChunkError("router-error-boundary", error.message);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chunkError, error.message]);
+
+  if (chunkError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-gold" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
       <div className="glass-card max-w-md rounded-2xl p-8 text-center">
