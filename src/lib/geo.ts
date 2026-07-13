@@ -9,7 +9,16 @@ export type CapturedLocation = {
   capturedAt: number;
 };
 
-export async function captureGps(timeoutMs = 10_000): Promise<CapturedLocation | null> {
+export async function captureGps(
+  timeoutMs = 10_000,
+  // 5 minutes par défaut : une position récente en cache convient pour une
+  // capture ponctuelle (position de l'agent). À forcer à 0 pour les points
+  // d'un périmètre (handleAddBoundaryPoint) — sinon le navigateur peut
+  // renvoyer la MÊME position en cache pour plusieurs points tapés à la
+  // suite sans déplacement significatif, produisant un polygone dégénéré
+  // (points quasi identiques) dont l'aire calcule correctement... à zéro.
+  maximumAgeMs = 5 * 60_000,
+): Promise<CapturedLocation | null> {
   if (typeof navigator === "undefined" || !navigator.geolocation) return null;
   return new Promise((resolve) => {
     let settled = false;
@@ -33,7 +42,7 @@ export async function captureGps(timeoutMs = 10_000): Promise<CapturedLocation |
         clearTimeout(t);
         done(null);
       },
-      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 5 * 60_000 },
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: maximumAgeMs },
     );
   });
 }

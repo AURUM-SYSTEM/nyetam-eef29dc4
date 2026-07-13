@@ -467,7 +467,11 @@ function RecordPage() {
   async function handleAddBoundaryPoint() {
     setCapturingBoundaryPoint(true);
     try {
-      const p = await captureGps();
+      // maximumAgeMs=0 : force une lecture GPS fraîche à chaque point — le
+      // cache par défaut de captureGps() (5 min) renverrait sinon la même
+      // position pour plusieurs points tapés à la suite sans déplacement
+      // réel, produisant un périmètre dégénéré (surface calculée à 0).
+      const p = await captureGps(undefined, 0);
       if (!p) { toast.error("Position GPS indisponible"); return; }
       setBoundaryPoints(prev => [...prev, { lat: p.lat, lng: p.lng, accuracy: p.accuracy }]);
       if (p.accuracy != null && p.accuracy > 20) {
