@@ -1,8 +1,9 @@
-// DEBUG TEMPORAIRE — capture les mêmes messages [PARCELLES DEBUG] / [IDB
-// DEBUG] déjà envoyés à la console, pour un affichage à l'écran (voir
-// DebugLogPanel.tsx). Utile pour diagnostiquer sur un téléphone sans accès
-// à un ordinateur pour les DevTools distants. À retirer avec le reste de
-// cette instrumentation une fois la cause du cache parcelles confirmée.
+// Double logging console + buffer en mémoire, affichable à l'écran via
+// DebugLogPanel.tsx (dev uniquement — voir ce fichier). Utile pour
+// diagnostiquer sur un téléphone sans accès à un ordinateur pour les
+// DevTools distants. Utilisé aussi par du code permanent (ex.
+// chunk-reload.ts) qui a besoin de logs visibles en dev sans dépendre de la
+// console distante.
 type Entry = { at: number; text: string };
 
 const MAX_ENTRIES = 200;

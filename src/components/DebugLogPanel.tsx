@@ -1,7 +1,7 @@
-// DEBUG TEMPORAIRE — panneau texte repliable affichant en direct les logs
-// [PARCELLES DEBUG] / [IDB DEBUG] (voir src/lib/debug-log.ts), pour
-// diagnostiquer le cache parcelles hors-ligne directement à l'écran sur un
-// téléphone, sans DevTools distant. À retirer une fois la cause confirmée.
+// Panneau texte repliable affichant en direct les logs internes (voir
+// src/lib/debug-log.ts), pour diagnostiquer directement à l'écran sur un
+// téléphone, sans DevTools distant. Réservé au développement : ne s'affiche
+// jamais en production, même si des entrées sont présentes.
 import { useState, useSyncExternalStore } from "react";
 import { getDebugEntries, subscribeDebugLog, clearDebugLog } from "@/lib/debug-log";
 
@@ -9,6 +9,7 @@ export function DebugLogPanel() {
   const entries = useSyncExternalStore(subscribeDebugLog, getDebugEntries, getDebugEntries);
   const [open, setOpen] = useState(false);
 
+  if (!import.meta.env.DEV) return null;
   if (entries.length === 0) return null;
 
   return (

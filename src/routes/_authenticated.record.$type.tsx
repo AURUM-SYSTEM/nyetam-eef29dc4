@@ -17,7 +17,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
 import { listParcelles, listCooperatives, listProducers, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
-import { debugLog, debugError } from "@/lib/debug-log";
 import { DebugLogPanel } from "@/components/DebugLogPanel";
 
 
@@ -229,7 +228,6 @@ function RecordPage() {
     (async () => {
       try {
         const draft = await getRecordDraft();
-        debugLog("[DRAFT DEBUG] getRecordDraft on mount", { found: !!draft, missionKey: draft?.missionKey });
         if (draft) {
           if (draft.missionKey) setMissionKey(draft.missionKey);
           if (draft.fieldValues) setFieldValues(draft.fieldValues);
@@ -259,23 +257,6 @@ function RecordPage() {
   }, [missionForms, missionKey, draftCheckDone]);
 
   const activeMission = missionForms.find(m => m.mission_key === missionKey);
-
-  // DEBUG TEMPORAIRE — confirme la valeur RÉELLE de mission_key reçue de
-  // mission_forms (pas une supposition) : isParcelleSelectionMission compare
-  // missionKey aux littéraux "visite_parcelle"/"suivi_parcelle" codés en dur
-  // (aucun entity_mode n'existe dans le schéma actuel — vérifié par grep).
-  // Si la vraie clé stockée diffère de ces littéraux, la comparaison échoue
-  // silencieusement même quand le libellé affiché est correct. À retirer
-  // avec le reste de cette instrumentation une fois la cause confirmée.
-  useEffect(() => {
-    debugLog("[MISSION DEBUG] active mission", {
-      missionKey,
-      activeMissionKey: activeMission?.mission_key,
-      activeMissionLabel: activeMission?.mission_label,
-      allMissionForms: missionForms.map(m => ({ key: m.mission_key, label: m.mission_label })),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [missionKey, missionForms]);
   const missionFields = activeMission?.fields ?? [];
 
   const [supported, setSupported] = useState(true);
@@ -309,7 +290,6 @@ function RecordPage() {
   // l'état neutre du tout premier rendu.
   useEffect(() => {
     if (!draftCheckDone) return;
-    debugLog("[DRAFT DEBUG] saveRecordDraft", { missionKey });
     void saveRecordDraft({
       missionKey, fieldValues, agentName, location, docDate, docTime,
       gps: gps ?? undefined,
@@ -383,18 +363,10 @@ function RecordPage() {
   // et relue hors-ligne, avec un message explicite si aucun cache n'existe.
   const parcellesCacheKey = profile?.id ?? "default";
 
-  // DEBUG TEMPORAIRE — trace le timing exact de résolution de `profile` par
-  // rapport aux appels réseau/cache ci-dessous. À retirer une fois la cause
-  // du cache parcelles vide hors-ligne confirmée.
-  useEffect(() => {
-    debugLog("[PARCELLES DEBUG] profile/online changed", { profileId: profile?.id, parcellesCacheKey, online });
-  }, [profile?.id, parcellesCacheKey, online]);
-
   useEffect(() => {
     if (!isParcelleMission) return;
     let cancelled = false;
     const keyAtRunStart = parcellesCacheKey;
-    debugLog("[PARCELLES DEBUG] effect run start", { keyAtRunStart, isParcelleSelectionMission, online, profileId: profile?.id });
     (async () => {
       setParcellesLoading(true);
       if (isParcelleSelectionMission) setParcellesOfflineNoCache(false);
@@ -405,31 +377,21 @@ function RecordPage() {
           fetchCooperatives({ data: undefined as any }),
           fetchProducers({ data: undefined as any }),
         ]);
-        if (cancelled) {
-          debugLog("[PARCELLES DEBUG] fetch succeeded but effect run was CANCELLED (superseded by a re-run) — nothing saved", { keyAtRunStart });
-          return;
-        }
-        debugLog("[PARCELLES DEBUG] listParcelles fetch SUCCESS", { keyAtRunStart, count: p.parcelles.length, parcelles: p.parcelles });
+        if (cancelled) return;
         setParcelleList(p.parcelles);
         setCoopNames(c.cooperatives.map(x => x.name));
         setProducerNames(pr.producers.map(x => x.fullName));
         if (isParcelleSelectionMission) {
           setParcellesOfflineNoCache(false);
-          debugLog("[PARCELLES DEBUG] about to call saveParcellesCache", { keyAtRunStart, count: p.parcelles.length });
-          saveParcellesCache(keyAtRunStart, p.parcelles)
-            .then(() => debugLog("[PARCELLES DEBUG] saveParcellesCache promise RESOLVED", { keyAtRunStart }))
-            .catch((err) => debugError("[PARCELLES DEBUG] saveParcellesCache promise REJECTED", { keyAtRunStart, err }));
+          void saveParcellesCache(keyAtRunStart, p.parcelles);
         }
       } catch (err) {
-        debugLog("[PARCELLES DEBUG] entered catch branch", { keyAtRunStart, online, isParcelleSelectionMission, err: err instanceof Error ? err.message : err });
         if (!isParcelleSelectionMission) {
           // recensement_plantations hors-ligne : pas de liste requise, juste
           // pas de suggestions coop/producteur — comportement inchangé.
           if (!cancelled) setParcelleList([]);
         } else {
-          debugLog("[PARCELLES DEBUG] about to call getParcellesCache", { keyAtRunStart });
           const cached = await getParcellesCache(keyAtRunStart);
-          debugLog("[PARCELLES DEBUG] getParcellesCache returned", { keyAtRunStart, cached });
           if (cancelled) return;
           if (cached) {
             setParcelleList(cached);
