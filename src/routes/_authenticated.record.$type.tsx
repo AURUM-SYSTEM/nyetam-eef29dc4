@@ -967,9 +967,11 @@ function RecordPage() {
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
               {gpsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
-              {gps
-                ? `GPS capturé : ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}${gps.accuracy != null ? ` (précision ±${Math.round(gps.accuracy)}m)` : ""}`
-                : "Capturer ma position GPS"}
+              {gpsLoading
+                ? "Recherche du signal GPS… (jusqu'à 20s)"
+                : gps
+                  ? `GPS capturé : ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}${gps.accuracy != null ? ` (précision ±${Math.round(gps.accuracy)}m)` : ""}`
+                  : "Capturer ma position GPS"}
             </button>
             {gps && gps.accuracy != null && gpsAccuracyWarning(gps.accuracy) && (
               <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-amber-400">
@@ -1106,7 +1108,7 @@ function RecordPage() {
                             className="flex items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
                           >
                             {capturingBoundaryPoint ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
-                            Ajouter un point
+                            {capturingBoundaryPoint ? "Recherche du signal… (jusqu'à 20s)" : "Ajouter un point"}
                           </button>
                           <button
                             type="button"
