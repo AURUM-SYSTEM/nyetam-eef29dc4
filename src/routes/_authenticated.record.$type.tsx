@@ -471,6 +471,14 @@ function RecordPage() {
     const center = computePolygonCenter(boundaryPoints);
     setGps({ lat: center.lat, lng: center.lng });
     setBoundaryClosed(true);
+    // Reporte la surface calculée depuis le périmètre dans le champ Surface
+    // — jusqu'ici la valeur n'était affichée qu'en texte informatif
+    // ("surface estimée : X ha") sans jamais alimenter le champ réellement
+    // envoyé à la création de la parcelle (newSurface), qui restait vide
+    // tant que l'agent ne la retapait pas à la main. Reste modifiable
+    // ensuite si l'agent veut corriger.
+    const area = computePolygonAreaHectares(boundaryPoints);
+    if (area > 0) setNewSurface(area.toFixed(2));
   }
 
   function handleResetBoundary() {

@@ -644,6 +644,14 @@ export type Database = {
         Args: { _decided_by: string; _new_status: string; _request_id: string }
         Returns: undefined
       }
+      can_access_field_media: {
+        Args: { _owner_user_id: string }
+        Returns: boolean
+      }
+      delete_own_document: {
+        Args: { _document_id: string }
+        Returns: undefined
+      }
       has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"]; _user: string }
         Returns: boolean

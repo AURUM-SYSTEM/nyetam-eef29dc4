@@ -5,10 +5,18 @@
 
 export type LatLng = { lat: number; lng: number };
 
+// Rejette les points non finis (NaN, Infinity — ex. capture GPS corrompue
+// ou donnée en cache altérée) plutôt que de les laisser propager un NaN
+// silencieux jusqu'au résultat final.
+function finitePoints(points: LatLng[]): LatLng[] {
+  return points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+}
+
 export function computePolygonCenter(points: LatLng[]): LatLng {
-  const n = points.length;
-  const lat = points.reduce((s, p) => s + p.lat, 0) / n;
-  const lng = points.reduce((s, p) => s + p.lng, 0) / n;
+  const valid = finitePoints(points);
+  const n = valid.length;
+  const lat = valid.reduce((s, p) => s + p.lat, 0) / n;
+  const lng = valid.reduce((s, p) => s + p.lng, 0) / n;
   return { lat, lng };
 }
 
@@ -18,13 +26,14 @@ const EARTH_RADIUS_M = 6371000;
 // (mètres autour de la latitude moyenne du polygone) — approximation
 // suffisante à l'échelle d'une parcelle agricole.
 export function computePolygonAreaHectares(points: LatLng[]): number {
-  if (points.length < 3) return 0;
-  const meanLatRad = (points.reduce((s, p) => s + p.lat, 0) / points.length) * (Math.PI / 180);
+  const validPoints = finitePoints(points);
+  if (validPoints.length < 3) return 0;
+  const meanLatRad = (validPoints.reduce((s, p) => s + p.lat, 0) / validPoints.length) * (Math.PI / 180);
   const toXY = (p: LatLng) => ({
     x: (p.lng * Math.PI / 180) * Math.cos(meanLatRad) * EARTH_RADIUS_M,
     y: (p.lat * Math.PI / 180) * EARTH_RADIUS_M,
   });
-  const pts = points.map(toXY);
+  const pts = validPoints.map(toXY);
   let sum = 0;
   for (let i = 0; i < pts.length; i++) {
     const a = pts[i];
