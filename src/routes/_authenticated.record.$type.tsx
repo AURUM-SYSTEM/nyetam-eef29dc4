@@ -627,7 +627,12 @@ function RecordPage() {
   async function handleCaptureGps() {
     setGpsLoading(true);
     try {
-      const g = await captureGps();
+      // maximumAgeMs=0 : un tap sur ce bouton est toujours une demande
+      // explicite de position À JOUR (y compris pour re-capturer après
+      // s'être déplacé) — le cache par défaut de captureGps() renverrait
+      // sinon la même position déjà connue, donnant l'impression que le
+      // bouton ne fait rien.
+      const g = await captureGps(undefined, 0);
       if (!g) toast.error("Position GPS indisponible");
       else { setGps(g); toast.success("Position GPS capturée"); }
     } finally { setGpsLoading(false); }
