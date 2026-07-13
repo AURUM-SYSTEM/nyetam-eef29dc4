@@ -156,6 +156,25 @@ function formatSurfaceHa(areaHa: number): string {
   return areaHa.toFixed(2);
 }
 
+// Au-delà de quelques centaines de mètres, ce n'est plus une question de
+// réception GPS (arbres, bâtiments) mais le signe que l'appareil ne fournit
+// pas du tout une position satellite — le navigateur retombe silencieusement
+// sur une localisation réseau (Wi-Fi/antennes), qui ne bougera quasiment pas
+// même après un vrai déplacement. Message distinct pour orienter vers le
+// vrai réglage à vérifier plutôt que de suggérer de changer d'endroit.
+const GPS_ACCURACY_WARN_THRESHOLD_M = 20;
+const GPS_ACCURACY_NO_GPS_THRESHOLD_M = 500;
+
+function gpsAccuracyWarning(accuracyM: number): string | null {
+  if (accuracyM > GPS_ACCURACY_NO_GPS_THRESHOLD_M) {
+    return `Précision très faible (±${Math.round(accuracyM)}m) — le téléphone ne semble pas utiliser le GPS, seulement une position réseau approximative. Vérifiez que la « position précise » est activée pour ce navigateur dans les réglages de localisation du téléphone.`;
+  }
+  if (accuracyM > GPS_ACCURACY_WARN_THRESHOLD_M) {
+    return `Précision faible (±${Math.round(accuracyM)}m) — essayez un endroit plus dégagé, loin des bâtiments et arbres.`;
+  }
+  return null;
+}
+
 type LocalPhoto = { id: string; previewUrl: string };
 type LocalVideo = { id: string; previewUrl: string; durationMs: number };
 
@@ -474,8 +493,9 @@ function RecordPage() {
       const p = await captureGps(undefined, 0);
       if (!p) { toast.error("Position GPS indisponible"); return; }
       setBoundaryPoints(prev => [...prev, { lat: p.lat, lng: p.lng, accuracy: p.accuracy }]);
-      if (p.accuracy != null && p.accuracy > 20) {
-        toast.warning(`Précision faible pour ce point (±${Math.round(p.accuracy)}m) — essayez un endroit plus dégagé si possible.`);
+      if (p.accuracy != null) {
+        const warning = gpsAccuracyWarning(p.accuracy);
+        if (warning) toast.warning(warning);
       }
     } finally {
       setCapturingBoundaryPoint(false);
@@ -951,10 +971,10 @@ function RecordPage() {
                 ? `GPS capturé : ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}${gps.accuracy != null ? ` (précision ±${Math.round(gps.accuracy)}m)` : ""}`
                 : "Capturer ma position GPS"}
             </button>
-            {gps && gps.accuracy != null && gps.accuracy > 20 && (
+            {gps && gps.accuracy != null && gpsAccuracyWarning(gps.accuracy) && (
               <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-amber-400">
                 <AlertTriangle className="h-3 w-3 shrink-0" />
-                Précision faible — essayez un endroit plus dégagé, loin des bâtiments et arbres.
+                {gpsAccuracyWarning(gps.accuracy)}
               </p>
             )}
           </div>
