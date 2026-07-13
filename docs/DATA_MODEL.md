@@ -148,12 +148,17 @@ Aucune modification des écrans de capture n'est nécessaire.
 
 ## 7. Storage
 
-Bucket privé `recensement-photos`. Chemin :
-`<user_id>/<document_id>/<photo_id>.<ext>`.
+Buckets privés `recensement-photos` et `recensement-videos`. Chemin :
+`<user_id>/<document_id>/<photo_id>.<ext>` (idem pour les vidéos).
 
-RLS storage : lecture / écriture réservées au propriétaire (via user_id
-dans le chemin). Renommer le bucket serait cosmétique — le nom historique
-est conservé pour éviter une migration de fichiers.
+RLS storage : écriture (INSERT/UPDATE/DELETE) réservée au propriétaire (via
+user_id dans le chemin). Lecture (SELECT) ouverte au propriétaire OU à un
+superviseur/admin de la même organisation (`public.can_access_field_media`,
+voir migration `20260713120000_...`). Aucun accès public direct : toute
+consultation passe par une URL signée à expiration courte (`createSignedUrl`,
+1h), jamais par une URL publique permanente. Renommer le bucket serait
+cosmétique — le nom historique est conservé pour éviter une migration de
+fichiers.
 
 ---
 
