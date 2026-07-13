@@ -19,6 +19,7 @@ type DocRow = {
   status: string;
   created_at: string;
   reference: string | null;
+  validated_at: string | null;
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -45,7 +46,7 @@ export const Route = createFileRoute("/_authenticated/")({
 async function fetchDocuments(): Promise<DocRow[]> {
   const { data, error } = await supabase
     .from("documents")
-    .select("id,type,mission_type,title,status,created_at,reference")
+    .select("id,type,mission_type,title,status,created_at,reference,validated_at")
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw error;
@@ -89,7 +90,9 @@ function HomePage() {
     queryClient.setQueryData<DocRow[]>(["documents"], (prev) =>
       prev ? prev.filter((d) => d.id !== id) : prev,
     );
-    const { error } = await supabase.from("documents").delete().eq("id", id);
+    // Suppression réservée aux documents non validés — voir
+    // delete_own_document() (SECURITY DEFINER, journalise dans audit_log).
+    const { error } = await supabase.rpc("delete_own_document", { _document_id: id });
     if (error) {
       toast.error(error.message);
       queryClient.invalidateQueries({ queryKey: ["documents"] });
@@ -218,13 +221,15 @@ function HomePage() {
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </Link>
-              <button
-                onClick={() => remove(d.id)}
-                className="px-3 py-3 text-muted-foreground transition hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
-                aria-label={t("common.delete")}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {!d.validated_at && (
+                <button
+                  onClick={() => remove(d.id)}
+                  className="px-3 py-3 text-muted-foreground transition hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
+                  aria-label={t("common.delete")}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </li>
           ))}
         </ul>

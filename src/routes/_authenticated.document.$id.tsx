@@ -144,7 +144,10 @@ function DocPage() {
   async function remove() {
     if (!doc) return;
     if (!confirm(t("doc.delete_confirm"))) return;
-    const { error } = await supabase.from("documents").delete().eq("id", doc.id);
+    // Suppression réservée aux documents non validés — appliqué à la fois
+    // en RLS et dans delete_own_document() (SECURITY DEFINER, journalise
+    // dans audit_log). Un appel direct .delete() n'est plus autorisé.
+    const { error } = await supabase.rpc("delete_own_document", { _document_id: doc.id });
     if (error) toast.error(error.message);
     else navigate({ to: "/" });
   }
