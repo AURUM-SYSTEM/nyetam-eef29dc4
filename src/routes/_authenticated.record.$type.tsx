@@ -18,6 +18,11 @@ import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
 import { listParcelles, listCooperatives, listProducers, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
 import { DebugLogPanel } from "@/components/DebugLogPanel";
+// DEBUG TEMPORAIRE — instrumentation active pour diagnostiquer la capture
+// des points de périmètre sur un appareil réel. À retirer une fois la
+// cause confirmée (voir aussi le forçage de visibilité de DebugLogPanel
+// plus bas, également temporaire).
+import { debugLog, debugError } from "@/lib/debug-log";
 
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
@@ -484,6 +489,7 @@ function RecordPage() {
   // la parcelle en se déplaçant, puis "Terminer le périmètre" pour fermer
   // le polygone. Le centre calculé remplace alors le point GPS unique.
   async function handleAddBoundaryPoint() {
+    debugLog("[GPS DEBUG] handleAddBoundaryPoint called", { currentPointCount: boundaryPoints.length });
     setCapturingBoundaryPoint(true);
     try {
       // maximumAgeMs=0 : force une lecture GPS fraîche à chaque point — le
@@ -491,8 +497,17 @@ function RecordPage() {
       // position pour plusieurs points tapés à la suite sans déplacement
       // réel, produisant un périmètre dégénéré (surface calculée à 0).
       const p = await captureGps(undefined, 0);
-      if (!p) { toast.error("Position GPS indisponible"); return; }
-      setBoundaryPoints(prev => [...prev, { lat: p.lat, lng: p.lng, accuracy: p.accuracy }]);
+      debugLog("[GPS DEBUG] handleAddBoundaryPoint got result from captureGps", p);
+      if (!p) {
+        debugError("[GPS DEBUG] captureGps returned null — aucun point ajouté");
+        toast.error("Position GPS indisponible");
+        return;
+      }
+      setBoundaryPoints(prev => {
+        const next = [...prev, { lat: p.lat, lng: p.lng, accuracy: p.accuracy }];
+        debugLog("[GPS DEBUG] boundaryPoints updated", { previousCount: prev.length, newCount: next.length, newPoint: { lat: p.lat, lng: p.lng, accuracy: p.accuracy } });
+        return next;
+      });
       if (p.accuracy != null) {
         const warning = gpsAccuracyWarning(p.accuracy);
         if (warning) toast.warning(warning);
@@ -1386,7 +1401,10 @@ function RecordPage() {
         </button>
       </div>
     </div>
-    <DebugLogPanel />
+    {/* DEBUG TEMPORAIRE — forceVisible=true pour voir les logs sur ce
+        téléphone en production, sans DevTools distant. À repasser à
+        <DebugLogPanel /> (sans prop) une fois la cause confirmée. */}
+    <DebugLogPanel forceVisible />
     </>
   );
 }

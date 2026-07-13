@@ -1,6 +1,7 @@
 // Browser-side GPS capture helper.
 // Reverse geocoding is handled server-side via aurum.functions.reverseGeocode
 // (Nominatim requires a custom User-Agent header).
+import { debugLog, debugWarn, debugError } from "./debug-log";
 
 export type CapturedLocation = {
   lat: number;
@@ -35,10 +36,11 @@ export async function captureGps(
     let best: CapturedLocation | null = null;
     let watchId: number | null = null;
 
-    const finish = (v: CapturedLocation | null) => {
+    const finish = (v: CapturedLocation | null, reason: string) => {
       if (settled) return;
       settled = true;
       if (watchId != null) navigator.geolocation.clearWatch(watchId);
+      debugLog("[GPS DEBUG] captureGps resolved", { reason, value: v });
       resolve(v);
     };
 
@@ -48,7 +50,8 @@ export async function captureGps(
     // les mises à jour successives et on garde la MEILLEURE précision vue
     // dans la fenêtre de temps impartie, au lieu de se contenter de la
     // toute première réponse.
-    const t = setTimeout(() => finish(best), timeoutMs);
+    debugLog("[GPS DEBUG] captureGps starting watchPosition", { timeoutMs, maximumAgeMs });
+    const t = setTimeout(() => finish(best, "outer-timeout"), timeoutMs);
 
     watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -58,18 +61,38 @@ export async function captureGps(
           accuracy: pos.coords.accuracy,
           capturedAt: Date.now(),
         };
+        debugLog("[GPS DEBUG] watchPosition success callback", candidate);
         if (!best || (candidate.accuracy ?? Infinity) < (best.accuracy ?? Infinity)) {
           best = candidate;
+          debugLog("[GPS DEBUG] new best candidate", best);
         }
         if (candidate.accuracy != null && candidate.accuracy <= GOOD_ENOUGH_ACCURACY_M) {
           clearTimeout(t);
-          finish(candidate);
+          finish(candidate, "good-enough-accuracy");
         }
       },
-      () => {
-        // Erreur de géolocalisation : on garde un éventuel candidat déjà
-        // obtenu plutôt que d'échouer sur une erreur transitoire.
-        if (!best) { clearTimeout(t); finish(null); }
+      (err) => {
+        // BUG CORRIGÉ ICI : watchPosition() peut légitimement déclencher
+        // cette erreur plusieurs fois pendant qu'il continue de chercher un
+        // signal en arrière-plan (ex. TIMEOUT interne sur une tentative,
+        // POSITION_UNAVAILABLE momentané) — ce n'est PAS un échec définitif.
+        // L'ancien code arrêtait tout (clearWatch + resolve(null)) dès la
+        // toute première erreur si aucun point n'avait encore été obtenu,
+        // ce qui pouvait tuer la capture avant même que le GPS n'ait eu la
+        // moindre chance de verrouiller un signal — expliquant "plus aucun
+        // nouveau point capturé". Seul le timeout GLOBAL (ci-dessus) ou une
+        // erreur de PERMISSION (définitive, jamais transitoire) doivent
+        // mettre fin à la capture.
+        debugWarn("[GPS DEBUG] watchPosition error callback (peut être transitoire)", {
+          code: err.code, message: err.message, hasBestAlready: !!best,
+        });
+        if (err.code === err.PERMISSION_DENIED) {
+          debugError("[GPS DEBUG] permission de géolocalisation refusée — abandon immédiat");
+          clearTimeout(t);
+          finish(best, "permission-denied");
+        }
+        // Sinon (POSITION_UNAVAILABLE / TIMEOUT) : on NE résout PAS ici, on
+        // laisse watchPosition continuer d'essayer jusqu'au timeout global.
       },
       { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: maximumAgeMs },
     );
