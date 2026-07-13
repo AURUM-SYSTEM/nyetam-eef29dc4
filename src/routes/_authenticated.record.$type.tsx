@@ -144,6 +144,18 @@ const VALID_TYPES = new Set<DocType>(["rapport", "pv", "mission_terrain", "enque
 
 const MAX_VIDEO_SECONDS = 60;
 
+// L'hectare (10 000 m²) est une trop grande unité pour un périmètre de test
+// tracé sur quelques mètres (taps rapprochés sans déplacement réel) : à 2
+// décimales, tout ce qui est en dessous de 0.005 ha arrondit à "0.00" et
+// donne l'impression que rien n'a été calculé alors que le calcul tourne
+// bien. On affiche davantage de décimales pour les petites surfaces, et le
+// m² équivalent pour lever toute ambiguïté au moment du test.
+function formatSurfaceHa(areaHa: number): string {
+  if (areaHa <= 0) return "0.00";
+  if (areaHa < 0.01) return areaHa.toFixed(4);
+  return areaHa.toFixed(2);
+}
+
 type LocalPhoto = { id: string; previewUrl: string };
 type LocalVideo = { id: string; previewUrl: string; durationMs: number };
 
@@ -478,7 +490,7 @@ function RecordPage() {
     // tant que l'agent ne la retapait pas à la main. Reste modifiable
     // ensuite si l'agent veut corriger.
     const area = computePolygonAreaHectares(boundaryPoints);
-    if (area > 0) setNewSurface(area.toFixed(2));
+    if (area > 0) setNewSurface(formatSurfaceHa(area));
   }
 
   function handleResetBoundary() {
@@ -1040,7 +1052,14 @@ function RecordPage() {
                         <p className="flex items-center gap-2 text-sm text-emerald-400">
                           <CheckCircle2 className="h-4 w-4 shrink-0" />
                           Périmètre fermé — {boundaryPoints.length} points, surface estimée :{" "}
-                          {computePolygonAreaHectares(boundaryPoints).toFixed(2)} ha
+                          {formatSurfaceHa(computePolygonAreaHectares(boundaryPoints))} ha
+                          {(() => {
+                            const areaHa = computePolygonAreaHectares(boundaryPoints);
+                            // En dessous de 0.01 ha, l'équivalent en m² est
+                            // bien plus parlant pour un tracé de test sur
+                            // quelques mètres.
+                            return areaHa > 0 && areaHa < 0.01 ? ` (≈ ${Math.round(areaHa * 10000)} m²)` : "";
+                          })()}
                         </p>
                         <PerimeterMapPreview points={boundaryPoints} />
                         <button type="button" onClick={handleResetBoundary}
