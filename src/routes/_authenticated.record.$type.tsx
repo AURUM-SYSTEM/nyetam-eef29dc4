@@ -22,7 +22,7 @@ import { DebugLogPanel } from "@/components/DebugLogPanel";
 // des points de périmètre sur un appareil réel. À retirer une fois la
 // cause confirmée (voir aussi le forçage de visibilité de DebugLogPanel
 // plus bas, également temporaire).
-import { debugLog, debugError } from "@/lib/debug-log";
+import { debugLog, debugWarn, debugError } from "@/lib/debug-log";
 
 
 function getPlatform(): { os: "ios" | "android" | "other"; browser: "safari" | "chrome" | "other" } {
@@ -518,8 +518,16 @@ function RecordPage() {
   }
 
   function handleFinishBoundary() {
-    if (boundaryPoints.length < 3) return;
+    debugLog("[GPS DEBUG] handleFinishBoundary called", {
+      pointCount: boundaryPoints.length,
+      points: boundaryPoints,
+    });
+    if (boundaryPoints.length < 3) {
+      debugError("[GPS DEBUG] handleFinishBoundary aborted — moins de 3 points", { pointCount: boundaryPoints.length });
+      return;
+    }
     const center = computePolygonCenter(boundaryPoints);
+    debugLog("[GPS DEBUG] handleFinishBoundary computed center", center);
     setGps({ lat: center.lat, lng: center.lng });
     setBoundaryClosed(true);
     // Reporte la surface calculée depuis le périmètre dans le champ Surface
@@ -529,7 +537,13 @@ function RecordPage() {
     // tant que l'agent ne la retapait pas à la main. Reste modifiable
     // ensuite si l'agent veut corriger.
     const area = computePolygonAreaHectares(boundaryPoints);
-    if (area > 0) setNewSurface(formatSurfaceHa(area));
+    debugLog("[GPS DEBUG] handleFinishBoundary computed area", { areaHa: area, formatted: formatSurfaceHa(area) });
+    if (area > 0) {
+      setNewSurface(formatSurfaceHa(area));
+      debugLog("[GPS DEBUG] handleFinishBoundary called setNewSurface", formatSurfaceHa(area));
+    } else {
+      debugWarn("[GPS DEBUG] handleFinishBoundary — area <= 0, newSurface NOT updated", { area, points: boundaryPoints });
+    }
   }
 
   function handleResetBoundary() {
