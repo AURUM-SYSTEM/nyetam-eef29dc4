@@ -1101,6 +1101,11 @@ function RecordPage() {
                       <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Surface (ha)</span>
                       <input type="number" inputMode="decimal" min="0" step="0.01" value={newSurface} onChange={e => setNewSurface(e.target.value)}
                         className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                      {newSurface.trim() && Number.isFinite(Number(newSurface)) && (
+                        <span className="mt-1 block text-[11px] text-muted-foreground">
+                          ≈ {Math.round(Number(newSurface) * 10000)} m²
+                        </span>
+                      )}
                     </label>
                   </div>
                   <label className="block">
@@ -1130,13 +1135,7 @@ function RecordPage() {
                           <CheckCircle2 className="h-4 w-4 shrink-0" />
                           Périmètre fermé — {boundaryPoints.length} points, surface estimée :{" "}
                           {formatSurfaceHa(computePolygonAreaHectares(boundaryPoints))} ha
-                          {(() => {
-                            const areaHa = computePolygonAreaHectares(boundaryPoints);
-                            // En dessous de 0.01 ha, l'équivalent en m² est
-                            // bien plus parlant pour un tracé de test sur
-                            // quelques mètres.
-                            return areaHa > 0 && areaHa < 0.01 ? ` (≈ ${Math.round(areaHa * 10000)} m²)` : "";
-                          })()}
+                          {" "}(≈ {Math.round(computePolygonAreaHectares(boundaryPoints) * 10000)} m²)
                         </p>
                         <PerimeterMapPreview points={boundaryPoints} />
                         <button type="button" onClick={handleResetBoundary}
