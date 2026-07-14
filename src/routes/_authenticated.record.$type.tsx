@@ -12,7 +12,7 @@ import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
 import { captureGps } from "@/lib/geo";
-import { computePolygonCenter, computePolygonAreaHectares, maxPairwiseDistanceMeters } from "@/lib/geo-polygon";
+import { computePolygonCenter, computePolygonAreaHectares, maxPairwiseDistanceMeters, haversineMeters } from "@/lib/geo-polygon";
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -502,6 +502,24 @@ function RecordPage() {
         debugError("[GPS DEBUG] captureGps returned null — aucun point ajouté");
         toast.error("Position GPS indisponible");
         return;
+      }
+      // Détection immédiate d'un doublon — comparé aux points DÉJÀ présents
+      // avant cet ajout, avant de mettre à jour l'état. Un point capté à
+      // moins de sa propre marge de précision d'un point déjà tracé n'est
+      // pas fiablement distinct (typiquement : GPS retombé sur une
+      // estimation réseau grossière) ; mieux vaut le signaler tout de
+      // suite plutôt que de laisser un périmètre dégénéré passer inaperçu
+      // jusqu'à "Terminer le périmètre".
+      if (boundaryPoints.length > 0) {
+        const distances = boundaryPoints.map(existing => haversineMeters(existing, { lat: p.lat, lng: p.lng }));
+        const minDist = Math.min(...distances);
+        const threshold = Math.max(p.accuracy ?? 0, GPS_ACCURACY_WARN_THRESHOLD_M);
+        debugLog("[GPS DEBUG] handleAddBoundaryPoint duplicate check", { minDist, threshold, accuracy: p.accuracy });
+        if (minDist < threshold) {
+          toast.warning(
+            `Ce point est à seulement ${Math.round(minDist)}m d'un point déjà capturé — trop proche pour être distingué avec une précision de ±${Math.round(p.accuracy ?? 0)}m. Éloignez-vous davantage, ou améliorez la précision GPS avant de continuer.`,
+          );
+        }
       }
       setBoundaryPoints(prev => {
         const next = [...prev, { lat: p.lat, lng: p.lng, accuracy: p.accuracy }];

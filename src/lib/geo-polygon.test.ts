@@ -69,6 +69,24 @@ describe("computePolygonAreaHectares", () => {
     expect(computePolygonAreaHectares(rectangle)).toBeCloseTo(0.36, 2);
   });
 
+  it("retourne 0 pour un cas réel de terrain avec point dupliqué (régression) — pas un bug, la géométrie est bien dégénérée", () => {
+    // Capture réelle du 14/07 (09:59:06 UTC) : les points 1 et 2 sont
+    // rigoureusement identiques (repli GPS sur une estimation réseau
+    // ±500m, deux lectures consécutives à 31s d'écart réel ayant renvoyé
+    // la même position réseau grossière — voir le journal [GPS DEBUG]
+    // correspondant). Avec 2 sommets confondus sur 3, le "triangle" est en
+    // réalité un segment de droite : aire nulle par définition géométrique,
+    // pas une erreur de calcul. Ce test fige ce cas comme comportement
+    // attendu pour éviter qu'un futur changement du calcul d'aire y
+    // introduise un résultat non nul incorrect.
+    const realWorldDuplicatePoint: LatLng[] = [
+      { lat: 3.837167, lng: 10.4472074 },
+      { lat: 3.837167, lng: 10.4472074 },
+      { lat: 3.8377674, lng: 10.4493149 },
+    ];
+    expect(computePolygonAreaHectares(realWorldDuplicatePoint)).toBe(0);
+  });
+
   it("calcule une surface positive et cohérente pour un pentagone irrégulier (5 points)", () => {
     const pentagon: LatLng[] = [
       { lat: 4.0511, lng: 9.7679 },
