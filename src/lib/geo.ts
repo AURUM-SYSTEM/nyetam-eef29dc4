@@ -47,9 +47,21 @@ export async function captureGps(
     // watchPosition (pas getCurrentPosition) : sur mobile, les toutes
     // premières positions renvoyées sont souvent une estimation réseau
     // grossière pendant que le GPS s'affine progressivement. On surveille
-    // les mises à jour successives et on garde la MEILLEURE précision vue
-    // dans la fenêtre de temps impartie, au lieu de se contenter de la
-    // toute première réponse.
+    // les mises à jour successives.
+    //
+    // BUG CORRIGÉ ICI : `best` retenait auparavant la position ayant la
+    // MEILLEURE PRÉCISION vue sur toute la fenêtre, pas la plus RÉCENTE.
+    // En extérieur, une première lecture peut déjà être bonne (ex. ±12m) ;
+    // si l'agent se déplace ensuite pendant que la fenêtre de capture
+    // tourne encore, les positions suivantes (qui reflètent son vrai
+    // déplacement) ne remplaçaient l'ancienne QUE si leur précision était
+    // meilleure — ce qui n'arrive pas forcément. La fonction renvoyait donc
+    // la position d'où l'agent se trouvait au moment de la première bonne
+    // lecture, pas sa position actuelle : "la valeur reste figée sur le
+    // premier point malgré le déplacement". `best` est maintenant TOUJOURS
+    // la dernière position reçue ; la précision ne sert plus qu'à décider
+    // si on peut arrêter d'attendre plus tôt, jamais à choisir quelle
+    // lecture garder.
     debugLog("[GPS DEBUG] captureGps starting watchPosition", { timeoutMs, maximumAgeMs });
     const t = setTimeout(() => finish(best, "outer-timeout"), timeoutMs);
 
@@ -62,10 +74,8 @@ export async function captureGps(
           capturedAt: Date.now(),
         };
         debugLog("[GPS DEBUG] watchPosition success callback", candidate);
-        if (!best || (candidate.accuracy ?? Infinity) < (best.accuracy ?? Infinity)) {
-          best = candidate;
-          debugLog("[GPS DEBUG] new best candidate", best);
-        }
+        best = candidate;
+        debugLog("[GPS DEBUG] updated best (=latest) candidate", best);
         if (candidate.accuracy != null && candidate.accuracy <= GOOD_ENOUGH_ACCURACY_M) {
           clearTimeout(t);
           finish(candidate, "good-enough-accuracy");
