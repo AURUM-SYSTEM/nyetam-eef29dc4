@@ -43,3 +43,29 @@ export function computePolygonAreaHectares(points: LatLng[]): number {
   const areaM2 = Math.abs(sum) / 2;
   return areaM2 / 10000;
 }
+
+export function haversineMeters(a: LatLng, b: LatLng): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const h = sinLat ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
+}
+
+// La plus grande distance entre deux points du périmètre — sert à détecter
+// un polygone "dégénéré" (points trop rapprochés par rapport à la
+// précision GPS obtenue) plutôt que de laisser une surface proche de zéro
+// s'afficher sans explication.
+export function maxPairwiseDistanceMeters(points: LatLng[]): number {
+  const valid = finitePoints(points);
+  let max = 0;
+  for (let i = 0; i < valid.length; i++) {
+    for (let j = i + 1; j < valid.length; j++) {
+      const d = haversineMeters(valid[i], valid[j]);
+      if (d > max) max = d;
+    }
+  }
+  return max;
+}

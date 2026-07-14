@@ -12,7 +12,7 @@ import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
 import { captureGps } from "@/lib/geo";
-import { computePolygonCenter, computePolygonAreaHectares } from "@/lib/geo-polygon";
+import { computePolygonCenter, computePolygonAreaHectares, maxPairwiseDistanceMeters } from "@/lib/geo-polygon";
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -543,6 +543,23 @@ function RecordPage() {
       debugLog("[GPS DEBUG] handleFinishBoundary called setNewSurface", formatSurfaceHa(area));
     } else {
       debugWarn("[GPS DEBUG] handleFinishBoundary — area <= 0, newSurface NOT updated", { area, points: boundaryPoints });
+    }
+
+    // Distingue "vrai périmètre minuscule" de "points trop rapprochés par
+    // rapport au bruit de mesure GPS" — sans ça, une surface proche de 0
+    // s'affiche sans qu'on sache si c'est un vrai résultat ou un artefact
+    // de précision. On compare l'écart maximal entre deux points du
+    // périmètre à la précision GPS moyenne obtenue : des points plus
+    // proches l'un de l'autre que leur propre marge d'incertitude ne sont
+    // pas fiablement distincts, quelle que soit la surface qui en ressort.
+    const accuracies = boundaryPoints.map(p => p.accuracy).filter((a): a is number => a != null);
+    const avgAccuracy = accuracies.length > 0 ? accuracies.reduce((s, a) => s + a, 0) / accuracies.length : null;
+    const spread = maxPairwiseDistanceMeters(boundaryPoints);
+    debugLog("[GPS DEBUG] handleFinishBoundary reliability check", { spreadMeters: spread, avgAccuracy });
+    if (avgAccuracy != null && spread < avgAccuracy * 2) {
+      toast.warning(
+        `Surface peu fiable : les points sont espacés d'à peine ${Math.round(spread)}m, à comparer à une précision GPS moyenne de ±${Math.round(avgAccuracy)}m. Éloignez-vous davantage entre chaque point, ou améliorez la précision GPS (ciel dégagé) avant de retracer le périmètre.`,
+      );
     }
   }
 
