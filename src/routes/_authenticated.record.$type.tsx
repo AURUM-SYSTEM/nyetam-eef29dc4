@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudOff, MapPin, Loader2, Camera, Video, X, VideoOff, AlertTriangle, CheckCircle2, Sprout } from "lucide-react";
 import { toast } from "sonner";
@@ -93,6 +93,40 @@ function PermissionDeniedBanner({ onRetry }: { onRetry: () => void }) {
 // Aperçu carte du périmètre en cours de capture — chargé dynamiquement
 // (voir LeafletMaps.tsx) pour ne jamais alourdir l'écran de saisie quand
 // l'agent n'utilise pas ce mode.
+// DEBUG TEMPORAIRE — limite d'erreur (Error Boundary) autour de la section
+// périmètre/surface. Un try/catch classique ne peut PAS attraper une
+// exception levée pendant le rendu React d'un composant enfant (ex. Leaflet
+// qui lève "Map container is already initialized" si PerimeterMapPreview
+// est démonté/remonté trop vite au moment où boundaryClosed change) — seule
+// une Error Boundary le peut. Sans ça, une telle exception blanchit
+// silencieusement toute la section (texte de surface ET carte), ce qui
+// correspond exactement au symptôme "rien ne s'affiche du tout". À retirer
+// une fois la cause confirmée.
+class BoundaryRenderErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: { componentStack?: string | null }) {
+    debugError("[GPS DEBUG] RENDER CRASH dans la section Périmètre", {
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <p className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-[11px] text-red-400">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          Erreur d'affichage du périmètre : {this.state.error.message} — voir le panneau Debug ci-dessous.
+        </p>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function PerimeterMapPreview({ points }: { points: Array<{ lat: number; lng: number }> }) {
   const [leafletMod, setLeafletMod] = useState<typeof import("@/components/LeafletMaps") | null>(null);
 
@@ -1147,6 +1181,7 @@ function RecordPage() {
                     <span className="mb-2 block text-[10px] uppercase tracking-widest text-muted-foreground">
                       Périmètre (optionnel) — complète ou remplace le point GPS unique
                     </span>
+                    <BoundaryRenderErrorBoundary>
                     {boundaryClosed ? (
                       <div className="space-y-2">
                         <p className="flex items-center gap-2 text-sm text-emerald-400">
@@ -1201,6 +1236,7 @@ function RecordPage() {
                         <PerimeterMapPreview points={boundaryPoints} />
                       </div>
                     )}
+                    </BoundaryRenderErrorBoundary>
                   </div>
 
                   {!gps && (
