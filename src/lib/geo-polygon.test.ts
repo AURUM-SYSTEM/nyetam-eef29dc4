@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computePolygonAreaHectares, computePolygonCenter, haversineMeters, maxPairwiseDistanceMeters, type LatLng } from "./geo-polygon";
+import { computePolygonAreaHectares, computePolygonCenter, haversineMeters, maxPairwiseDistanceMeters, isDuplicatePoint, DUPLICATE_POINT_THRESHOLD_M, type LatLng } from "./geo-polygon";
 
 // Petit carré ~111m de côté autour de l'équateur/méridien de Greenwich
 // (0.001° ≈ 111m en latitude) — surface attendue ≈ 111m × 111m ≈ 1.23 ha.
@@ -139,6 +139,63 @@ describe("maxPairwiseDistanceMeters", () => {
   it("retourne 0 pour moins de 2 points valides", () => {
     expect(maxPairwiseDistanceMeters([])).toBe(0);
     expect(maxPairwiseDistanceMeters([{ lat: 0, lng: 0 }])).toBe(0);
+  });
+});
+
+describe("isDuplicatePoint", () => {
+  it("rejette un doublon exact — cas réel de terrain (14/07, minDist=0)", () => {
+    // Deux points ajoutés à 95s d'écart réel avec les MÊMES coordonnées
+    // exactes (repli GPS réseau ±700m figé sur la même estimation) :
+    // {lat:3.8443792, lng:10.4717978} capté deux fois de suite. C'est le
+    // point de départ du bug — le contrôle calculait bien minDist=0 mais
+    // n'empêchait pas l'ajout. Ce test fige le rejet attendu.
+    const existing: LatLng[] = [{ lat: 3.8443792, lng: 10.4717978 }];
+    const duplicate: LatLng = { lat: 3.8443792, lng: 10.4717978 };
+    expect(isDuplicatePoint(existing, duplicate)).toBe(true);
+  });
+
+  it("n'accepte PAS de rejeter un point réellement distinct malgré une précision GPS très mauvaise", () => {
+    // Reproduit le cas où deux points sont à 243m l'un de l'autre avec une
+    // précision de ±500m — un seuil qui suivrait l'accuracy (l'ancien bug)
+    // rejetterait ce point à tort. Le seuil fixe (5m) ne doit PAS le
+    // rejeter : 243m est très largement au-dessus de
+    // DUPLICATE_POINT_THRESHOLD_M, qu'importe la précision GPS du moment.
+    const existing: LatLng[] = [{ lat: 3.837167, lng: 10.4472074 }];
+    const distinctButImprecise: LatLng = { lat: 3.8377674, lng: 10.4493149 };
+    expect(haversineMeters(existing[0], distinctButImprecise)).toBeGreaterThan(200);
+    expect(isDuplicatePoint(existing, distinctButImprecise)).toBe(false);
+  });
+
+  it("rejette un point à moins de 5m mais accepte un point à plus de 5m (seuil fixe)", () => {
+    const existing: LatLng[] = [{ lat: 4.0511, lng: 9.7679 }];
+    // ~2m au nord (0.00002° lat ≈ 2.2m)
+    const tooClose: LatLng = { lat: 4.05112, lng: 9.7679 };
+    // ~11m au nord (0.0001° lat ≈ 11m)
+    const farEnough: LatLng = { lat: 4.0512, lng: 9.7679 };
+    expect(isDuplicatePoint(existing, tooClose)).toBe(true);
+    expect(isDuplicatePoint(existing, farEnough)).toBe(false);
+  });
+
+  it("n'affecte jamais l'aire calculée une fois les doublons exclus du tableau final", () => {
+    // Simule le comportement attendu de handleAddBoundaryPoint : un
+    // doublon rejeté en amont n'entre jamais dans boundaryPoints, donc le
+    // polygone final reste non dégénéré.
+    const traced: LatLng[] = [];
+    const captured: LatLng[] = [
+      { lat: 3.837167, lng: 10.4472074 },
+      { lat: 3.837167, lng: 10.4472074 }, // doublon exact — doit être rejeté
+      { lat: 3.8377674, lng: 10.4493149 },
+      { lat: 3.8380000, lng: 10.4480000 },
+    ];
+    for (const candidate of captured) {
+      if (!isDuplicatePoint(traced, candidate)) traced.push(candidate);
+    }
+    expect(traced).toHaveLength(3);
+    expect(computePolygonAreaHectares(traced)).toBeGreaterThan(0);
+  });
+
+  it("utilise DUPLICATE_POINT_THRESHOLD_M = 5m par défaut", () => {
+    expect(DUPLICATE_POINT_THRESHOLD_M).toBe(5);
   });
 });
 

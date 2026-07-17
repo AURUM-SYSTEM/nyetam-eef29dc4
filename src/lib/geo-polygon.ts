@@ -69,3 +69,24 @@ export function maxPairwiseDistanceMeters(points: LatLng[]): number {
   }
   return max;
 }
+
+// Seuil FIXE, volontairement indépendant de la précision GPS du moment.
+// Un seuil qui suivrait l'accuracy (ex. rejeter tout point à moins de
+// ±accuracy d'un point existant) rejetterait quasiment tous les points
+// dès que la précision est mauvaise (ex. ±700m de repli réseau) — y
+// compris des points réellement distincts sur le terrain, rendant le
+// traçage de périmètre impraticable. Ce seuil ne sert qu'à repérer un
+// VRAI doublon (même position renvoyée deux fois par la source GPS, à
+// quelques mètres près), pas à juger de la fiabilité générale de la
+// précision — c'est le rôle de maxPairwiseDistanceMeters/l'avertissement
+// de précision, séparément.
+export const DUPLICATE_POINT_THRESHOLD_M = 5;
+
+export function isDuplicatePoint(
+  existingPoints: LatLng[],
+  candidate: LatLng,
+  thresholdM = DUPLICATE_POINT_THRESHOLD_M,
+): boolean {
+  const valid = finitePoints(existingPoints);
+  return valid.some((p) => haversineMeters(p, candidate) < thresholdM);
+}

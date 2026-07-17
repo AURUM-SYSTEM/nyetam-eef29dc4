@@ -12,7 +12,7 @@ import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
 import { useI18n } from "@/i18n";
 import { captureGps } from "@/lib/geo";
-import { computePolygonCenter, computePolygonAreaHectares, maxPairwiseDistanceMeters, haversineMeters } from "@/lib/geo-polygon";
+import { computePolygonCenter, computePolygonAreaHectares, maxPairwiseDistanceMeters, haversineMeters, isDuplicatePoint, DUPLICATE_POINT_THRESHOLD_M } from "@/lib/geo-polygon";
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -537,23 +537,25 @@ function RecordPage() {
         toast.error("Position GPS indisponible");
         return;
       }
-      // Détection immédiate d'un doublon — comparé aux points DÉJÀ présents
-      // avant cet ajout, avant de mettre à jour l'état. Un point capté à
-      // moins de sa propre marge de précision d'un point déjà tracé n'est
-      // pas fiablement distinct (typiquement : GPS retombé sur une
-      // estimation réseau grossière) ; mieux vaut le signaler tout de
-      // suite plutôt que de laisser un périmètre dégénéré passer inaperçu
-      // jusqu'à "Terminer le périmètre".
-      if (boundaryPoints.length > 0) {
-        const distances = boundaryPoints.map(existing => haversineMeters(existing, { lat: p.lat, lng: p.lng }));
-        const minDist = Math.min(...distances);
-        const threshold = Math.max(p.accuracy ?? 0, GPS_ACCURACY_WARN_THRESHOLD_M);
-        debugLog("[GPS DEBUG] handleAddBoundaryPoint duplicate check", { minDist, threshold, accuracy: p.accuracy });
-        if (minDist < threshold) {
-          toast.warning(
-            `Ce point est à seulement ${Math.round(minDist)}m d'un point déjà capturé — trop proche pour être distingué avec une précision de ±${Math.round(p.accuracy ?? 0)}m. Éloignez-vous davantage, ou améliorez la précision GPS avant de continuer.`,
-          );
-        }
+      // BUG CORRIGÉ ICI : ce contrôle calculait bien minDist mais ne faisait
+      // qu'avertir (toast) — setBoundaryPoints s'exécutait ensuite sans
+      // condition, donc le doublon était ajouté quand même. Confirmé en
+      // terrain : minDist=0 détecté correctement, point ajouté malgré tout
+      // → périmètre à 4 points dont 2 identiques → aire dégénérée = 0.
+      // Le seuil suivait aussi l'accuracy GPS (ex. 700m), ce qui aurait
+      // rejeté presque tous les points dès que la précision est mauvaise —
+      // remplacé par un seuil fixe (DUPLICATE_POINT_THRESHOLD_M, 5m),
+      // indépendant de l'accuracy : il ne sert qu'à repérer un vrai doublon
+      // (même position renvoyée deux fois), pas à juger de la précision
+      // générale (déjà couvert séparément par gpsAccuracyWarning et
+      // l'avertissement de fiabilité dans handleFinishBoundary).
+      if (isDuplicatePoint(boundaryPoints, { lat: p.lat, lng: p.lng })) {
+        const minDist = boundaryPoints.length > 0
+          ? Math.min(...boundaryPoints.map(existing => haversineMeters(existing, { lat: p.lat, lng: p.lng })))
+          : 0;
+        debugWarn("[GPS DEBUG] handleAddBoundaryPoint REJECTED — doublon détecté", { minDist, threshold: DUPLICATE_POINT_THRESHOLD_M });
+        toast.error(`Point trop proche du précédent (${Math.round(minDist)}m) — déplacez-vous et réessayez.`);
+        return;
       }
       setBoundaryPoints(prev => {
         const next = [...prev, { lat: p.lat, lng: p.lng, accuracy: p.accuracy }];
