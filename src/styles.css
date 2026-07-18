@@ -83,6 +83,16 @@
   --gradient-dark: radial-gradient(ellipse at top, oklch(0.22 0.02 85 / 0.6), oklch(0.10 0.005 80) 70%);
   --shadow-gold: 0 10px 40px -10px oklch(0.78 0.13 85 / 0.35);
   --shadow-deep: 0 20px 60px -20px oklch(0 0 0 / 0.6);
+
+  /* .glass-card / .gold-border — mêmes teintes que --card/--gold ci-dessus,
+     avec transparence, dans une variable dédiée par thème (un simple
+     var(--card) ne porte pas la transparence). Sans ça, ces deux classes
+     gardaient un fond et une bordure dorée calés sur le thème sombre même
+     en thème clair, rendant le texte illisible (fond sombre non prévu par
+     le thème actif). */
+  --glass-bg: oklch(0.18 0.006 80 / 0.7);
+  --glass-border: oklch(0.78 0.13 85 / 0.15);
+  --gold-border-tint: oklch(0.78 0.13 85 / 0.3);
 }
 
 :root.light {
@@ -115,6 +125,10 @@
   --gradient-dark: radial-gradient(ellipse at top, oklch(0.95 0.02 85 / 0.7), oklch(0.985 0.005 85) 70%);
   --shadow-gold: 0 10px 40px -10px oklch(0.62 0.13 75 / 0.35);
   --shadow-deep: 0 20px 60px -20px oklch(0 0 0 / 0.15);
+
+  --glass-bg: oklch(0.99 0.004 85 / 0.7);
+  --glass-border: oklch(0.62 0.13 75 / 0.15);
+  --gold-border-tint: oklch(0.62 0.13 75 / 0.3);
 }
 
 @layer base {
@@ -137,12 +151,12 @@
     color: transparent;
   }
   .gold-border {
-    border: 1px solid oklch(0.78 0.13 85 / 0.3);
+    border: 1px solid var(--gold-border-tint);
   }
   .glass-card {
-    background: oklch(0.18 0.006 80 / 0.7);
+    background: var(--glass-bg);
     backdrop-filter: blur(12px);
-    border: 1px solid oklch(0.78 0.13 85 / 0.15);
+    border: 1px solid var(--glass-border);
     box-shadow: var(--shadow-deep);
   }
   .btn-gold {
