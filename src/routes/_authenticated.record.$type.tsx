@@ -1218,10 +1218,6 @@ function RecordPage() {
                 Connecte-toi au moins une fois en ligne pour télécharger la liste de tes parcelles. La saisie pour cette mission est bloquée tant qu'aucune parcelle n'est disponible.
               </p>
             </div>
-          ) : isParcelleCreationMission && !online ? (
-            <p className="text-sm text-muted-foreground">
-              La liaison à une parcelle nécessite une connexion. La saisie reste possible : le document ne sera simplement pas rattaché à une parcelle.
-            </p>
           ) : (
             <>
               {parcelleMode === "existing" ? (

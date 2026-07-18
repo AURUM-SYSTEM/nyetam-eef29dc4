@@ -369,6 +369,49 @@ non exécutable en pgTAP ni en test unitaire sans horloge simulée).
 
 ---
 
+### 3.6 — Garde-fou "nécessite une connexion" obsolète sur la création de parcelle ✅ Corrigé
+
+**Constat** (remonté par un test terrain). Dans la mission "Recensement des
+plantations" (`isParcelleCreationMission`), la section Parcelle affichait,
+hors-ligne, le message "La liaison à une parcelle nécessite une
+connexion. La saisie reste possible : le document ne sera simplement pas
+rattaché à une parcelle." — masquant **toute** la rubrique de capture
+(formulaire de création, GPS, périmètre). Ce garde-fou avait été écrit
+avant le correctif §3.3 (création de parcelle hors-ligne via
+`pendingParcelles`) et n'avait jamais été retiré une fois ce chemin
+implémenté : il bloquait une fonctionnalité qui, entre-temps, était
+devenue pleinement utilisable hors-ligne — y compris la capture GPS
+elle-même, qui ne dépend jamais du réseau (API Geolocation du navigateur,
+satellite).
+
+**Correctif** (`_authenticated.record.$type.tsx`) : suppression pure et
+simple de cette branche `isParcelleCreationMission && !online`. Le mode
+"nouvelle parcelle" (toujours actif pour cette mission) retombe
+directement sur le formulaire de création existant, qui gère déjà
+correctement le cas hors-ligne (`handleCreateParcelle` bascule vers
+`enqueueParcelle`, voir §3.3) — aucune autre modification nécessaire, le
+garde-fou était la seule chose qui empêchait cette fonctionnalité déjà
+prête d'être utilisée hors-ligne.
+
+**Vérification faite sur d'autres garde-fous "connexion requise" de
+l'app** — aucun autre trouvé obsolète :
+- `parcelleSelectionUnavailable` (missions visite/suivi) : tient déjà
+  compte des parcelles en attente de synchro (voir §3.3), pas de blocage
+  indu.
+- Bannière "connecte-toi pour télécharger les formulaires de mission"
+  (`missionFormsOfflineNoCache`) : cache-first avec repli réseau
+  légitime, ne s'affiche que si aucun cache n'existe encore — comportement
+  voulu, pas un bug.
+- `_authenticated.recensement.tsx` (module NGO, sans rapport avec les
+  parcelles AGRO) : ses vérifications `!online` concernent la
+  transcription audio, qui nécessite réellement le réseau (appel à un
+  modèle distant) — l'agent est informé que la transcription aura lieu à
+  la reconnexion, la saisie elle-même n'est jamais bloquée.
+- `_authenticated.parcelles.tsx`/`.producteurs.tsx` (pages de
+  consultation) : aucun garde-fou de connexion présent.
+
+---
+
 ## 4. Interface & thème
 
 ### 4.1 — `.glass-card`/`.gold-border` figés en thème sombre ✅ Corrigé
@@ -412,6 +455,7 @@ lecture de code.
 | 3.3 | Création parcelle/producteur impossible hors-ligne | ✅ Corrigé |
 | 3.4 | Idempotence sync documents (doublon possible sur interruption) | ✅ Corrigé |
 | 3.5 | `pendingParcelles` bloquée en "syncing" si interrompue | ✅ Corrigé |
+| 3.6 | Garde-fou "connexion requise" obsolète sur création de parcelle | ✅ Corrigé |
 | 4.1 | Thème clair : cartes illisibles | ✅ Corrigé |
 
 ---
