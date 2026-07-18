@@ -289,68 +289,83 @@ appelables par n'importe quel agent — pas réservées aux superviseurs).
 
 ---
 
-### 3.4 — Idempotence de la synchronisation offline (documents) 🔴 À corriger
+### 3.4 — Idempotence de la synchronisation offline (documents) ✅ Corrigé
 
 **Constat.** Le sync engine (`processOne` dans `use-sync-engine.ts`)
-insère la ligne `documents` puis continue le traitement (upload
+insérait la ligne `documents` puis continuait le traitement (upload
 photos/vidéos, structuration CORE) avant de marquer l'item de la file
-`status: "synced"`. Si l'exécution est interrompue **après** l'insertion
+`status: "synced"`. Si l'exécution était interrompue **après** l'insertion
 Supabase réussie mais **avant** l'appel `updateQueueItem(item.id,
 {status:"synced", remoteDocId: ...})` — app fermée, onglet tué, coupure
-réseau brutale au mauvais moment — l'item reste dans un état encore
+réseau brutale au mauvais moment — l'item restait dans un état encore
 "en cours" (`generating`, potentiellement `uploading`/`transcribing`
-selon où l'interruption survient). Le prochain passage du sync engine
-(`runPass`) considère cet item comme encore à traiter (le filtre inclut
-`status === "generating"` etc.) et rejoue `processOne` **depuis le
-début** — y compris un **second** `.insert()` sur `documents`, sans
-aucune vérification qu'un document correspondant existe déjà.
+selon où l'interruption survenait). Le prochain passage du sync engine
+rejouait `processOne` **depuis le début** — y compris un **second**
+`.insert()` sur `documents`, sans aucune vérification qu'un document
+correspondant existait déjà.
 
-**Impact concret** : un document en double en base, avec le même
-contenu/transcript, dans les cas (rares mais réels sur le terrain, où les
-coupures réseau/redémarrages d'app sont fréquents) où l'interruption tombe
-dans cette fenêtre. Aucune alerte, aucune détection automatique
-aujourd'hui — l'agent ou un superviseur doit le remarquer visuellement
-(deux entrées identiques dans "Documents récents"/le tableau de bord).
+**Correctif** (`supabase/migrations/20260718100000_067bc9aa-...sql`,
+`src/hooks/use-sync-engine.ts`) :
+- Nouvelle colonne `documents.client_queue_id`, avec un **index unique
+  partiel** (`WHERE client_queue_id IS NOT NULL` — les documents créés
+  avant ce correctif ont tous cette colonne à `NULL`, sans conflit entre
+  eux). Alimentée avec l'`id` local du `QueueItem` (stable, généré une
+  seule fois par saisie).
+- `processOne` vérifie désormais l'existence d'un document portant cette
+  clé **avant** d'insérer ; s'il en existe déjà un (issu d'une tentative
+  précédente interrompue), il réutilise cette ligne au lieu d'en créer
+  une seconde — la garantie d'unicité en base rend cette vérification
+  fiable même en cas de double exécution concurrente.
+- Effet de bord corrigé au passage, découvert en traitant ce correctif :
+  l'upload de photos/vidéos réécrivait `photo_urls`/`video_urls` avec
+  uniquement les fichiers de la passe **courante**, perdant la référence
+  aux fichiers déjà envoyés lors d'une tentative précédente interrompue
+  (le fichier local est supprimé après un upload réussi, donc invisible à
+  la passe suivante, mais son URL n'était plus dans le tableau écrit).
+  Ces deux mises à jour font maintenant une fusion (`Set` sur l'union des
+  URLs existantes et nouvelles) plutôt qu'un remplacement.
+- La structuration CORE (`core_outputs`) vérifie aussi qu'aucune ligne
+  n'existe déjà pour ce document avant d'en écrire une — évite un second
+  résultat d'analyse IA en double sur une reprise.
 
-**Recommandation** : introduire une clé d'idempotence côté client (ex.
-l'`id` local du `QueueItem`, déjà stable et généré une seule fois),
-stockée dans une colonne dédiée sur `documents` (ou vérifiée via un
-`upsert` avec contrainte d'unicité sur cette clé) avant de considérer
-l'insertion comme la source de vérité. Alternative plus légère à court
-terme : avant l'`.insert()`, vérifier par une requête si un document avec
-ce `client_queue_id` existe déjà pour cet agent, et sauter directement à
-l'étape suivante (upload médias) si oui.
-
-**Portée** : ce n'est pas un régression introduite dans cette session —
-c'est un gap préexistant, remonté ici parce que le travail sur
-`pendingParcelles` (§3.3) a nécessité de lire en détail ce pipeline. Le
-correctif `pendingParcelles` lui-même n'a **pas** ce problème pour la
-détection de doublon métier (elle est gérée explicitement, voir §3.3),
-mais partage une variante plus bénigne du même risque de timing : voir
-§3.5.
+**Vérifié par** `supabase/tests/database/documents_idempotency.test.sql`
+(garantie de l'index unique — deux documents ne peuvent pas partager un
+`client_queue_id` non nul, les valeurs `NULL` n'entrent jamais en
+conflit). La logique de reprise elle-même (vérifier avant d'insérer,
+réutiliser la ligne trouvée) vit côté client et n'est pas exécutable
+depuis pgTAP — vérifiée par lecture de code et `tsc`/build.
 
 ---
 
-### 3.5 — `pendingParcelles` : entrée bloquée en "syncing" si interrompue 🔴 À corriger (mineur)
+### 3.5 — `pendingParcelles` : entrée bloquée en "syncing" si interrompue ✅ Corrigé
 
 **Constat.** Pendant la synchronisation d'une parcelle en attente,
-`processParcelle()` marque l'entrée `status: "syncing"` avant l'appel
-réseau. Si l'exécution est interrompue à ce moment précis (avant que le
+`processParcelle()` marquait l'entrée `status: "syncing"` avant l'appel
+réseau. Si l'exécution était interrompue à ce moment précis (avant que le
 `try`/`catch` ne retombe sur un état final `synced`/`conflict`/`error`),
-l'entrée reste bloquée en `"syncing"` indéfiniment : le filtre de
-re-traitement (`toSync` dans `processParcelleQueue`) ne considère que les
-statuts `"pending"` et `"error"` éligible au retry, jamais `"syncing"`.
-
-**Impact** : plus rare que §3.4 (fenêtre de temps plus courte — un seul
-appel réseau, pas plusieurs étapes), et sans risque de duplication (rien
-n'est réinséré), mais l'agent voit indéfiniment "Synchronisation…" sur
+l'entrée restait bloquée en `"syncing"` indéfiniment : le filtre de
+re-traitement (`toSync` dans `processParcelleQueue`) ne considérait que
+les statuts `"pending"` et `"error"` éligible au retry, jamais
+`"syncing"`. L'agent voyait indéfiniment "Synchronisation…" sur
 `/parcelles` sans que rien ne se passe, sans message d'erreur ni option
 de réessayer.
 
-**Recommandation** : au démarrage de `processParcelleQueue`, réinclure
-dans `toSync` les entrées `"syncing"` dont `updatedAt` dépasse un délai
-raisonnable (ex. 2 minutes) — signe qu'un passage précédent a été
-interrompu avant de conclure.
+**Correctif** (`src/hooks/use-sync-engine.ts`) : `toSync` inclut
+désormais aussi les entrées `"syncing"` dont `updatedAt` dépasse
+`STUCK_SYNCING_THRESHOLD_MS` (2 minutes) — signe qu'un passage précédent
+a été interrompu avant de conclure. La tentative est alors rejouée.
+
+**Sécurité de cette reprise** : rejouer un appel `createParcelle` qui a
+peut-être déjà réussi côté serveur (réponse perdue avant l'interruption)
+ne crée **pas** de parcelle en double — `createParcelle` fait lui-même une
+détection de doublon par proximité GPS (rayon 50 m, voir
+`findNearbyParcelle` dans `agro.functions.ts`) avant toute insertion. Dans
+le pire cas, la parcelle déjà créée est détectée comme "doublon" d'elle-même
+(distance ≈ 0 m) et l'entrée passe en état `"conflict"`, visible et
+actionnable par l'agent — jamais une seconde ligne silencieuse.
+
+**Vérifié par** lecture de code et `tsc`/build (comportement de timing,
+non exécutable en pgTAP ni en test unitaire sans horloge simulée).
 
 ---
 
@@ -395,21 +410,22 @@ lecture de code.
 | 3.1 | Bugs GPS/surface (7 bugs distincts) | ✅ Corrigé |
 | 3.2 | Fuite d'état "GPS capturé" entre saisies | ✅ Corrigé |
 | 3.3 | Création parcelle/producteur impossible hors-ligne | ✅ Corrigé |
-| 3.4 | Idempotence sync documents (doublon possible sur interruption) | 🔴 À corriger |
-| 3.5 | `pendingParcelles` bloquée en "syncing" si interrompue | 🔴 À corriger (mineur) |
+| 3.4 | Idempotence sync documents (doublon possible sur interruption) | ✅ Corrigé |
+| 3.5 | `pendingParcelles` bloquée en "syncing" si interrompue | ✅ Corrigé |
 | 4.1 | Thème clair : cartes illisibles | ✅ Corrigé |
 
 ---
 
 ## 6. Prochaines priorités suggérées
 
-1. **Reconstruction des migrations (§2.1)** — bloquant pour toute
-   personne qui voudrait un environnement de dev reproductible ou un
-   second environnement (staging propre). Nécessite un accès direct au
-   projet Supabase.
-2. **Idempotence de la synchronisation (§3.4)** — risque de données
-   dupliquées en production, silencieux. À traiter avant d'augmenter le
-   volume d'agents terrain sur connexions instables.
-3. **`pendingParcelles` bloquée en "syncing" (§3.5)** — correctif simple
-   (fenêtre de timeout), à faire en même temps que §3.4 puisque les deux
-   touchent le même pipeline.
+1. **Reconstruction des migrations (§2.1)** — seul point encore ouvert.
+   Bloquant pour toute personne qui voudrait un environnement de dev
+   reproductible ou un second environnement (staging propre). Nécessite
+   un accès direct au projet Supabase (dashboard, ou CLI avec
+   `SUPABASE_ACCESS_TOKEN`/`DATABASE_URL`) — voir §2.1 pour la procédure.
+2. Appliquer la migration `20260718100000_067bc9aa-...sql` (§3.4) sur la
+   base réelle et lancer `supabase/tests/database/documents_idempotency.test.sql`
+   pour confirmer la contrainte en conditions réelles — comme pour toutes
+   les migrations de ce projet, elle n'a pas pu être vérifiée contre une
+   vraie base depuis l'environnement de développement utilisé ici (pas
+   d'accès réseau Supabase, voir §2.1).

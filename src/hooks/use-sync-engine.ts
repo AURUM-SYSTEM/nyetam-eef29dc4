@@ -45,6 +45,13 @@ import { getCachedProfile } from "@/hooks/use-auth";
 import { normalizeDocumentType } from "@/lib/document-types";
 
 const PARCELLE_SYNC_MAX_RETRIES = 8;
+// Voir docs/AUDIT_REPORT.md §3.5 — une entrée passe à "syncing" juste avant
+// l'appel réseau ; si l'exécution est interrompue à ce moment précis (avant
+// que le try/catch ne retombe sur un état final synced/conflict/error),
+// elle restait bloquée en "syncing" indéfiniment, puisque seuls "pending" et
+// "error" étaient rejoués. Passé ce délai sans conclusion, on considère la
+// tentative précédente comme abandonnée et on la rejoue.
+const STUCK_SYNCING_THRESHOLD_MS = 2 * 60_000;
 
 // Traçage interne du cycle de vie de la file — jamais affiché à l'écran,
 // mais console.log reste visible dans les DevTools de n'importe quel
@@ -149,7 +156,10 @@ export function useSyncEngine() {
       const pendingParcelles = await listPendingParcelles();
       const now = Date.now();
       const toSync = pendingParcelles.filter(
-        (p) => p.status === "pending" || (p.status === "error" && (p.nextRetryAt ?? 0) <= now),
+        (p) =>
+          p.status === "pending" ||
+          (p.status === "error" && (p.nextRetryAt ?? 0) <= now) ||
+          (p.status === "syncing" && now - p.updatedAt > STUCK_SYNCING_THRESHOLD_MS),
       );
       for (const p of toSync) {
         if (cancelled || !navigator.onLine) break;
@@ -328,66 +338,106 @@ export function useSyncEngine() {
           ? "field_entry"
           : normalizeDocumentType(result.missionType);
 
-        const { data, error } = await supabase
+        // IDEMPOTENCE (voir docs/AUDIT_REPORT.md §3.4) : si l'exécution a été
+        // interrompue APRÈS un insert précédent réussi mais AVANT le
+        // updateQueueItem(...,{status:"synced"}) final, cet item est rejoué
+        // depuis le début — sans cette vérification, l'insert ci-dessous
+        // créerait un second document identique. `item.id` (l'id local du
+        // QueueItem, stable et généré une seule fois) sert de clé
+        // d'idempotence, stockée dans documents.client_queue_id (index
+        // unique partiel — voir la migration 20260718100000_...sql). On
+        // réutilise la ligne existante au lieu d'en créer une seconde.
+        const { data: existingDoc } = await supabase
           .from("documents")
-          .insert({
-            user_id: userId,
-            type: dbType,
-            mission_type: result.missionType,
-            module_type: item.meta?.moduleType ?? null,
-            title: result.title ?? "Sans titre",
-
-            transcript: result.cleanedTranscript ?? transcript,
-            introduction: result.introduction ?? "",
-            faits: result.faits ?? "",
-            declarations: result.declarations ?? "",
-            observations: result.observations ?? "",
-            conclusion: result.conclusion ?? "",
-            status: "ready",
-            agent_name: item.meta?.agentName ?? "",
-            location: locationLabel,
-            location_data: resolvedLocation as any,
-            field_data: item.meta?.fieldData ?? null,
-            parcelle_id: item.meta?.parcelleId ?? null,
-            suggestions,
-            reference: item.meta?.reference ?? "",
-            signature_name:
-              item.meta?.signatureName ?? item.meta?.agentName ?? "",
-            doc_date: item.meta?.docDate ?? null,
-            doc_time: item.meta?.docTime ?? null,
-            lang,
-          } as any)
           .select("id")
-          .single();
+          .eq("client_queue_id", item.id)
+          .maybeSingle();
 
-        if (error) throw error;
+        let data: { id: string };
+        if (existingDoc) {
+          data = existingDoc;
+        } else {
+          const { data: inserted, error } = await supabase
+            .from("documents")
+            .insert({
+              user_id: userId,
+              client_queue_id: item.id,
+              type: dbType,
+              mission_type: result.missionType,
+              module_type: item.meta?.moduleType ?? null,
+              title: result.title ?? "Sans titre",
+
+              transcript: result.cleanedTranscript ?? transcript,
+              introduction: result.introduction ?? "",
+              faits: result.faits ?? "",
+              declarations: result.declarations ?? "",
+              observations: result.observations ?? "",
+              conclusion: result.conclusion ?? "",
+              status: "ready",
+              agent_name: item.meta?.agentName ?? "",
+              location: locationLabel,
+              location_data: resolvedLocation as any,
+              field_data: item.meta?.fieldData ?? null,
+              parcelle_id: item.meta?.parcelleId ?? null,
+              suggestions,
+              reference: item.meta?.reference ?? "",
+              signature_name:
+                item.meta?.signatureName ?? item.meta?.agentName ?? "",
+              doc_date: item.meta?.docDate ?? null,
+              doc_time: item.meta?.docTime ?? null,
+              lang,
+            } as any)
+            .select("id")
+            .single();
+
+          if (error) throw error;
+          data = inserted;
+        }
 
         // ÉTAPE 3.6 — 🧩 CORE : structuration IA générique (non bloquant)
         // Ne concerne que les saisies `field_entry` (les types legacy sont
         // déjà structurés par `generateDocument` ci-dessus). Écrit UNIQUEMENT
         // dans `core_outputs`, jamais dans `documents`. Un échec ici ne doit
         // jamais faire échouer la synchronisation de la saisie elle-même —
-        // l'agent a déjà son document sauvegardé.
+        // l'agent a déjà son document sauvegardé. Idempotence : sur une
+        // reprise après interruption (ligne documents réutilisée ci-dessus),
+        // ne pas réécrire un second core_outputs pour le même document.
         if (item.type === "field_entry") {
           try {
-            const structured = await structure({
-              data: {
-                transcript: result.cleanedTranscript ?? transcript,
-                moduleType: item.meta?.moduleType ?? "generic",
-                lang,
-              },
-            });
-            await supabase.from("core_outputs").insert({
-              document_id: data.id,
-              module_type: item.meta?.moduleType ?? "generic",
-              payload: structured as any,
-            } as any);
+            const { data: existingCore } = await supabase
+              .from("core_outputs")
+              .select("id")
+              .eq("document_id", data.id)
+              .maybeSingle();
+            if (!existingCore) {
+              const structured = await structure({
+                data: {
+                  transcript: result.cleanedTranscript ?? transcript,
+                  moduleType: item.meta?.moduleType ?? "generic",
+                  lang,
+                },
+              });
+              await supabase.from("core_outputs").insert({
+                document_id: data.id,
+                module_type: item.meta?.moduleType ?? "generic",
+                payload: structured as any,
+              } as any);
+            }
           } catch (e) {
             console.warn("CORE structureFieldEntry failed (non bloquant)", e);
           }
         }
 
-        // Upload photos (if any) to storage and patch the document
+        // Upload photos (if any) to storage and patch the document.
+        // Idempotence : sur une reprise, certaines photos peuvent avoir été
+        // uploadées ET supprimées localement (deletePhoto ci-dessous) lors
+        // d'une tentative précédente interrompue APRÈS l'upload mais avant
+        // la fin du traitement — getPhoto(pid) renvoie alors undefined et
+        // ce pid est simplement ignoré (déjà en place côté storage). Sans
+        // fusion avec les URLs déjà enregistrées, le .update() suivant
+        // écraserait photo_urls avec seulement les photos de CETTE passe,
+        // perdant la référence aux photos déjà envoyées lors de la
+        // précédente.
         const photoIds = item.photoIds ?? [];
         if (photoIds.length > 0) {
           toast.loading("🖼️ Envoi des photos…", { id: toastId });
@@ -410,9 +460,16 @@ export function useSyncEngine() {
             paths.push(path);
           }
           if (paths.length > 0) {
+            const { data: currentDoc } = await supabase
+              .from("documents")
+              .select("photo_urls")
+              .eq("id", data.id)
+              .single();
+            const existingPaths = (currentDoc as any)?.photo_urls ?? [];
+            const mergedPaths = Array.from(new Set([...existingPaths, ...paths]));
             await supabase
               .from("documents")
-              .update({ photo_urls: paths })
+              .update({ photo_urls: mergedPaths })
               .eq("id", data.id);
           }
           for (const pid of photoIds) {
@@ -443,9 +500,16 @@ export function useSyncEngine() {
             vpaths.push(path);
           }
           if (vpaths.length > 0) {
+            const { data: currentDoc } = await supabase
+              .from("documents")
+              .select("video_urls")
+              .eq("id", data.id)
+              .single();
+            const existingPaths = (currentDoc as any)?.video_urls ?? [];
+            const mergedPaths = Array.from(new Set([...existingPaths, ...vpaths]));
             await supabase
               .from("documents")
-              .update({ video_urls: vpaths })
+              .update({ video_urls: mergedPaths })
               .eq("id", data.id);
           }
           for (const vid of videoIds) {

@@ -120,6 +120,7 @@ export type Database = {
       documents: {
         Row: {
           agent_name: string
+          client_queue_id: string | null
           conclusion: string
           created_at: string
           declarations: string
@@ -152,6 +153,7 @@ export type Database = {
         }
         Insert: {
           agent_name?: string
+          client_queue_id?: string | null
           conclusion?: string
           created_at?: string
           declarations?: string
@@ -184,6 +186,7 @@ export type Database = {
         }
         Update: {
           agent_name?: string
+          client_queue_id?: string | null
           conclusion?: string
           created_at?: string
           declarations?: string
