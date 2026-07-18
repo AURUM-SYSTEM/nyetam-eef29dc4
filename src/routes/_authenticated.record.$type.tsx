@@ -316,6 +316,29 @@ function RecordPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // BUG CORRIGÉ ICI (2e passe) : la première correction ne vidait le
+  // brouillon que sur un clic explicite du lien "retour" en haut de l'écran.
+  // Ça ne couvre pas tous les cas réels de sortie — en particulier le bouton
+  // "retour" matériel / le geste de retour du téléphone (Android notamment),
+  // qui ne déclenche PAS le onClick du lien : il fait sortir l'écran par
+  // l'historique de navigation, sans jamais passer par ce gestionnaire. Le
+  // brouillon (dont "GPS capturé") restait donc résident dans ce cas précis,
+  // exactement comme rapporté sur le terrain malgré la première correction.
+  //
+  // Fix robuste : nettoyage au DÉMONTAGE du composant, quel qu'en soit le
+  // déclencheur (lien, bouton retour matériel, navigation programmatique
+  // ailleurs dans l'app) — un vrai rechargement de page, lui, ne déclenche
+  // jamais ce nettoyage (le contexte JS est détruit sans qu'aucun cleanup
+  // React ne s'exécute), donc la reprise après un rechargement accidentel
+  // reste intacte. Idempotent (suppression d'une clé déjà absente = no-op),
+  // donc sans risque même si stopAndSave/submitManual ont déjà vidé le
+  // brouillon juste avant.
+  useEffect(() => {
+    return () => {
+      void clearRecordDraft();
+    };
+  }, []);
+
   useEffect(() => {
     // Attend la tentative de restauration du brouillon avant de retomber sur
     // la première mission par défaut, sinon le défaut gagnerait toujours la
@@ -1001,23 +1024,12 @@ function RecordPage() {
   return (
     <>
     <div className="px-5 pt-8 pb-32">
-      <Link
-        to="/"
-        onClick={() => {
-          // BUG CORRIGÉ ICI : quitter la saisie par ce bouton (sans
-          // enregistrer) ne vidait jamais le brouillon persistant
-          // (recordDraft, IndexedDB) — contrairement à stopAndSave/
-          // submitManual. Le brouillon (dont "GPS capturé") ressurgissait
-          // donc tel quel au prochain montage de cet écran, y compris pour
-          // une saisie sans rapport avec la précédente (le brouillon est
-          // global, pas par mission/type). Le brouillon reste volontairement
-          // préservé en cas de simple rechargement de page (aucune
-          // navigation, cet effet ne se déclenche pas) — seul un abandon
-          // conscient via ce bouton doit repartir d'un état neutre.
-          void clearRecordDraft();
-        }}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
+      {/* Le nettoyage du brouillon en cas d'abandon (sans enregistrer) se
+          fait au démontage du composant (voir l'effet de nettoyage plus
+          haut) — pas ici sur ce clic précis, pour couvrir aussi le bouton/
+          geste de retour matériel du téléphone, qui ne déclenche pas ce
+          onClick. */}
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> {t("common.back")}
       </Link>
       <header className="mt-6">
