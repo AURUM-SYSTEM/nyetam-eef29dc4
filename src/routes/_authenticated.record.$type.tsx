@@ -18,11 +18,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
 import { listParcelles, listCooperatives, listProducers, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
-import { DebugLogPanel } from "@/components/DebugLogPanel";
-// DEBUG TEMPORAIRE — instrumentation active pour diagnostiquer la capture
-// des points de périmètre sur un appareil réel. À retirer une fois la
-// cause confirmée (voir aussi le forçage de visibilité de DebugLogPanel
-// plus bas, également temporaire).
+// Instrumentation de diagnostic pour la capture GPS/périmètre — no-op en
+// production (voir debug-log.ts), gardée pour un futur diagnostic terrain.
 import { debugLog, debugWarn, debugError } from "@/lib/debug-log";
 
 
@@ -94,15 +91,14 @@ function PermissionDeniedBanner({ onRetry }: { onRetry: () => void }) {
 // Aperçu carte du périmètre en cours de capture — chargé dynamiquement
 // (voir LeafletMaps.tsx) pour ne jamais alourdir l'écran de saisie quand
 // l'agent n'utilise pas ce mode.
-// DEBUG TEMPORAIRE — limite d'erreur (Error Boundary) autour de la section
-// périmètre/surface. Un try/catch classique ne peut PAS attraper une
-// exception levée pendant le rendu React d'un composant enfant (ex. Leaflet
-// qui lève "Map container is already initialized" si PerimeterMapPreview
-// est démonté/remonté trop vite au moment où boundaryClosed change) — seule
-// une Error Boundary le peut. Sans ça, une telle exception blanchit
-// silencieusement toute la section (texte de surface ET carte), ce qui
-// correspond exactement au symptôme "rien ne s'affiche du tout". À retirer
-// une fois la cause confirmée.
+// Limite d'erreur (Error Boundary) autour de la section périmètre/surface.
+// Un try/catch classique ne peut PAS attraper une exception levée pendant
+// le rendu React d'un composant enfant (ex. Leaflet qui lève "Map container
+// is already initialized" si PerimeterMapPreview est démonté/remonté trop
+// vite au moment où boundaryClosed change) — seule une Error Boundary le
+// peut. Sans ça, une telle exception blanchit silencieusement toute la
+// section (texte de surface ET carte), ce qui correspond exactement au
+// symptôme "rien ne s'affiche du tout".
 class BoundaryRenderErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
   static getDerivedStateFromError(error: Error) {
@@ -120,7 +116,7 @@ class BoundaryRenderErrorBoundary extends Component<{ children: ReactNode }, { e
       return (
         <p className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-[11px] text-red-400">
           <AlertTriangle className="h-3 w-3 shrink-0" />
-          Erreur d'affichage du périmètre : {this.state.error.message} — voir le panneau Debug ci-dessous.
+          Erreur d'affichage du périmètre — vos points GPS déjà capturés restent enregistrés. Réessayez, ou rechargez la page si le problème persiste.
         </p>
       );
     }
@@ -1099,7 +1095,6 @@ function RecordPage() {
   const vss = String(videoElapsed % 60).padStart(2, "0");
 
   return (
-    <>
     <div className="px-5 pt-8 pb-32">
       {/* Le nettoyage du brouillon en cas d'abandon (sans enregistrer) se
           fait au démontage du composant (voir l'effet de nettoyage plus
@@ -1618,10 +1613,5 @@ function RecordPage() {
         </button>
       </div>
     </div>
-    {/* DEBUG TEMPORAIRE — forceVisible=true pour voir les logs sur ce
-        téléphone en production, sans DevTools distant. À repasser à
-        <DebugLogPanel /> (sans prop) une fois la cause confirmée. */}
-    <DebugLogPanel forceVisible />
-    </>
   );
 }

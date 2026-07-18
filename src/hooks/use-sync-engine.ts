@@ -46,6 +46,13 @@ import { normalizeDocumentType } from "@/lib/document-types";
 
 const PARCELLE_SYNC_MAX_RETRIES = 8;
 
+// Traçage interne du cycle de vie de la file — jamais affiché à l'écran,
+// mais console.log reste visible dans les DevTools de n'importe quel
+// utilisateur en production si on ne le limite pas au développement.
+function devLog(...args: unknown[]) {
+  if (import.meta.env.DEV) console.log(...args);
+}
+
 export function useSyncEngine() {
   const transcribe = useServerFn(transcribeAudio);
   const generate = useServerFn(generateDocument);
@@ -494,12 +501,12 @@ export function useSyncEngine() {
 
     async function runPass() {
       if (running.current) {
-        console.log("⏳ ENGINE ALREADY RUNNING");
+        devLog("⏳ ENGINE ALREADY RUNNING");
         return;
       }
 
       if (!navigator.onLine) {
-        console.log("📴 OFFLINE MODE");
+        devLog("📴 OFFLINE MODE");
         return;
       }
 
@@ -508,14 +515,14 @@ export function useSyncEngine() {
       } = await supabase.auth.getSession();
 
       if (!session) {
-        console.log("🔒 NO SESSION");
+        devLog("🔒 NO SESSION");
         return;
       }
 
       running.current = true;
 
       try {
-        console.log("🚀 SYNC ENGINE ACTIVE");
+        devLog("🚀 SYNC ENGINE ACTIVE");
 
         // AVANT les documents : voir le commentaire au-dessus de
         // processParcelleQueue — un document en attente peut référencer une
@@ -525,7 +532,7 @@ export function useSyncEngine() {
 
         const pending = await listPending();
 
-        console.log("📦 QUEUE LENGTH =", pending.length);
+        devLog("📦 QUEUE LENGTH =", pending.length);
 
         const now = Date.now();
         const toProcess = pending.filter(
@@ -538,7 +545,7 @@ export function useSyncEngine() {
         );
 
 
-        console.log(
+        devLog(
           "📋 TO PROCESS =",
           toProcess.map((i) => ({
             id: i.id,
@@ -549,7 +556,7 @@ export function useSyncEngine() {
 
         for (const item of toProcess) {
           if (cancelled || !navigator.onLine) {
-            console.log("⛔ STOP SYNC LOOP");
+            devLog("⛔ STOP SYNC LOOP");
             break;
           }
 
@@ -570,7 +577,7 @@ export function useSyncEngine() {
     }
 
     const onOnline = () => {
-      console.log("🌐 BACK ONLINE");
+      devLog("🌐 BACK ONLINE");
       void runPass();
     };
 
@@ -578,7 +585,7 @@ export function useSyncEngine() {
 
     // Manual trigger — dispatch `new CustomEvent("aurum:sync-now")` from anywhere
     const onManualSync = () => {
-      console.log("🖐️ MANUAL SYNC TRIGGERED");
+      devLog("🖐️ MANUAL SYNC TRIGGERED");
       void runPass();
     };
     window.addEventListener("aurum:sync-now", onManualSync);
@@ -588,7 +595,7 @@ export function useSyncEngine() {
     }, 30000);
 
     const unsub = subscribeQueue(() => {
-      console.log("📨 QUEUE UPDATED");
+      devLog("📨 QUEUE UPDATED");
       void runPass();
     });
 

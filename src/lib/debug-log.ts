@@ -4,6 +4,10 @@
 // DevTools distants. Utilisé aussi par du code permanent (ex.
 // chunk-reload.ts) qui a besoin de logs visibles en dev sans dépendre de la
 // console distante.
+//
+// No-op en production (ni console.*, ni buffer) : ces fonctions restent
+// appelables partout dans le code sans risque — un appelant n'a jamais à se
+// demander s'il expose un détail technique à un utilisateur final.
 type Entry = { at: number; text: string };
 
 const MAX_ENTRIES = 200;
@@ -30,16 +34,19 @@ function push(text: string) {
 }
 
 export function debugLog(...args: unknown[]) {
+  if (!import.meta.env.DEV) return;
   console.log(...args);
   push(format(args));
 }
 
 export function debugWarn(...args: unknown[]) {
+  if (!import.meta.env.DEV) return;
   console.warn(...args);
   push("[WARN] " + format(args));
 }
 
 export function debugError(...args: unknown[]) {
+  if (!import.meta.env.DEV) return;
   console.error(...args);
   push("[ERROR] " + format(args));
 }

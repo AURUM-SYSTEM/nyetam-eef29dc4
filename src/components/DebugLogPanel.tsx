@@ -1,21 +1,16 @@
 // Panneau texte repliable affichant en direct les logs internes (voir
 // src/lib/debug-log.ts), pour diagnostiquer directement à l'écran sur un
-// téléphone, sans DevTools distant. Réservé au développement par défaut :
-// ne s'affiche pas en production, même si des entrées sont présentes.
-//
-// `forceVisible` (DEBUG TEMPORAIRE) : contourne cette garde pour une session
-// de diagnostic active en production, sur un écran précis uniquement (voir
-// _authenticated.record.$type.tsx). À retirer avec le reste de
-// l'instrumentation une fois la cause confirmée — ne jamais laisser ce
-// contournement actif en permanence.
+// téléphone, sans DevTools distant. Réservé au développement : ne s'affiche
+// jamais en production, même si des entrées sont présentes — aucune prop ne
+// permet de contourner cette garde.
 import { useState, useSyncExternalStore } from "react";
 import { getDebugEntries, subscribeDebugLog, clearDebugLog } from "@/lib/debug-log";
 
-export function DebugLogPanel({ forceVisible = false }: { forceVisible?: boolean } = {}) {
+export function DebugLogPanel() {
   const entries = useSyncExternalStore(subscribeDebugLog, getDebugEntries, getDebugEntries);
   const [open, setOpen] = useState(false);
 
-  if (!forceVisible && !import.meta.env.DEV) return null;
+  if (!import.meta.env.DEV) return null;
   if (entries.length === 0) return null;
 
   return (

@@ -66,54 +66,11 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
-// Diagnostic temporaire — lit SUPABASE_URL exactement comme le fait le
-// vrai code applicatif (client.server.ts : process.env.SUPABASE_URL), pas
-// via le paramètre `env` brut du Worker Cloudflare. Ce fichier server.ts
-// n'est PAS le point d'entrée réel du Worker (Nitro génère son propre
-// wrapper et n'y transmet jamais `env` — il alimente process.env par un
-// autre mécanisme interne), donc lire `env` ici donnait un faux négatif.
-// Ne renvoie que le nom d'hôte, jamais de clé. À retirer une fois la
-// confusion de projet Supabase clarifiée.
-function debugEnvResponse(): Response {
-  const raw = process.env.SUPABASE_URL;
-  let supabaseUrlHost: string;
-  if (!raw) {
-    supabaseUrlHost = "(process.env.SUPABASE_URL absent)";
-  } else {
-    try {
-      supabaseUrlHost = new URL(raw).host;
-    } catch {
-      supabaseUrlHost = "(SUPABASE_URL présent mais n'est pas une URL valide)";
-    }
-  }
-  return new Response(
-    JSON.stringify({ supabaseUrlHost, commit: __BUILD_SHA__, checkedAt: new Date().toISOString() }, null, 2),
-    {
-      status: 200,
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-        "cache-control": "no-store, no-cache, must-revalidate",
-      },
-    },
-  );
-}
-
-// Marqueur de diagnostic temporaire (voir __BUILD_SHA__/__BUILD_TIME__ dans
-// vite.config.ts) — permet de confirmer que le Worker exécute bien le
-// dernier déploiement, sans passer par le routage SSR ni aucun cache
-// d'assets. À retirer une fois la confusion de projet Supabase clarifiée.
+// Vérification légère d'exécution (uptime checks) — ne révèle aucun détail
+// d'infrastructure (pas de commit, pas d'hôte Supabase, etc.).
 function healthResponse(): Response {
   return new Response(
-    JSON.stringify(
-      {
-        status: "ok",
-        commit: __BUILD_SHA__,
-        builtAt: __BUILD_TIME__,
-        checkedAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
+    JSON.stringify({ status: "ok" }, null, 2),
     {
       status: 200,
       headers: {
@@ -128,7 +85,6 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const pathname = new URL(request.url).pathname;
     if (pathname === "/health") return healthResponse();
-    if (pathname === "/api/debug-env") return debugEnvResponse();
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
