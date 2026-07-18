@@ -509,6 +509,25 @@ export const createParcelle = createServerFn({ method: "POST" })
           .single();
         if (createErr) throw new Error(createErr.message);
         cooperativeId = (created as any).id as string;
+
+        // Journalisation manuelle (comme partout ailleurs dans ce fichier) —
+        // volontairement PAS déléguée à un trigger DB : cette création passe
+        // par supabaseAdmin (service role), sous lequel auth.uid() est NULL
+        // côté Postgres (le JWT service role ne porte pas de claim "sub").
+        // Un trigger générique ne pourrait donc pas attribuer cette création
+        // à context.userId — seul le code applicatif le sait ici.
+        try {
+          await supabaseAdmin.from("audit_log").insert({
+            organization_id: orgId,
+            actor_id: context.userId,
+            action: "creation",
+            entity_type: "cooperative",
+            entity_id: cooperativeId,
+            new_value: { name: wanted } as any,
+          } as any);
+        } catch (e) {
+          console.warn("audit_log cooperative creation failed (non bloquant)", e);
+        }
       }
     }
 
@@ -534,6 +553,23 @@ export const createParcelle = createServerFn({ method: "POST" })
           .single();
         if (createErr) throw new Error(createErr.message);
         producerId = (created as any).id as string;
+
+        // Journalisation manuelle — même raison que pour la coopérative
+        // ci-dessus : cette création par nom libre (distincte de la fonction
+        // dédiée createProducer, qui journalise déjà) passe aussi par
+        // supabaseAdmin, donc pas de auth.uid() exploitable par un trigger.
+        try {
+          await supabaseAdmin.from("audit_log").insert({
+            organization_id: orgId,
+            actor_id: context.userId,
+            action: "creation",
+            entity_type: "producer",
+            entity_id: producerId,
+            new_value: { full_name: wanted } as any,
+          } as any);
+        } catch (e) {
+          console.warn("audit_log producer creation (via createParcelle) failed (non bloquant)", e);
+        }
       }
     }
 
@@ -793,6 +829,52 @@ export const getAgentQualityScores = createServerFn({ method: "POST" })
           confirmedDuplicates: agg.confirmedDuplicates,
         }))
         .sort((a, b) => b.totalAlerts - a.totalAlerts),
+    };
+  });
+
+// ============================================================
+// Journal d'activité (audit_log) — lecture seule, superviseur/admin de
+// l'organisation uniquement (déjà garanti par la RLS de audit_log, revérifié
+// ici comme partout ailleurs dans ce fichier). Couvre les entrées écrites
+// manuellement (createParcelle, validateDocument, ...) ET celles des
+// triggers automatiques (voir migration 20260714150000...sql) — les deux
+// partagent la même table, cette fonction ne fait pas de distinction.
+//
+// Fenêtre des 200 entrées les plus récentes de l'organisation, filtrée
+// ensuite côté client (mêmes filtres table/agent que ceux déjà appliqués
+// côté client pour les autres sections de ce tableau de bord) plutôt qu'un
+// filtre serveur par requête — cohérent avec le reste de ce fichier.
+// ============================================================
+
+export const listAuditLog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+
+    const { data: rows, error } = await supabaseAdmin
+      .from("audit_log")
+      .select("id, action, entity_type, entity_id, actor_id, created_at")
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw new Error(error.message);
+
+    const actorIds = Array.from(new Set((rows ?? []).map((r: any) => r.actor_id).filter(Boolean)));
+    const { data: actorProfiles } = actorIds.length > 0
+      ? await supabaseAdmin.from("profiles").select("id, full_name").in("id", actorIds)
+      : { data: [] as any[] };
+    const actorNameById = new Map(((actorProfiles ?? []) as any[]).map((p) => [p.id, p.full_name || "Utilisateur"]));
+
+    return {
+      entries: ((rows ?? []) as Array<any>).map((r) => ({
+        id: r.id as string,
+        action: r.action as string,
+        entityType: r.entity_type as string,
+        entityId: (r.entity_id ?? null) as string | null,
+        actorId: (r.actor_id ?? null) as string | null,
+        actorName: r.actor_id ? (actorNameById.get(r.actor_id) ?? "Utilisateur") : "Système",
+        createdAt: r.created_at as string,
+      })),
     };
   });
 

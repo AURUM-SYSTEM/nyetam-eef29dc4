@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   BarChart3,
   CheckCircle2,
+  History,
   Loader2,
   Lock,
   MapPin,
@@ -65,6 +66,7 @@ import {
   listDuplicateAlerts,
   reviewDuplicateAlert,
   getAgentQualityScores,
+  listAuditLog,
   getDocumentDetails,
   getDataAnalystStats,
   getParcelleTimeline,
@@ -1792,6 +1794,135 @@ function DataQualitySection() {
   );
 }
 
+// ── Journal d'activité (audit_log) — lecture seule, superviseur/admin ────
+// Couvre à la fois les entrées écrites manuellement par le code applicatif
+// (créations/modifications/validations) et celles des triggers automatiques
+// (voir migration 20260714150000_...sql) : les deux partagent la même
+// table, cette vue ne fait pas de distinction. Fenêtre des 200 événements
+// les plus récents de l'organisation ; filtres appliqués côté client, même
+// convention que le reste de ce tableau de bord (ex. DataQualitySection).
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  creation: "Création",
+  modification: "Modification",
+  deletion: "Suppression",
+};
+
+const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  parcelle: "Parcelle",
+  producer: "Producteur",
+  cooperative: "Coopérative",
+  document: "Document",
+};
+
+type AuditLogEntry = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  actorId: string | null;
+  actorName: string;
+  createdAt: string;
+};
+
+function AuditLogSection() {
+  const fetchAuditLog = useServerFn(listAuditLog);
+  const [entries, setEntries] = useState<AuditLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [entityFilter, setEntityFilter] = useState<string>("all");
+  const [actorFilter, setActorFilter] = useState<string>("all");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchAuditLog({ data: undefined as any })
+      .then((r) => { if (!cancelled) setEntries(r.entries); })
+      .catch(() => { /* section purement informative */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const entityOptions = useMemo(
+    () => Array.from(new Set(entries.map((e) => e.entityType))),
+    [entries],
+  );
+  const actorOptions = useMemo(
+    () => Array.from(new Set(entries.map((e) => e.actorName))),
+    [entries],
+  );
+
+  const filtered = entries.filter((e) => {
+    if (entityFilter !== "all" && e.entityType !== entityFilter) return false;
+    if (actorFilter !== "all" && e.actorName !== actorFilter) return false;
+    return true;
+  });
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <h2 className="mb-3 flex items-center gap-2 font-display text-lg">
+        <History className="h-4 w-4 text-gold" /> Journal d'activité
+      </h2>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <select
+          value={entityFilter}
+          onChange={(e) => setEntityFilter(e.target.value)}
+          className="rounded-lg border border-border bg-card/60 px-2.5 py-1.5 text-xs"
+        >
+          <option value="all">Tous les éléments</option>
+          {entityOptions.map((t) => (
+            <option key={t} value={t}>{AUDIT_ENTITY_LABELS[t] ?? t}</option>
+          ))}
+        </select>
+        <select
+          value={actorFilter}
+          onChange={(e) => setActorFilter(e.target.value)}
+          className="rounded-lg border border-border bg-card/60 px-2.5 py-1.5 text-xs"
+        >
+          <option value="all">Tous les utilisateurs</option>
+          {actorOptions.map((a) => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+      ) : filtered.length === 0 ? (
+        <p className="py-4 text-center text-sm text-muted-foreground">
+          Aucune activité pour l'instant.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Utilisateur</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Élément</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((e) => (
+                <TableRow key={e.id}>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {new Date(e.createdAt).toLocaleString("fr-FR")}
+                  </TableCell>
+                  <TableCell className="text-sm">{e.actorName}</TableCell>
+                  <TableCell className="text-sm">{AUDIT_ACTION_LABELS[e.action] ?? e.action}</TableCell>
+                  <TableCell className="text-sm">{AUDIT_ENTITY_LABELS[e.entityType] ?? e.entityType}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function SupervisorDashboardContent() {
   const { profile } = useAuth();
   const { docs, profilesById, loading, error, reload } = useSupervisorData();
@@ -1958,6 +2089,10 @@ function SupervisorDashboardContent() {
           </ResponsiveContainer>
         </div>
       </section>
+
+      {/* Journal d'activité — pas réservé au module agro : documents couvre
+          tous les modules, et audit_log filtre déjà par organisation. */}
+      <AuditLogSection />
 
       {/* AGRO — parcelles et producteurs (uniquement pour les superviseurs du module agro) */}
       {profile?.module_type === "agro" && (

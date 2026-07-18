@@ -162,6 +162,49 @@ fichiers.
 
 ---
 
+## 7bis. Table `audit_log` (journal d'audit)
+
+Table préexistante en production (avant toute migration versionnée — voir
+§8 et `supabase/migrations/README.md`), désormais complétée par des
+triggers automatiques (migration `20260714150000_...`). Colonnes réelles :
+`id, organization_id, actor_id, action, entity_type, entity_id, old_value,
+new_value, justification, created_at` (noms différents d'un schéma
+générique `table_name/record_id/user_id` classique — conservés pour ne pas
+casser le code existant qui les utilise déjà : `agro.functions.ts`,
+`moderation.functions.ts`, `admin.functions.ts`).
+
+Deux mécanismes coexistent, sans jamais journaliser deux fois le même
+événement :
+
+- **Journalisation manuelle** (code applicatif, `actor_id` toujours
+  correct) — pour toute écriture faite via `supabaseAdmin` (clé service
+  role) : `createParcelle`, création de coopérative/producteur "à la
+  volée", `createProducer`/`updateProducer`, `attestEudrCompliance`,
+  `validateDocument`, `delete_own_document`. Nécessaire ici car
+  `auth.uid()` est NULL sous service role (le JWT service role ne porte
+  pas de claim `sub`) — un trigger ne peut pas deviner l'auteur de ces
+  écritures, seul le code appelant le sait (`context.userId`).
+- **Trigger automatique** (`public.audit_log_trigger()`, voir la migration)
+  — uniquement sur les combinaisons table/opération qu'aucune
+  journalisation manuelle ne couvre déjà : `cooperatives` (UPDATE/DELETE),
+  `parcelles` (DELETE), `producers` (DELETE), `documents` (INSERT — couvre
+  notamment la création via la synchronisation offline, qui insère
+  directement avec le client authentifié dans `use-sync-engine.ts`, donc
+  avec un `auth.uid()` correct).
+
+RLS : lecture (`SELECT`) réservée aux superviseurs/admins de la même
+organisation. Aucune policy `INSERT`/`UPDATE`/`DELETE` pour
+`authenticated`/`anon` (refus par défaut). Immuabilité réelle : `UPDATE`
+et `DELETE` sont en plus retirés au niveau `GRANT` pour `authenticated`,
+`anon` **et `service_role`** — un journal d'audit doit rester inaltérable
+même pour le backend avec la clé service.
+
+UI : vue « Journal d'activité » dans le tableau de bord superviseur
+(`listAuditLog`, `src/lib/agro.functions.ts`), filtrable par type d'entité
+et par utilisateur.
+
+---
+
 ## 8. Migrations
 
 Toutes les migrations vivent dans `supabase/migrations/`. Principe :
