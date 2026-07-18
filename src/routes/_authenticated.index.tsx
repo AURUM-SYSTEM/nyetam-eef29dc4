@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Plus, Mic, Trash2, ChevronRight, CloudOff, Settings, Info, User, Users, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { FileText, Plus, Mic, Trash2, ChevronRight, CloudOff, Settings, Info, User, Users, LayoutDashboard, ShieldCheck, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { PendingQueue } from "@/components/PendingQueue";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -10,6 +11,7 @@ import { InstallGuide } from "@/components/InstallGuide";
 import { useOnline } from "@/hooks/use-online";
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/hooks/use-auth";
+import { listParcelles, listProducers } from "@/lib/agro.functions";
 
 type DocRow = {
   id: string;
@@ -57,8 +59,9 @@ function HomePage() {
   const navigate = useNavigate();
   const online = useOnline();
   const { t, lang } = useI18n();
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const queryClient = useQueryClient();
+  const isAgro = profile?.module_type === "agro";
 
   // Accès rapide dashboards — réservé platform_admin (un seul appel has_role).
   // admin/supervisor classiques n'atterrissent jamais ici : ils sont déjà
@@ -80,6 +83,28 @@ function HomePage() {
     enabled: online,
     retry: false,
     refetchOnWindowFocus: online,
+  });
+
+  // Accès rapide AGRO (parcelles/producteurs) — comptes seulement, réutilise
+  // les mêmes fonctions serveur que le tableau de bord superviseur
+  // (listParcelles/listProducers, déjà scopées par organisation côté
+  // serveur). N'importe quel agent du module agro peut les appeler, pas
+  // seulement les superviseurs.
+  const fetchParcelles = useServerFn(listParcelles);
+  const fetchProducers = useServerFn(listProducers);
+  const { data: parcellesCount } = useQuery({
+    queryKey: ["quick-access-parcelles-count"],
+    queryFn: async () => (await fetchParcelles({ data: undefined as any })).parcelles.length,
+    staleTime: 30_000,
+    enabled: online && isAgro,
+    retry: false,
+  });
+  const { data: producteursCount } = useQuery({
+    queryKey: ["quick-access-producteurs-count"],
+    queryFn: async () => (await fetchProducers({ data: undefined as any })).producers.length,
+    staleTime: 30_000,
+    enabled: online && isAgro,
+    retry: false,
   });
 
   async function remove(id: string) {
@@ -170,6 +195,29 @@ function HomePage() {
         </div>
       </button>
 
+      {/* Accès rapide — la fonctionnalité parcelles/producteurs n'avait
+          aucune entrée visible depuis l'accueil (uniquement accessible via
+          le tableau de bord superviseur). Cartes réservées au module agro ;
+          "Tableau de bord" seulement pour platform_admin, qui est le seul
+          profil à atterrir sur cet écran avec un rôle superviseur/admin
+          (les autres sont redirigés avant, voir _authenticated.tsx). */}
+      {(isAgro || isPlatformAdmin) && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">{t("home.quickAccess")}</p>
+          <div className={`grid gap-3 ${isAgro && isPlatformAdmin ? "grid-cols-3" : isAgro ? "grid-cols-2" : "grid-cols-1"}`}>
+            {isAgro && (
+              <QuickAccessCard to="/parcelles" icon={MapPin} label={t("home.parcelles")} count={parcellesCount} />
+            )}
+            {isAgro && (
+              <QuickAccessCard to="/producteurs" icon={Users} label={t("home.producteurs")} count={producteursCount} />
+            )}
+            {isPlatformAdmin && (
+              <QuickAccessCard to="/supervisor" icon={LayoutDashboard} label={t("home.dashboard")} />
+            )}
+          </div>
+        </div>
+      )}
+
       <PendingQueue />
 
       <section className="mt-10">
@@ -235,5 +283,27 @@ function HomePage() {
         </ul>
       </section>
     </div>
+  );
+}
+
+function QuickAccessCard({
+  to,
+  icon: Icon,
+  label,
+  count,
+}: {
+  to: "/parcelles" | "/producteurs" | "/supervisor";
+  icon: typeof MapPin;
+  label: string;
+  count?: number;
+}) {
+  return (
+    <Link to={to} className="glass-card flex flex-col justify-between gap-3 rounded-xl p-4 transition hover:border-gold/40">
+      <Icon className="h-5 w-5 text-gold" />
+      <div>
+        {count != null && <div className="font-display text-xl">{count}</div>}
+        <div className="text-xs text-muted-foreground">{label}</div>
+      </div>
+    </Link>
   );
 }

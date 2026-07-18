@@ -1,0 +1,147 @@
+// Liste des producteurs de l'organisation — accessible à tout agent (pas
+// réservé aux superviseurs), lecture seule. Réutilise listProducers(),
+// déjà utilisée par le tableau de bord superviseur et déjà scopée par
+// organisation côté serveur (getCallerOrg) — aucune nouvelle fonction
+// serveur nécessaire.
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Users, Search, ChevronRight, Phone, Mail } from "lucide-react";
+import { listProducers } from "@/lib/agro.functions";
+
+export const Route = createFileRoute("/_authenticated/producteurs")({
+  component: ProducteursPage,
+  head: () => ({
+    meta: [
+      { title: "Producteurs — AURUM" },
+      { name: "description", content: "Producteurs enregistrés par votre organisation." },
+    ],
+  }),
+});
+
+type ProducerRow = {
+  id: string;
+  fullName: string;
+  cooperativeName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  parcelleCount: number;
+};
+
+function ProducteursPage() {
+  const fetchProducers = useServerFn(listProducers);
+  const [rows, setRows] = useState<ProducerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchProducers({ data: undefined as any });
+        if (!cancelled) setRows(res.producers);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? "Erreur de chargement");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return rows;
+    return rows.filter((r) => `${r.fullName} ${r.cooperativeName ?? ""}`.toLowerCase().includes(needle));
+  }, [rows, q]);
+
+  return (
+    <div className="px-5 pt-8 pb-32">
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" /> Accueil
+      </Link>
+
+      <header className="mt-6">
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Agro</p>
+        <h1 className="mt-2 font-display text-3xl flex items-center gap-2">
+          <Users className="h-7 w-7 text-gold" /> Producteurs
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Tous les producteurs enregistrés par votre organisation.
+        </p>
+      </header>
+
+      <div className="mt-6">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Rechercher un nom, une coopérative…"
+            className="w-full rounded-lg border border-border bg-input/50 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-gold"
+          />
+        </div>
+      </div>
+
+      <section className="mt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg">Résultats</h2>
+          {!loading && <span className="text-xs text-muted-foreground">{filtered.length} / {rows.length}</span>}
+        </div>
+
+        {loading && (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-card" />)}
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="glass-card rounded-2xl p-8 text-center">
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && filtered.length === 0 && (
+          <div className="glass-card rounded-2xl p-8 text-center">
+            <Users className="mx-auto h-10 w-10 text-muted-foreground" />
+            <p className="mt-3 text-sm text-muted-foreground">
+              {rows.length === 0 ? "Aucun producteur enregistré pour l'instant." : "Aucun résultat pour cette recherche."}
+            </p>
+          </div>
+        )}
+
+        <ul className="space-y-2">
+          {filtered.map((p) => (
+            <li key={p.id} className="glass-card rounded-xl">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent">
+                  <Users className="h-5 w-5 text-gold" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{p.fullName}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {p.cooperativeName ?? "Sans coopérative"}
+                    {p.parcelleCount > 0 && <> · {p.parcelleCount} parcelle{p.parcelleCount > 1 ? "s" : ""}</>}
+                  </div>
+                  {(p.contactPhone || p.contactEmail) && (
+                    <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground">
+                      {p.contactPhone && (
+                        <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {p.contactPhone}</span>
+                      )}
+                      {p.contactEmail && (
+                        <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {p.contactEmail}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}

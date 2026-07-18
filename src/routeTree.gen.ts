@@ -21,6 +21,8 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedRecensementsRouteImport } from './routes/_authenticated.recensements'
 import { Route as AuthenticatedRecensementRouteImport } from './routes/_authenticated.recensement'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated.profile'
+import { Route as AuthenticatedProducteursRouteImport } from './routes/_authenticated.producteurs'
+import { Route as AuthenticatedParcellesRouteImport } from './routes/_authenticated.parcelles'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated.admin'
 import { Route as AuthenticatedRecordTypeRouteImport } from './routes/_authenticated.record.$type'
 import { Route as AuthenticatedDocumentIdRouteImport } from './routes/_authenticated.document.$id'
@@ -86,6 +88,17 @@ const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedProducteursRoute =
+  AuthenticatedProducteursRouteImport.update({
+    id: '/producteurs',
+    path: '/producteurs',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedParcellesRoute = AuthenticatedParcellesRouteImport.update({
+  id: '/parcelles',
+  path: '/parcelles',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -110,6 +123,8 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/welcome': typeof WelcomeRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/parcelles': typeof AuthenticatedParcellesRoute
+  '/producteurs': typeof AuthenticatedProducteursRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/recensement': typeof AuthenticatedRecensementRoute
   '/recensements': typeof AuthenticatedRecensementsRoute
@@ -125,6 +140,8 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/welcome': typeof WelcomeRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/parcelles': typeof AuthenticatedParcellesRoute
+  '/producteurs': typeof AuthenticatedProducteursRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/recensement': typeof AuthenticatedRecensementRoute
   '/recensements': typeof AuthenticatedRecensementsRoute
@@ -143,6 +160,8 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/welcome': typeof WelcomeRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/parcelles': typeof AuthenticatedParcellesRoute
+  '/_authenticated/producteurs': typeof AuthenticatedProducteursRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/recensement': typeof AuthenticatedRecensementRoute
   '/_authenticated/recensements': typeof AuthenticatedRecensementsRoute
@@ -162,6 +181,8 @@ export interface FileRouteTypes {
     | '/register'
     | '/welcome'
     | '/admin'
+    | '/parcelles'
+    | '/producteurs'
     | '/profile'
     | '/recensement'
     | '/recensements'
@@ -177,6 +198,8 @@ export interface FileRouteTypes {
     | '/register'
     | '/welcome'
     | '/admin'
+    | '/parcelles'
+    | '/producteurs'
     | '/profile'
     | '/recensement'
     | '/recensements'
@@ -194,6 +217,8 @@ export interface FileRouteTypes {
     | '/register'
     | '/welcome'
     | '/_authenticated/admin'
+    | '/_authenticated/parcelles'
+    | '/_authenticated/producteurs'
     | '/_authenticated/profile'
     | '/_authenticated/recensement'
     | '/_authenticated/recensements'
@@ -299,6 +324,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/producteurs': {
+      id: '/_authenticated/producteurs'
+      path: '/producteurs'
+      fullPath: '/producteurs'
+      preLoaderRoute: typeof AuthenticatedProducteursRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/parcelles': {
+      id: '/_authenticated/parcelles'
+      path: '/parcelles'
+      fullPath: '/parcelles'
+      preLoaderRoute: typeof AuthenticatedParcellesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -325,6 +364,8 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedParcellesRoute: typeof AuthenticatedParcellesRoute
+  AuthenticatedProducteursRoute: typeof AuthenticatedProducteursRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRecensementRoute: typeof AuthenticatedRecensementRoute
   AuthenticatedRecensementsRoute: typeof AuthenticatedRecensementsRoute
@@ -337,6 +378,8 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedParcellesRoute: AuthenticatedParcellesRoute,
+  AuthenticatedProducteursRoute: AuthenticatedProducteursRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRecensementRoute: AuthenticatedRecensementRoute,
   AuthenticatedRecensementsRoute: AuthenticatedRecensementsRoute,

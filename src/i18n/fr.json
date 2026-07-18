@@ -60,7 +60,11 @@
     "offline_title": "Mode hors ligne activé",
     "offline_sub": "Vos données seront synchronisées automatiquement dès le retour de la connexion.",
     "pending": "Documents en attente",
-    "draft": "Brouillon"
+    "draft": "Brouillon",
+    "quickAccess": "Accès rapide",
+    "parcelles": "Parcelles",
+    "producteurs": "Producteurs",
+    "dashboard": "Tableau de bord"
   },
   "record": {
     "step": "Nouvelle saisie",

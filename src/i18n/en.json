@@ -60,7 +60,11 @@
     "offline_title": "Offline mode enabled",
     "offline_sub": "Your data will sync automatically when the connection is back.",
     "pending": "Pending documents",
-    "draft": "Draft"
+    "draft": "Draft",
+    "quickAccess": "Quick access",
+    "parcelles": "Parcels",
+    "producteurs": "Producers",
+    "dashboard": "Dashboard"
   },
   "record": {
     "step": "New entry",
