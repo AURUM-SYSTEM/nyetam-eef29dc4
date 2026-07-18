@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   saveAudio, enqueue, savePhoto, saveVideo, saveMissionFormsCache, getMissionFormsCache,
   saveParcellesCache, getParcellesCache, saveRecordDraft, getRecordDraft, clearRecordDraft,
-  enqueueParcelle, isLocalParcelleId,
+  enqueueParcelle, isLocalParcelleId, listPendingParcelles, subscribeQueue,
   type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm, type CachedParcelle,
 } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
@@ -424,9 +424,6 @@ function RecordPage() {
   // obligatoire pour ces missions — est tout simplement impossible. On le
   // signale explicitement plutôt que de laisser passer une saisie orpheline.
   const [parcellesOfflineNoCache, setParcellesOfflineNoCache] = useState(false);
-  // Bloque le démarrage/l'envoi de la saisie : la mission exige une parcelle
-  // liée, mais la liste n'a jamais été téléchargée et le réseau est absent.
-  const parcelleSelectionUnavailable = isParcelleSelectionMission && parcellesOfflineNoCache;
   const [selectedParcelleId, setSelectedParcelleId] = useState("");
   const [coopNames, setCoopNames] = useState<string[]>([]);
   const [producerNames, setProducerNames] = useState<string[]>([]);
@@ -511,6 +508,48 @@ function RecordPage() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isParcelleMission, isParcelleSelectionMission, online, parcellesCacheKey]);
+
+  // Parcelles créées hors-ligne dans CETTE session (pas encore synchronisées,
+  // voir pendingParcelles dans offline-store.ts) — doivent être sélectionnables
+  // pour visite_parcelle/suivi_parcelle comme n'importe quelle autre parcelle,
+  // sinon une parcelle recensée hors-ligne reste inutilisable pour une visite
+  // tant que la synchronisation n'a pas eu lieu (impossible offline). Jamais
+  // écrites dans parcellesCache : ce cache reflète le serveur, pas l'état
+  // local éphémère de la file en attente.
+  const [pendingParcellesForSelection, setPendingParcellesForSelection] = useState<
+    Array<{ id: string; culture: string; surfaceHa: number | null; cooperativeName: string | null }>
+  >([]);
+  useEffect(() => {
+    if (!isParcelleSelectionMission) return;
+    let cancelled = false;
+    async function refresh() {
+      const all = await listPendingParcelles();
+      if (cancelled) return;
+      setPendingParcellesForSelection(all.map(p => ({
+        id: p.id,
+        culture: p.culture,
+        surfaceHa: p.surfaceHa ?? null,
+        cooperativeName: p.cooperativeName ?? null,
+      })));
+    }
+    void refresh();
+    const unsub = subscribeQueue(() => { void refresh(); });
+    return () => { cancelled = true; unsub(); };
+  }, [isParcelleSelectionMission]);
+
+  // Fusion pour l'affichage/la sélection uniquement — parcelleList (serveur
+  // ou cache) reste la source de vérité inchangée pour saveParcellesCache.
+  const selectableParcelles: Array<CachedParcelle & { pending?: boolean }> = isParcelleSelectionMission
+    ? [...parcelleList, ...pendingParcellesForSelection.map(p => ({ ...p, pending: true }))]
+    : parcelleList;
+
+  // Bloque le démarrage/l'envoi de la saisie : la mission exige une parcelle
+  // liée, mais la liste serveur n'a jamais été mise en cache ET aucune
+  // parcelle en attente de synchro (créée offline dans cette session) n'est
+  // disponible non plus — sinon une parcelle recensée hors-ligne juste avant
+  // suffirait à débloquer la mission.
+  const parcelleSelectionUnavailable =
+    isParcelleSelectionMission && parcellesOfflineNoCache && pendingParcellesForSelection.length === 0;
 
   // Vérification automatique des doublons GPS dès qu'une position est capturée
   // en mode "Nouvelle parcelle"
@@ -1177,7 +1216,7 @@ function RecordPage() {
             <Sprout className="h-3.5 w-3.5" /> Parcelle{isParcelleSelectionMission ? " *" : ""}
           </h2>
 
-          {isParcelleSelectionMission && parcellesOfflineNoCache ? (
+          {parcelleSelectionUnavailable ? (
             <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
               <CloudOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
               <p className="text-sm text-amber-300">
@@ -1193,27 +1232,37 @@ function RecordPage() {
               {parcelleMode === "existing" ? (
                 parcellesLoading ? (
                   <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin text-gold" /></div>
-                ) : parcelleList.length === 0 ? (
+                ) : selectableParcelles.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     {isParcelleSelectionMission
                       ? "Aucune parcelle enregistrée pour l'instant — utilisez d'abord la mission « Recensement des plantations » pour en créer une."
                       : "Aucune parcelle enregistrée pour l'instant."}
                   </p>
                 ) : (
-                  <select
-                    value={selectedParcelleId}
-                    onChange={e => setSelectedParcelleId(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-input/50 px-3 py-2.5 text-sm outline-none focus:border-gold"
-                  >
-                    <option value="">— Choisir une parcelle —</option>
-                    {parcelleList.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.culture}
-                        {p.surfaceHa ? ` · ${p.surfaceHa} ha` : ""}
-                        {p.cooperativeName ? ` · ${p.cooperativeName}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      value={selectedParcelleId}
+                      onChange={e => setSelectedParcelleId(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-input/50 px-3 py-2.5 text-sm outline-none focus:border-gold"
+                    >
+                      <option value="">— Choisir une parcelle —</option>
+                      {selectableParcelles.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.culture}
+                          {p.surfaceHa ? ` · ${p.surfaceHa} ha` : ""}
+                          {p.cooperativeName ? ` · ${p.cooperativeName}` : ""}
+                          {p.pending ? " · ⏳ en attente de sync" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedParcelleId && isLocalParcelleId(selectedParcelleId) && (
+                      <p className="mt-2 flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2.5 text-xs text-amber-400">
+                        <CloudOff className="h-3.5 w-3.5 shrink-0" />
+                        Cette parcelle a été recensée hors-ligne et n'est pas encore synchronisée — cette saisie sera
+                        liée automatiquement dès que la parcelle sera créée côté serveur.
+                      </p>
+                    )}
+                  </>
                 )
               ) : createdParcelleId ? (
                 isLocalParcelleId(createdParcelleId) ? (
