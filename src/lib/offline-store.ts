@@ -31,11 +31,22 @@
 // facto toute saisie sur "Visite de parcelle"/"Suivi de parcelle" après un
 // rechargement — la sélection ne survivait jamais assez longtemps pour
 // que la logique de liaison parcelle (et son cache hors-ligne) s'applique.
+// DB_VERSION 9 : ajout de l'object store `pendingParcelles` — les créations
+// de parcelle (mission recensement_plantations, avec coopérative/producteur
+// éventuellement créés "à la volée" par nom libre) passaient jusqu'ici par
+// un appel serveur direct (createParcelle), impossible hors-ligne — alors
+// que la saisie elle-même (le document) est déjà mise en file via `queue`.
+// Corrige ce bug critique : une création de parcelle hors-ligne est
+// maintenant stockée ici avec un identifiant local temporaire
+// (LOCAL_ID_PREFIX + id), et rejouée via le même createParcelle() au retour
+// du réseau (voir useSyncEngine) — donc avec exactement la même détection
+// de doublon et la même journalisation audit_log que le flux en ligne,
+// puisque c'est littéralement le même appel serveur, juste différé.
 // ─────────────────────────────────────────────────────────────────────────────
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "aurum-offline";
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 export type DocType =
   | "rapport"
@@ -137,9 +148,56 @@ export type RecordDraft = {
   docDate: string;
   docTime: string;
   gps?: GpsLocation;
+  // Parcelle liée à cette saisie en cours (recensement_plantations) — id
+  // réel une fois en ligne, ou id temporaire (LOCAL_PARCELLE_ID_PREFIX) si
+  // créée hors-ligne. Sans ce champ, un rechargement de page pendant une
+  // création hors-ligne perdait le lien vers la parcelle pourtant déjà
+  // stockée dans `pendingParcelles` — l'agent la recréait alors en double.
+  createdParcelleId?: string;
   updatedAt: number;
 };
 type RecordDraftRecord = RecordDraft & { id: "current" };
+
+// ── Parcelles en attente de synchronisation (AGRO, mission
+// recensement_plantations créée hors-ligne) ────────────────────────────────
+// Préfixe reconnaissable partout où un id de parcelle circule (meta.parcelleId
+// d'un document en file, sélection de parcelle...) pour distinguer un id
+// local temporaire d'un vrai uuid Supabase sans avoir à interroger l'IndexedDB.
+export const LOCAL_PARCELLE_ID_PREFIX = "local-parcelle-";
+
+export function isLocalParcelleId(id: string | null | undefined): boolean {
+  return !!id && id.startsWith(LOCAL_PARCELLE_ID_PREFIX);
+}
+
+export type PendingParcelleStatus = "pending" | "syncing" | "synced" | "conflict" | "error";
+
+export type PendingParcelle = {
+  id: string;
+  culture: string;
+  surfaceHa?: number;
+  cooperativeName?: string;
+  producerName?: string;
+  lat: number;
+  lng: number;
+  notes?: string;
+  boundaryPoints?: Array<{ lat: number; lng: number }>;
+  // Posé par l'agent une fois averti d'un doublon potentiel (voir status
+  // "conflict") — rejoué avec forceCreate=true à la prochaine tentative.
+  forceCreate?: boolean;
+  reason?: string;
+  status: PendingParcelleStatus;
+  // Renseigné une fois status="synced" — le vrai id Supabase, à substituer
+  // partout où LOCAL_PARCELLE_ID_PREFIX+id apparaissait.
+  remoteParcelleId?: string;
+  // Renseigné une fois status="conflict" — la parcelle existante détectée,
+  // pour affichage à l'agent (voir /parcelles).
+  existingParcelle?: { id: string; culture: string; distanceMeters: number };
+  errorMsg?: string;
+  createdAt: number;
+  updatedAt: number;
+  retryCount?: number;
+  nextRetryAt?: number;
+};
 
 export type QueueMeta = {
   agentName?: string;
@@ -220,6 +278,10 @@ function getDB() {
         }
         if (!db.objectStoreNames.contains("recordDraft")) {
           db.createObjectStore("recordDraft", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("pendingParcelles")) {
+          const s = db.createObjectStore("pendingParcelles", { keyPath: "id" });
+          s.createIndex("status", "status");
         }
       },
     });
@@ -323,6 +385,50 @@ export async function getRecordDraft(): Promise<RecordDraft | undefined> {
 export async function clearRecordDraft() {
   const db = await getDB();
   await db.delete("recordDraft", "current");
+}
+
+export async function enqueueParcelle(
+  data: Omit<PendingParcelle, "id" | "status" | "createdAt" | "updatedAt">,
+): Promise<PendingParcelle> {
+  const db = await getDB();
+  const now = Date.now();
+  const rec: PendingParcelle = {
+    id: LOCAL_PARCELLE_ID_PREFIX + rid(),
+    status: "pending",
+    createdAt: now,
+    updatedAt: now,
+    ...data,
+  };
+  await db.put("pendingParcelles", rec);
+  notify();
+  return rec;
+}
+
+export async function updatePendingParcelle(id: string, patch: Partial<PendingParcelle>) {
+  const db = await getDB();
+  const cur = await db.get("pendingParcelles", id);
+  if (!cur) return;
+  const next = { ...cur, ...patch, updatedAt: Date.now() };
+  await db.put("pendingParcelles", next);
+  notify();
+  return next as PendingParcelle;
+}
+
+export async function getPendingParcelle(id: string): Promise<PendingParcelle | undefined> {
+  const db = await getDB();
+  return db.get("pendingParcelles", id);
+}
+
+export async function deletePendingParcelle(id: string) {
+  const db = await getDB();
+  await db.delete("pendingParcelles", id);
+  notify();
+}
+
+export async function listPendingParcelles(): Promise<PendingParcelle[]> {
+  const db = await getDB();
+  const all = (await db.getAll("pendingParcelles")) as PendingParcelle[];
+  return all.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function enqueue(

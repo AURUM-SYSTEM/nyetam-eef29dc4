@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   listPending,
+  listQueue,
   updateQueueItem,
   getAudio,
   deleteAudio,
@@ -29,27 +30,144 @@ import {
   deleteVideo,
   blobToBase64,
   subscribeQueue,
+  listPendingParcelles,
+  updatePendingParcelle,
+  deletePendingParcelle,
+  isLocalParcelleId,
   type QueueItem,
+  type PendingParcelle,
 } from "@/lib/offline-store";
 import { transcribeAudio, generateDocument, reverseGeocode, suggestImprovements, structureFieldEntry } from "@/lib/aurum.functions";
+import { createParcelle } from "@/lib/agro.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { getCachedProfile } from "@/hooks/use-auth";
 import { normalizeDocumentType } from "@/lib/document-types";
 
+const PARCELLE_SYNC_MAX_RETRIES = 8;
+
 export function useSyncEngine() {
   const transcribe = useServerFn(transcribeAudio);
   const generate = useServerFn(generateDocument);
   const structure = useServerFn(structureFieldEntry);
+  const createParc = useServerFn(createParcelle);
   const queryClient = useQueryClient();
   const running = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
+    // ── AGRO : parcelles créées hors-ligne (recensement_plantations) ────────
+    // Rejoue exactement le même appel serveur que le flux en ligne
+    // (createParcelle) — donc la même détection de doublon et la même
+    // journalisation audit_log, juste différée. Traité AVANT la file de
+    // documents ci-dessous : un document de recensement référence sa
+    // parcelle via un id temporaire (meta.parcelleId = pendingParcelle.id,
+    // voir handleCreateParcelle dans record.$type.tsx) tant qu'elle n'est
+    // pas synchronisée — cette passe doit donc résoudre l'id réel et le
+    // reporter sur les documents en file AVANT que ceux-ci ne soient traités
+    // dans la même passe, sous peine d'insérer un id invalide dans
+    // documents.parcelle_id (colonne uuid).
+    async function processParcelle(p: PendingParcelle) {
+      try {
+        await updatePendingParcelle(p.id, { status: "syncing" });
+        const res = await createParc({
+          data: {
+            culture: p.culture,
+            surfaceHa: p.surfaceHa,
+            cooperativeName: p.cooperativeName,
+            producerName: p.producerName,
+            lat: p.lat,
+            lng: p.lng,
+            forceCreate: p.forceCreate,
+            reason: p.reason,
+            boundaryPoints: p.boundaryPoints,
+          },
+        });
+
+        if (!res.success && res.duplicateFound) {
+          // Pas une erreur transitoire : un humain doit décider (voir
+          // /parcelles, section "en attente"). Pas de retry automatique.
+          await updatePendingParcelle(p.id, {
+            status: "conflict",
+            existingParcelle: res.existingParcelle,
+            errorMsg: undefined,
+          });
+          return;
+        }
+
+        if (res.success) {
+          // Remappe l'id temporaire → id réel sur tout document en file qui
+          // référence encore cette parcelle (référence croisée parcelle ↔
+          // saisie créées offline dans la même session) — AVANT de retirer
+          // l'entrée locale, pour ne jamais laisser un document orphelin
+          // référencer un id qui n'existe plus nulle part.
+          const allQueued = await listQueue();
+          for (const doc of allQueued) {
+            if (doc.meta?.parcelleId === p.id) {
+              await updateQueueItem(doc.id, {
+                meta: { ...doc.meta, parcelleId: res.parcelleId },
+              });
+            }
+          }
+          // Comme pour les documents synchronisés (listPending() les exclut
+          // une fois status="synced"), une fois la vraie ligne créée côté
+          // serveur, l'entrée locale n'a plus de raison d'exister — la
+          // parcelle réelle apparaît désormais via listParcelles() (voir
+          // /parcelles), pas via ce store temporaire.
+          await deletePendingParcelle(p.id);
+        }
+      } catch (e: any) {
+        const retryCount = (p.retryCount ?? 0) + 1;
+        if (retryCount >= PARCELLE_SYNC_MAX_RETRIES) {
+          await updatePendingParcelle(p.id, {
+            status: "error",
+            errorMsg: `${e?.message ?? "Erreur inconnue"} — abandonné après ${PARCELLE_SYNC_MAX_RETRIES} tentatives.`,
+            retryCount,
+            nextRetryAt: Number.MAX_SAFE_INTEGER,
+          });
+          return;
+        }
+        const delayMs = Math.min(5_000 * 2 ** (retryCount - 1), 5 * 60_000);
+        await updatePendingParcelle(p.id, {
+          status: "error",
+          errorMsg: e?.message ?? "Erreur inconnue",
+          retryCount,
+          nextRetryAt: Date.now() + delayMs,
+        });
+      }
+    }
+
+    async function processParcelleQueue() {
+      const pendingParcelles = await listPendingParcelles();
+      const now = Date.now();
+      const toSync = pendingParcelles.filter(
+        (p) => p.status === "pending" || (p.status === "error" && (p.nextRetryAt ?? 0) <= now),
+      );
+      for (const p of toSync) {
+        if (cancelled || !navigator.onLine) break;
+        try {
+          await processParcelle(p);
+        } catch (err) {
+          console.error("❌ PARCELLE SYNC CONTINUING AFTER ERROR", err);
+        }
+      }
+    }
+
     async function processOne(item: QueueItem) {
       const toastId = `sync-${item.id}`;
       try {
+        // Un document de recensement peut référencer une parcelle créée
+        // hors-ligne pas encore synchronisée (ou en conflit, en attente
+        // d'une décision de l'agent) — inséré tel quel, cet id temporaire
+        // violerait la contrainte de clé étrangère de documents.parcelle_id.
+        // On reporte ce document, sans le faire échouer ni consommer de
+        // tentative : processParcelleQueue() ci-dessus l'aura déjà remappé
+        // vers le vrai id dès que sa parcelle sera synchronisée.
+        if (isLocalParcelleId(item.meta?.parcelleId)) {
+          return;
+        }
+
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -399,6 +517,12 @@ export function useSyncEngine() {
       try {
         console.log("🚀 SYNC ENGINE ACTIVE");
 
+        // AVANT les documents : voir le commentaire au-dessus de
+        // processParcelleQueue — un document en attente peut référencer une
+        // parcelle qui vient tout juste d'être synchronisée dans cette même
+        // passe, et a besoin de son id réel avant d'être lui-même traité.
+        await processParcelleQueue();
+
         const pending = await listPending();
 
         console.log("📦 QUEUE LENGTH =", pending.length);
@@ -478,5 +602,5 @@ export function useSyncEngine() {
       unsub();
     };
 
-  }, [transcribe, generate, structure, queryClient]);
+  }, [transcribe, generate, structure, createParc, queryClient]);
 }

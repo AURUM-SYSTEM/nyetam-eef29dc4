@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   saveAudio, enqueue, savePhoto, saveVideo, saveMissionFormsCache, getMissionFormsCache,
   saveParcellesCache, getParcellesCache, saveRecordDraft, getRecordDraft, clearRecordDraft,
+  enqueueParcelle, isLocalParcelleId,
   type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm, type CachedParcelle,
 } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
@@ -306,6 +307,7 @@ function RecordPage() {
           if (draft.docDate) setDocDate(draft.docDate);
           if (draft.docTime) setDocTime(draft.docTime);
           if (draft.gps) setGps(draft.gps);
+          if (draft.createdParcelleId) setCreatedParcelleId(draft.createdParcelleId);
         }
       } catch {
         // Pas de brouillon récupérable — on repart d'un état neutre.
@@ -370,6 +372,10 @@ function RecordPage() {
   const [gps, setGps] = useState<GpsLocation | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  // Déclaré ici (avant l'effet de sauvegarde du brouillon juste en dessous,
+  // qui le persiste) plutôt qu'avec le reste de l'état "liaison parcelle"
+  // plus bas dans ce composant.
+  const [createdParcelleId, setCreatedParcelleId] = useState<string | null>(null);
 
   // Note : la réinitialisation des champs saisis quand l'agent change de
   // mission se fait directement dans le onChange du sélecteur de mission
@@ -386,8 +392,13 @@ function RecordPage() {
     void saveRecordDraft({
       missionKey, fieldValues, agentName, location, docDate, docTime,
       gps: gps ?? undefined,
+      // Persisté aussi : sans ça, un rechargement pendant une création de
+      // parcelle hors-ligne perdrait le lien vers `pendingParcelles` côté
+      // React (l'entrée locale, elle, survivrait — mais plus rien ne
+      // saurait qu'elle est liée à cette saisie en cours).
+      createdParcelleId: createdParcelleId ?? undefined,
     });
-  }, [draftCheckDone, missionKey, fieldValues, agentName, location, docDate, docTime, gps]);
+  }, [draftCheckDone, missionKey, fieldValues, agentName, location, docDate, docTime, gps, createdParcelleId]);
 
   // ── AGRO : liaison parcelle (recensement_plantations / visite_parcelle / suivi_parcelle) ──
   // Comportement fixe et exclusif par mission — jamais de bascule manuelle :
@@ -424,7 +435,6 @@ function RecordPage() {
   const [newCoop, setNewCoop] = useState("");
   const [newProducer, setNewProducer] = useState("");
   const [dupParcelle, setDupParcelle] = useState<null | { id: string; culture: string; distanceMeters: number }>(null);
-  const [createdParcelleId, setCreatedParcelleId] = useState<string | null>(null);
   const [creatingParcelle, setCreatingParcelle] = useState(false);
   const [forceReason, setForceReason] = useState("");
 
@@ -665,6 +675,34 @@ function RecordPage() {
     const useBoundary = boundaryClosed && boundaryPoints.length >= 3;
     setCreatingParcelle(true);
     try {
+      // BUG CORRIGÉ ICI : createParc() est un appel serveur direct — sans
+      // réseau, il échouait systématiquement (voir catch plus bas), alors
+      // que la saisie elle-même (le document) survit hors-ligne via la file
+      // `queue`/enqueue(). La création de parcelle n'avait pas d'équivalent.
+      // Hors-ligne, on stocke donc la demande localement (pendingParcelles,
+      // id temporaire préfixé) — rejouée par le sync engine via ce MÊME
+      // createParcelle() dès le retour du réseau (donc avec la même
+      // détection de doublon et la même journalisation audit_log, pas une
+      // version dégradée). La détection de doublon ne peut pas s'exécuter
+      // hors-ligne (elle interroge la base) : elle est donc différée elle
+      // aussi, et gérée au retour du réseau (voir useSyncEngine +
+      // /parcelles, qui affiche les conflits à résoudre).
+      if (!online) {
+        const pending = await enqueueParcelle({
+          culture: newCulture.trim(),
+          surfaceHa: surface,
+          cooperativeName: newCoop.trim() || undefined,
+          producerName: newProducer.trim() || undefined,
+          lat: gps.lat,
+          lng: gps.lng,
+          boundaryPoints: useBoundary ? boundaryPoints : undefined,
+        });
+        setCreatedParcelleId(pending.id);
+        setDupParcelle(null);
+        setForceReason("");
+        toast.success("Parcelle enregistrée hors-ligne — sera synchronisée au retour du réseau");
+        return;
+      }
       const res = await createParc({
         data: {
           culture: newCulture.trim(),
@@ -1178,9 +1216,15 @@ function RecordPage() {
                   </select>
                 )
               ) : createdParcelleId ? (
-                <p className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-400">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" /> Parcelle créée — elle sera liée à cette saisie.
-                </p>
+                isLocalParcelleId(createdParcelleId) ? (
+                  <p className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2.5 text-sm text-amber-400">
+                    <CloudOff className="h-4 w-4 shrink-0" /> Parcelle enregistrée hors-ligne — en attente de synchronisation. Elle sera liée à cette saisie dès le retour du réseau.
+                  </p>
+                ) : (
+                  <p className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-400">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" /> Parcelle créée — elle sera liée à cette saisie.
+                  </p>
+                )
               ) : (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">

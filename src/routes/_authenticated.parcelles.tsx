@@ -8,6 +8,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, MapPin, Search, ChevronRight, Sprout } from "lucide-react";
 import { listParcelles } from "@/lib/agro.functions";
+import { PendingParcellesQueue } from "@/components/PendingParcellesQueue";
 
 export const Route = createFileRoute("/_authenticated/parcelles")({
   component: ParcellesPage,
@@ -74,6 +75,10 @@ function ParcellesPage() {
           Toutes les parcelles enregistrées par votre organisation.
         </p>
       </header>
+
+      <div className="mt-6">
+        <PendingParcellesQueue />
+      </div>
 
       <div className="mt-6">
         <div className="relative">
