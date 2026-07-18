@@ -582,6 +582,11 @@ function RecordPage() {
     }
     const center = computePolygonCenter(boundaryPoints);
     debugLog("[GPS DEBUG] handleFinishBoundary computed center", center);
+    // Comportement voulu (voir commentaire au-dessus de handleAddBoundaryPoint) :
+    // le "GPS capturé" affiché en haut du formulaire est UN SEUL point, utilisé
+    // quand aucun périmètre n'est tracé. Terminer un périmètre écrase toujours
+    // ce point par le centre du polygone — les deux ne sont jamais montrés
+    // comme deux valeurs indépendantes.
     setGps({ lat: center.lat, lng: center.lng });
     setBoundaryClosed(true);
     // Reporte la surface calculée depuis le périmètre dans le champ Surface
@@ -951,7 +956,12 @@ function RecordPage() {
         meta: buildMeta(),
       });
       toast.success(online ? "Enregistré — synchronisation en cours" : "Enregistré localement — sync à la reconnexion");
-      void clearRecordDraft();
+      // Attendu (pas fire-and-forget) : le prochain montage de cet écran
+      // (nouvelle saisie) lit le brouillon dès son premier effet — sans
+      // attendre ici, une nouvelle saisie démarrée assez vite pourrait
+      // relire l'ancien brouillon (gps compris) avant que sa suppression ne
+      // soit effective.
+      await clearRecordDraft();
       navigate({ to: "/" });
     } catch (e: any) {
       toast.error(e?.message ?? "Erreur sauvegarde locale");
@@ -975,7 +985,7 @@ function RecordPage() {
         meta: buildMeta(),
       });
       toast.success(online ? "Ajouté — synchronisation en cours" : "Ajouté à la file — sync à la reconnexion");
-      void clearRecordDraft();
+      await clearRecordDraft();
       navigate({ to: "/" });
     } catch (e: any) {
       toast.error(e?.message ?? "Erreur");
@@ -991,7 +1001,23 @@ function RecordPage() {
   return (
     <>
     <div className="px-5 pt-8 pb-32">
-      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        to="/"
+        onClick={() => {
+          // BUG CORRIGÉ ICI : quitter la saisie par ce bouton (sans
+          // enregistrer) ne vidait jamais le brouillon persistant
+          // (recordDraft, IndexedDB) — contrairement à stopAndSave/
+          // submitManual. Le brouillon (dont "GPS capturé") ressurgissait
+          // donc tel quel au prochain montage de cet écran, y compris pour
+          // une saisie sans rapport avec la précédente (le brouillon est
+          // global, pas par mission/type). Le brouillon reste volontairement
+          // préservé en cas de simple rechargement de page (aucune
+          // navigation, cet effet ne se déclenche pas) — seul un abandon
+          // conscient via ce bouton doit repartir d'un état neutre.
+          void clearRecordDraft();
+        }}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="h-4 w-4" /> {t("common.back")}
       </Link>
       <header className="mt-6">
