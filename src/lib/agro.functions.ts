@@ -171,7 +171,7 @@ export const listProducers = createServerFn({ method: "POST" })
 
     const { data: producers, error } = await supabaseAdmin
       .from("producers")
-      .select("id, full_name, cooperative_id, contact_phone, contact_email")
+      .select("id, producer_code, full_name, sex, contact_phone, contact_email, id_document_type, id_document_number, village, commune, department, region, cooperative_id")
       .eq("organization_id", orgId)
       .order("full_name", { ascending: true });
     if (error) throw new Error(error.message);
@@ -198,7 +198,15 @@ export const listProducers = createServerFn({ method: "POST" })
     return {
       producers: rows.map(p => ({
         id: p.id as string,
+        producerCode: p.producer_code as string,
         fullName: p.full_name as string,
+        sex: (p.sex ?? null) as string | null,
+        idDocumentType: (p.id_document_type ?? null) as string | null,
+        idDocumentNumber: (p.id_document_number ?? null) as string | null,
+        village: (p.village ?? null) as string | null,
+        commune: (p.commune ?? null) as string | null,
+        department: (p.department ?? null) as string | null,
+        region: (p.region ?? null) as string | null,
         cooperativeName: p.cooperative_id ? (coopById.get(p.cooperative_id) ?? null) : null,
         contactPhone: (p.contact_phone ?? null) as string | null,
         contactEmail: (p.contact_email ?? null) as string | null,
@@ -216,6 +224,11 @@ export const createProducer = createServerFn({ method: "POST" })
     contactEmail?: string;
     idDocumentType?: string;
     idDocumentNumber?: string;
+    sex?: "male" | "female" | "unknown";
+    village?: string;
+    commune?: string;
+    department?: string;
+    region?: string;
   }) =>
     z.object({
       fullName: z.string().min(1).max(200),
@@ -224,6 +237,11 @@ export const createProducer = createServerFn({ method: "POST" })
       contactEmail: z.string().email().max(200).optional(),
       idDocumentType: z.string().max(80).optional(),
       idDocumentNumber: z.string().max(80).optional(),
+      sex: z.enum(["male", "female", "unknown"]).optional(),
+      village: z.string().max(120).optional(),
+      commune: z.string().max(120).optional(),
+      department: z.string().max(120).optional(),
+      region: z.string().max(120).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -239,12 +257,18 @@ export const createProducer = createServerFn({ method: "POST" })
         contact_email: data.contactEmail?.trim() || null,
         id_document_type: data.idDocumentType?.trim() || null,
         id_document_number: data.idDocumentNumber?.trim() || null,
+        sex: data.sex ?? null,
+        village: data.village?.trim() || null,
+        commune: data.commune?.trim() || null,
+        department: data.department?.trim() || null,
+        region: data.region?.trim() || null,
         registered_by: context.userId,
       } as any)
-      .select("id")
+      .select("id, producer_code")
       .single();
     if (error) throw new Error(error.message);
     const producerId = (producer as any).id as string;
+    const producerCode = (producer as any).producer_code as string;
 
     // Journalisation — jamais bloquante pour l'agent terrain
     try {
@@ -263,7 +287,7 @@ export const createProducer = createServerFn({ method: "POST" })
       console.warn("audit_log producer creation failed (non bloquant)", e);
     }
 
-    return { success: true as const, producerId };
+    return { success: true as const, producerId, producerCode };
   });
 
 export const getProducerDetails = createServerFn({ method: "POST" })
@@ -276,7 +300,7 @@ export const getProducerDetails = createServerFn({ method: "POST" })
 
     const { data: producer, error } = await supabaseAdmin
       .from("producers")
-      .select("id, full_name, contact_phone, contact_email, id_document_type, id_document_number, cooperative_id, organization_id")
+      .select("id, producer_code, full_name, sex, contact_phone, contact_email, id_document_type, id_document_number, village, commune, department, region, cooperative_id, organization_id")
       .eq("id", data.producerId)
       .single();
     if (error || !producer || (producer as any).organization_id !== orgId) {
@@ -332,6 +356,11 @@ export const updateProducer = createServerFn({ method: "POST" })
     idDocumentType?: string;
     idDocumentNumber?: string;
     cooperativeId?: string | null;
+    sex?: "male" | "female" | "unknown" | null;
+    village?: string | null;
+    commune?: string | null;
+    department?: string | null;
+    region?: string | null;
   }) =>
     z.object({
       producerId: z.string().uuid(),
@@ -341,6 +370,11 @@ export const updateProducer = createServerFn({ method: "POST" })
       idDocumentType: z.string().max(80).optional(),
       idDocumentNumber: z.string().max(80).optional(),
       cooperativeId: z.string().uuid().nullable().optional(),
+      sex: z.enum(["male", "female", "unknown"]).nullable().optional(),
+      village: z.string().max(120).nullable().optional(),
+      commune: z.string().max(120).nullable().optional(),
+      department: z.string().max(120).nullable().optional(),
+      region: z.string().max(120).nullable().optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -348,7 +382,7 @@ export const updateProducer = createServerFn({ method: "POST" })
 
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("producers")
-      .select("id, full_name, contact_phone, contact_email, id_document_type, id_document_number, cooperative_id, organization_id")
+      .select("id, producer_code, full_name, sex, contact_phone, contact_email, id_document_type, id_document_number, village, commune, department, region, cooperative_id, organization_id")
       .eq("id", data.producerId)
       .single();
     if (fetchErr || !existing || (existing as any).organization_id !== orgId) {
