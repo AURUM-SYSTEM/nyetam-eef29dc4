@@ -5,7 +5,7 @@ import { ArrowLeft, Mic, Square, Type, MicOff, ShieldAlert, ExternalLink, CloudO
 import { toast } from "sonner";
 import {
   saveAudio, enqueue, savePhoto, saveVideo, saveMissionFormsCache, getMissionFormsCache,
-  saveParcellesCache, getParcellesCache, saveRecordDraft, getRecordDraft, clearRecordDraft,
+  saveParcellesCache, getParcellesCache, saveProducersCache, getProducersCache, saveRecordDraft, getRecordDraft, clearRecordDraft,
   enqueueParcelle, isLocalParcelleId, listPendingParcelles, subscribeQueue,
   type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm, type CachedParcelle,
 } from "@/lib/offline-store";
