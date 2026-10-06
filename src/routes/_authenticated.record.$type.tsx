@@ -445,6 +445,7 @@ function RecordPage() {
     setSelectedParcelleId("");
     setDupParcelle(null);
     setCreatedParcelleId(null);
+    setSelectedProducerId("");
     setForceReason("");
     setBoundaryPoints([]);
     setBoundaryClosed(false);
@@ -480,7 +481,9 @@ function RecordPage() {
         if (cancelled) return;
         setParcelleList(p.parcelles);
         setCoopNames(c.cooperatives.map(x => x.name));
-        setProducerNames(pr.producers.map(x => x.fullName));
+        const cachedProducers = pr.producers as CachedProducer[];
+        setProducerList(cachedProducers);
+        void saveProducersCache(keyAtRunStart, cachedProducers);
         if (isParcelleSelectionMission) {
           setParcellesOfflineNoCache(false);
           void saveParcellesCache(keyAtRunStart, p.parcelles);
