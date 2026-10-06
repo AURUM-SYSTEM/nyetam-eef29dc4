@@ -127,7 +127,38 @@ jobs:
           echo "Connexion au projet Supabase de production: ${SUPABASE_PROJECT_ID}"
           supabase link             --project-ref "${SUPABASE_PROJECT_ID}"             --password "${SUPABASE_DB_PASSWORD}"
 
-          echo "Application des migrations Supabase présentes dans supabase/migrations/"
+          # La production contient un schéma historique créé en partie directement
+          # dans Supabase/Lovable. Les anciennes migrations ci-dessous décrivent des
+          # changements déjà présents en production mais absents de l'historique
+          # Supabase. On répare UNIQUEMENT l'historique : aucune requête SQL de ces
+          # migrations n'est rejouée et aucune donnée/table n'est supprimée.
+          historical_versions=(
+            20260519214513
+            20260519214525
+            20260521060658
+            20260522071924
+            20260522071936
+            20260531183116
+            20260531183129
+            20260601040010
+            20260603195248
+            20260603205203
+            20260604070835
+            20260604072433
+            20260702193825
+            20260703052524
+            20260713120000
+            20260713130000
+            20260714150000
+            20260718100000
+          )
+
+          echo "Synchronisation de l'historique des migrations historiques..."
+          for version in "${historical_versions[@]}"; do
+            supabase migration repair "${version}" --status applied --linked
+          done
+
+          echo "Application des nouvelles migrations Supabase..."
           supabase db push --linked
 
           echo "Migrations Supabase appliquées ou déjà à jour."
