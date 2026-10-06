@@ -424,11 +424,9 @@ function RecordPage() {
   const [parcellesOfflineNoCache, setParcellesOfflineNoCache] = useState(false);
   const [selectedParcelleId, setSelectedParcelleId] = useState("");
   const [coopNames, setCoopNames] = useState<string[]>([]);
-  const [producerNames, setProducerNames] = useState<string[]>([]);
   const [newCulture, setNewCulture] = useState("");
   const [newSurface, setNewSurface] = useState("");
   const [newCoop, setNewCoop] = useState("");
-  const [newProducer, setNewProducer] = useState("");
   const [dupParcelle, setDupParcelle] = useState<null | { id: string; culture: string; distanceMeters: number }>(null);
   const [creatingParcelle, setCreatingParcelle] = useState(false);
   const [forceReason, setForceReason] = useState("");
