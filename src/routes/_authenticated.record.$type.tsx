@@ -458,6 +458,8 @@ function RecordPage() {
   // à la sélection obligatoire, donc mise en cache à chaque succès réseau
   // et relue hors-ligne, avec un message explicite si aucun cache n'existe.
   const parcellesCacheKey = profile?.id ?? "default";
+  const [producerList, setProducerList] = useState<CachedProducer[]>([]);
+  const [selectedProducerId, setSelectedProducerId] = useState("");
 
   useEffect(() => {
     if (!isParcelleMission) return;
