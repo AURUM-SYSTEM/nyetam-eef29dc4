@@ -7,7 +7,7 @@ import {
   saveAudio, enqueue, savePhoto, saveVideo, saveMissionFormsCache, getMissionFormsCache,
   saveParcellesCache, getParcellesCache, saveProducersCache, getProducersCache, saveRecordDraft, getRecordDraft, clearRecordDraft,
   enqueueParcelle, isLocalParcelleId, listPendingParcelles, subscribeQueue,
-  type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm, type CachedParcelle,
+  type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm, type CachedParcelle, type CachedProducer,
 } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
 import { getProfile, generateReference } from "@/lib/profile-store";
