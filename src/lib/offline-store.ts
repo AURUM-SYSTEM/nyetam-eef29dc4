@@ -46,7 +46,7 @@
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "aurum-offline";
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 export type DocType =
   | "rapport"
@@ -130,9 +130,23 @@ export type CachedParcelle = {
   surfaceHa: number | null;
   cooperativeName: string | null;
 };
+
+export type CachedProducer = {
+  id: string;
+  fullName: string;
+  cooperativeName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  parcelleCount: number;
+};
 type ParcellesCacheRecord = {
   userId: string;
   parcelles: CachedParcelle[];
+  cachedAt: number;
+};
+type ProducersCacheRecord = {
+  userId: string;
+  producers: CachedProducer[];
   cachedAt: number;
 };
 
@@ -154,6 +168,7 @@ export type RecordDraft = {
   // création hors-ligne perdait le lien vers la parcelle pourtant déjà
   // stockée dans `pendingParcelles` — l'agent la recréait alors en double.
   createdParcelleId?: string;
+  selectedProducerId?: string;
   updatedAt: number;
 };
 type RecordDraftRecord = RecordDraft & { id: "current" };
@@ -177,6 +192,7 @@ export type PendingParcelle = {
   surfaceHa?: number;
   cooperativeName?: string;
   producerName?: string;
+  producerId?: string;
   lat: number;
   lng: number;
   notes?: string;
@@ -276,6 +292,9 @@ function getDB() {
         if (!db.objectStoreNames.contains("parcellesCache")) {
           db.createObjectStore("parcellesCache", { keyPath: "userId" });
         }
+        if (!db.objectStoreNames.contains("producersCache")) {
+          db.createObjectStore("producersCache", { keyPath: "userId" });
+        }
         if (!db.objectStoreNames.contains("recordDraft")) {
           db.createObjectStore("recordDraft", { keyPath: "id" });
         }
@@ -366,6 +385,18 @@ export async function getParcellesCache(userId: string): Promise<CachedParcelle[
   const db = await getDB();
   const rec = (await db.get("parcellesCache", userId)) as ParcellesCacheRecord | undefined;
   return rec?.parcelles;
+}
+
+export async function saveProducersCache(userId: string, producers: CachedProducer[]) {
+  const db = await getDB();
+  const rec: ProducersCacheRecord = { userId, producers, cachedAt: Date.now() };
+  await db.put("producersCache", rec);
+}
+
+export async function getProducersCache(userId: string): Promise<CachedProducer[] | undefined> {
+  const db = await getDB();
+  const rec = (await db.get("producersCache", userId)) as ProducersCacheRecord | undefined;
+  return rec?.producers;
 }
 
 export async function saveRecordDraft(draft: Omit<RecordDraft, "updatedAt">) {
