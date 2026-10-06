@@ -74,6 +74,8 @@ import {
   getEudrCompliance,
   attestEudrCompliance,
   getParcelleMapInfo,
+  getOrganizationDataPolicy,
+  updateOrganizationDataPolicy,
 } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 import type { SupervisorMapMarker } from "@/components/LeafletMaps";
@@ -1190,188 +1192,97 @@ function ProducersSection() {
 }
 
 // ── AGRO : restitution de la base de données ─────────────────────────────
-function UnaprocamRestitutionSection() {
-  const fetchParcelles = useServerFn(listParcelles);
-  const fetchProducers = useServerFn(listProducers);
-  const [parcelles, setParcelles] = useState<Array<any>>([]);
-  const [producers, setProducers] = useState<Array<any>>([]);
+function DataPolicySection() {
+  const fetchPolicy = useServerFn(getOrganizationDataPolicy);
+  const savePolicy = useServerFn(updateOrganizationDataPolicy);
+  const [policy, setPolicy] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [scopes, setScopes] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const [p, pr] = await Promise.all([
-          fetchParcelles({ data: undefined as any }),
-          fetchProducers({ data: undefined as any }),
-        ]);
-        if (!cancelled) {
-          setParcelles(p.parcelles as Array<any>);
-          setProducers(pr.producers as Array<any>);
-        }
-      } catch {
-        // La section reste silencieuse si les données ne peuvent pas être chargées.
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+    fetchPolicy({ data: undefined as any }).then((p) => {
+      if (!cancelled) { setPolicy(p); setScopes(p.allowedScopes ?? []); }
+    }).catch(() => {
+      if (!cancelled) toast.error("Impossible de charger la politique de données.");
+    }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function csvCell(value: unknown): string {
-    const raw = value == null ? "" : Array.isArray(value) ? value.join(" | ") : String(value);
-    return '"' + raw.replace(/"/g, '""') + '"';
+  async function save() {
+    if (!policy) return;
+    setSaving(true);
+    try {
+      await savePolicy({ data: { ...policy, allowedScopes: scopes } });
+      toast.success("Politique de données enregistrée.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'enregistrement.");
+    } finally { setSaving(false); }
   }
 
-  function downloadFile(filename: string, content: string, type: string) {
-    const blob = new Blob(["\\uFEFF", content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  function toggleScope(scope: string) {
+    setScopes((prev) => prev.includes(scope) ? prev.filter((x) => x !== scope) : [...prev, scope]);
   }
 
-  function exportProducersCsv() {
-    const headers = ["Code producteur", "Nom", "Sexe", "Téléphone", "Coopérative", "Village", "Commune", "Département", "Région", "Nombre de parcelles"];
-    const rows = producers.map(p => [
-      p.producerCode, p.fullName, p.sex, p.contactPhone, p.cooperativeName,
-      p.village, p.commune, p.department, p.region, p.parcelleCount,
-    ]);
-    downloadFile(
-      "UNAPROCAM_producteurs.csv",
-      [headers, ...rows].map(row => row.map(csvCell).join(";")).join("\n"),
-      "text/csv;charset=utf-8",
-    );
-  }
-
-  function exportParcellesCsv() {
-    const headers = [
-      "Code parcelle", "Code producteur", "Producteur", "Téléphone", "Coopérative",
-      "Village", "Commune", "Département", "Région", "Culture", "Espèces",
-      "Variétés", "Surface déclarée (ha)", "Surface calculée (ha)", "Latitude",
-      "Longitude", "Année de plantation", "Occupation du terrain", "Agroforesterie",
-      "Certification", "Rendement estimé (t)", "Statut conformité", "Date de collecte",
-    ];
-    const rows = parcelles.map(p => [
-      p.id, p.producerCode, p.producerName, p.producerPhone, p.cooperativeName,
-      p.village, p.commune, p.department, p.region, p.culture, p.species,
-      p.varieties, p.surfaceHa, p.surfaceHaCalculated, p.lat, p.lng,
-      p.plantingYear, p.landTenure, p.agroforestry == null ? "" : (p.agroforestry ? "Oui" : "Non"),
-      p.certification, p.estimatedYieldTonnes, p.complianceStatus, p.createdAt,
-    ]);
-    downloadFile(
-      "UNAPROCAM_parcelles.csv",
-      [headers, ...rows].map(row => row.map(csvCell).join(";")).join("\n"),
-      "text/csv;charset=utf-8",
-    );
-  }
-
-  function exportGeoJson() {
-    const features = parcelles.map(p => {
-      const boundary = Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3
-        ? [...p.boundaryPoints, p.boundaryPoints[0]]
-        : null;
-      const geometry = boundary
-        ? { type: "Polygon", coordinates: [boundary.map((pt: { lat: number; lng: number }) => [pt.lng, pt.lat])] }
-        : { type: "Point", coordinates: [p.lng, p.lat] };
-
-      return {
-        type: "Feature",
-        geometry,
-        properties: {
-          code_parcelle: p.id,
-          code_producteur: p.producerCode,
-          producteur: p.producerName,
-          cooperative: p.cooperativeName,
-          culture: p.culture,
-          surface_ha: p.surfaceHa,
-          surface_ha_calculee: p.surfaceHaCalculated,
-          village: p.village,
-          commune: p.commune,
-          departement: p.department,
-          region: p.region,
-          espece: p.species,
-          varietes: p.varieties,
-          annee_plantation: p.plantingYear,
-          occupation_terrain: p.landTenure,
-          agroforesterie: p.agroforestry,
-          certification: p.certification,
-          rendement_estime_t: p.estimatedYieldTonnes,
-          statut_conformite: p.complianceStatus,
-          date_collecte: p.createdAt,
-        },
-      };
-    });
-    downloadFile(
-      "UNAPROCAM_parcelles.geojson",
-      JSON.stringify({ type: "FeatureCollection", features }, null, 2),
-      "application/geo+json;charset=utf-8",
-    );
-  }
-
-  const polygonCount = parcelles.filter(p => Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3).length;
-  const gpsCount = parcelles.filter(p => typeof p.lat === "number" && typeof p.lng === "number").length;
-  const totalSurface = parcelles.reduce((sum, p) => sum + (Number(p.surfaceHaCalculated ?? p.surfaceHa) || 0), 0);
+  if (loading) return <section className="glass-card mb-6 rounded-2xl p-5"><div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div></section>;
+  if (!policy) return null;
 
   return (
     <section className="glass-card mb-6 rounded-2xl p-5">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 font-display text-lg">
-            <Download className="h-4 w-4 text-gold" /> Restitution de la base
-          </h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Données de votre organisation — préparation de la restitution du pilote UNAPROCAM.
-          </p>
+      <div className="mb-4">
+        <h2 className="flex items-center gap-2 font-display text-lg"><ShieldAlert className="h-4 w-4 text-gold" /> Données & valorisation</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Politique propre à cette organisation. Les données restent conservées dans AURUM ; un export est une copie.</p>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="flex items-center gap-2 rounded-xl border border-border bg-card/40 p-3 text-sm">
+          <input type="checkbox" checked={policy.exportEnabled} onChange={(e) => setPolicy((p: any) => ({ ...p, exportEnabled: e.target.checked }))} />
+          Autoriser les exports de données
+        </label>
+        <label className="flex items-center gap-2 rounded-xl border border-border bg-card/40 p-3 text-sm">
+          <input type="checkbox" checked={policy.commercialDataUse} onChange={(e) => setPolicy((p: any) => ({ ...p, commercialDataUse: e.target.checked }))} />
+          Autoriser la valorisation commerciale
+        </label>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <label className="text-xs text-muted-foreground">Statut de l'accord
+          <select value={policy.agreementStatus} onChange={(e) => setPolicy((p: any) => ({ ...p, agreementStatus: e.target.value }))} className="mt-1 w-full rounded-lg border border-border bg-input px-2 py-2 text-sm">
+            <option value="pending">En attente</option><option value="active">Actif</option><option value="suspended">Suspendu</option><option value="terminated">Terminé</option>
+          </select>
+        </label>
+        <label className="text-xs text-muted-foreground">Commission
+          <select value={policy.commissionType} onChange={(e) => setPolicy((p: any) => ({ ...p, commissionType: e.target.value }))} className="mt-1 w-full rounded-lg border border-border bg-input px-2 py-2 text-sm">
+            <option value="none">Aucune</option><option value="percentage">Pourcentage</option><option value="fixed_per_record">Montant par donnée</option>
+          </select>
+        </label>
+        <label className="text-xs text-muted-foreground">Taux / montant
+          <input type="number" min="0" value={policy.commissionRate ?? ""} onChange={(e) => setPolicy((p: any) => ({ ...p, commissionRate: e.target.value === "" ? null : Number(e.target.value) }))} className="mt-1 w-full rounded-lg border border-border bg-input px-2 py-2 text-sm" />
+        </label>
+      </div>
+
+      <div className="mt-3">
+        <p className="mb-2 text-xs text-muted-foreground">Données autorisées pour la valorisation</p>
+        <div className="flex flex-wrap gap-2">
+          {["parcelles", "surfaces", "production", "indicateurs_agreges", "cartographie_anonymisee"].map((scope) => (
+            <button key={scope} type="button" onClick={() => toggleScope(scope)} className={scopes.includes(scope) ? "rounded-full bg-emerald-500/15 px-3 py-1.5 text-xs text-emerald-300" : "rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground"}>
+              {scope.replace("_", " ")}
+            </button>
+          ))}
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
-      ) : (
-        <>
-          <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-            <div className="rounded-xl border border-border bg-card/40 p-3">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Producteurs</p>
-              <p className="mt-1 text-xl font-semibold">{producers.length}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card/40 p-3">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Parcelles</p>
-              <p className="mt-1 text-xl font-semibold">{parcelles.length}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card/40 p-3">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Polygones</p>
-              <p className="mt-1 text-xl font-semibold">{polygonCount}/{parcelles.length}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-card/40 p-3">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Surface</p>
-              <p className="mt-1 text-xl font-semibold">{totalSurface.toFixed(2)} ha</p>
-            </div>
-          </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <input value={policy.agreementReference ?? ""} onChange={(e) => setPolicy((p: any) => ({ ...p, agreementReference: e.target.value || null }))} placeholder="Référence de l'accord" className="rounded-lg border border-border bg-input px-2 py-2 text-sm" />
+        <textarea value={policy.notes ?? ""} onChange={(e) => setPolicy((p: any) => ({ ...p, notes: e.target.value || null }))} placeholder="Notes / périmètre contractuel" className="min-h-20 rounded-lg border border-border bg-input px-2 py-2 text-sm" />
+      </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={exportProducersCsv} disabled={producers.length === 0}
-              className="rounded-lg btn-gold px-3 py-2 text-xs disabled:opacity-40">
-              Producteurs CSV
-            </button>
-            <button type="button" onClick={exportParcellesCsv} disabled={parcelles.length === 0}
-              className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">
-              Parcelles CSV
-            </button>
-            <button type="button" onClick={exportGeoJson} disabled={parcelles.length === 0}
-              className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">
-              Parcelles GeoJSON
-            </button>
-          </div>
-
-          <p className="mt-3 text-[11px] text-muted-foreground">
-            GPS disponible : {gpsCount}/{parcelles.length}. Le GeoJSON utilise le polygone quand il existe, sinon le point GPS.
-          </p>
-        </>
-      )}
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-[11px] text-muted-foreground">L'exploitation commerciale ne peut être activée que si l'accord est « Actif ».</p>
+        <button type="button" onClick={() => void save()} disabled={saving} className="btn-gold rounded-lg px-4 py-2 text-xs disabled:opacity-40">{saving ? "Enregistrement…" : "Enregistrer"}</button>
+      </div>
     </section>
   );
 }
