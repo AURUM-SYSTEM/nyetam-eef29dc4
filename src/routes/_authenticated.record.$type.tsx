@@ -17,7 +17,7 @@ import { computePolygonCenter, computePolygonAreaHectares, maxPairwiseDistanceMe
 import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
-import { listParcelles, listCooperatives, listProducers, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
+import { listParcelles, listCooperatives, listProducers, createProducer, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
 // Instrumentation de diagnostic pour la capture GPS/périmètre — no-op en
 // production (voir debug-log.ts), gardée pour un futur diagnostic terrain.
 import { debugLog, debugWarn, debugError } from "@/lib/debug-log";
@@ -403,6 +403,7 @@ function RecordPage() {
   const fetchParcelles = useServerFn(listParcelles);
   const fetchCooperatives = useServerFn(listCooperatives);
   const fetchProducers = useServerFn(listProducers);
+  const createProd = useServerFn(createProducer);
   const checkDup = useServerFn(checkGpsDuplicate);
   const createParc = useServerFn(createParcelle);
   const logUsedExisting = useServerFn(logUsedExistingParcelle);
@@ -428,9 +429,47 @@ function RecordPage() {
   const [newSurface, setNewSurface] = useState("");
   const [newCoop, setNewCoop] = useState("");
   const [newProducer, setNewProducer] = useState("");
+  const [newProducerPhone, setNewProducerPhone] = useState("");
+  const [newProducerCni, setNewProducerCni] = useState("");
+  const [creatingProducer, setCreatingProducer] = useState(false);
   const [dupParcelle, setDupParcelle] = useState<null | { id: string; culture: string; distanceMeters: number }>(null);
   const [creatingParcelle, setCreatingParcelle] = useState(false);
   const [forceReason, setForceReason] = useState("");
+
+  async function handleCreateProducer() {
+    const name = newProducer.trim();
+    if (!name) {
+      toast.error("Indiquez le nom complet du producteur.");
+      return;
+    }
+    if (!online) {
+      toast.error("La création d'un nouveau producteur nécessite une connexion. Une fois créé, sa parcelle pourra ensuite être capturée hors-ligne.");
+      return;
+    }
+    setCreatingProducer(true);
+    try {
+      const res = await createProd({
+        data: {
+          fullName: name,
+          contactPhone: newProducerPhone.trim() || undefined,
+          idDocumentType: newProducerCni.trim() ? "CNI" : undefined,
+          idDocumentNumber: newProducerCni.trim() || undefined,
+        },
+      });
+      if (res.success) {
+        setSelectedProducerId(res.producerId);
+        setNewProducer(name);
+        setProducerOptions(prev => [...prev, { id: res.producerId, name }].sort((a, b) => a.name.localeCompare(b.name)));
+        setNewProducerPhone("");
+        setNewProducerCni("");
+        toast.success("Producteur créé et sélectionné. La parcelle sera liée à ce producteur.");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la création du producteur");
+    } finally {
+      setCreatingProducer(false);
+    }
+  }
 
   // Capture de périmètre (polygone) — complément du point unique existant.
   const [boundaryPoints, setBoundaryPoints] = useState<Array<{ lat: number; lng: number; accuracy?: number }>>([]);
@@ -730,7 +769,6 @@ function RecordPage() {
           surfaceHa: surface,
           cooperativeName: newCoop.trim() || undefined,
           producerId: selectedProducerId || undefined,
-          producerId: selectedProducerId || undefined,
           producerName: newProducer.trim() || undefined,
           lat: gps.lat,
           lng: gps.lng,
@@ -747,6 +785,7 @@ function RecordPage() {
           culture: newCulture.trim(),
           surfaceHa: surface,
           cooperativeName: newCoop.trim() || undefined,
+          producerId: selectedProducerId || undefined,
           producerName: newProducer.trim() || undefined,
           lat: gps.lat,
           lng: gps.lng,
@@ -1305,11 +1344,29 @@ function RecordPage() {
                         setNewProducer(producerOptions.find(p => p.id === id)?.name ?? "");
                       }}
                       className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
-                      <option value="">Sélectionner un producteur</option>
+                      <option value="">Sélectionner un producteur existant</option>
                       {producerOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                     <span className="mt-1 block text-[10px] text-muted-foreground">La parcelle sera reliée à l'identifiant du producteur.</span>
                   </label>
+
+                  <div className="rounded-xl border border-border bg-card/30 p-3">
+                    <p className="mb-2 text-[10px] uppercase tracking-widest text-muted-foreground">Nouveau producteur</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={newProducer} onChange={e => { setNewProducer(e.target.value); setSelectedProducerId(""); }}
+                        placeholder="Nom complet *" className="col-span-2 w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                      <input value={newProducerPhone} onChange={e => setNewProducerPhone(e.target.value)}
+                        placeholder="Téléphone" inputMode="tel" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                      <input value={newProducerCni} onChange={e => setNewProducerCni(e.target.value)}
+                        placeholder="N° CNI" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                    </div>
+                    <button type="button" onClick={() => void handleCreateProducer()}
+                      disabled={creatingProducer || !newProducer.trim() || !online}
+                      className="mt-2 w-full rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold disabled:opacity-40">
+                      {creatingProducer ? "Création…" : !online ? "Connexion requise pour créer" : "Créer et sélectionner ce producteur"}
+                    </button>
+                    <p className="mt-1 text-[10px] text-muted-foreground">Après création, le producteur est sélectionné automatiquement et la parcelle lui sera liée.</p>
+                  </div>
 
                   <div className="rounded-xl border border-border bg-card/30 p-3">
                     <span className="mb-2 block text-[10px] uppercase tracking-widest text-muted-foreground">
