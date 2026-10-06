@@ -2418,22 +2418,25 @@ function SupervisorDashboardContent() {
           );
         }
         
-        function SupervisorFolder({ title, description, icon: Icon = Folder, open, onToggle, children }: { title: string; description: string; icon?: typeof Folder; open: boolean; onToggle: () => void; children: React.ReactNode }) {
-          return (
-            <section className="mb-4 overflow-hidden rounded-2xl border border-border bg-card/30 shadow-sm">
-              <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-secondary/40 sm:px-5">
-                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${open ? "border-gold/30 bg-gold/10 text-gold" : "border-border bg-secondary/40 text-muted-foreground"}`}>
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1"><span className="block font-display text-base sm:text-lg">{title}</span><span className="mt-0.5 block text-xs text-muted-foreground">{description}</span></span>
-                <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180 text-gold" : ""}`} />
-              </button>
-              {open && <div className="border-t border-border p-3 sm:p-5">{children}</div>}
-            </section>
-          );
-        }
-        
               </SupervisorFolder>
+
+function SupervisorFolder({ title, description, icon: Icon = Folder, open, onToggle, children }: { title: string; description: string; icon?: typeof Folder; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <section className="mb-4 overflow-hidden rounded-2xl border border-border bg-card/30 shadow-sm">
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-secondary/40 sm:px-5">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${open ? "border-gold/30 bg-gold/10 text-gold" : "border-border bg-secondary/40 text-muted-foreground"}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-base sm:text-lg">{title}</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+        </span>
+        <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180 text-gold" : ""}`} />
+      </button>
+      {open && <div className="border-t border-border p-3 sm:p-5">{children}</div>}
+    </section>
+  );
+}
 
 function MetricCard({ icon: Icon, label, value }: { icon: typeof Activity; label: string; value: string | number }) {
   return (
