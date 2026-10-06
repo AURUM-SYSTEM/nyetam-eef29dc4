@@ -421,36 +421,54 @@ export type Database = {
           contact_phone: string | null
           cooperative_id: string | null
           created_at: string
+          department: string | null
           full_name: string
           id: string
           id_document_number: string | null
           id_document_type: string | null
           organization_id: string
+          producer_code: string
+          region: string | null
           registered_by: string
+          sex: string | null
+          village: string | null
+          commune: string | null
         }
         Insert: {
           contact_email?: string | null
           contact_phone?: string | null
           cooperative_id?: string | null
           created_at?: string
+          department?: string | null
           full_name: string
           id?: string
           id_document_number?: string | null
           id_document_type?: string | null
           organization_id: string
+          producer_code?: string
+          region?: string | null
           registered_by: string
+          sex?: string | null
+          village?: string | null
+          commune?: string | null
         }
         Update: {
           contact_email?: string | null
           contact_phone?: string | null
           cooperative_id?: string | null
           created_at?: string
+          department?: string | null
           full_name?: string
           id?: string
           id_document_number?: string | null
           id_document_type?: string | null
           organization_id?: string
+          producer_code?: string
+          region?: string | null
           registered_by?: string
+          sex?: string | null
+          village?: string | null
+          commune?: string | null
         }
         Relationships: []
       }
