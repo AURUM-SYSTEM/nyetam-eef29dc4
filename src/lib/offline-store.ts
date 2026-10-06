@@ -105,7 +105,7 @@ export type GpsLocation = {
 export type MissionFieldDef = {
   key: string;
   label: string;
-  type: "text" | "number" | "select";
+  type: "text" | "number" | "select" | "multiselect";
   unit?: string;
   required?: boolean;
   options?: string[];
@@ -156,7 +156,7 @@ type ProducersCacheRecord = {
 // après une coupure réseau) ne réinitialise plus la mission choisie.
 export type RecordDraft = {
   missionKey: string;
-  fieldValues: Record<string, string>;
+  fieldValues: Record<string, string | string[]>;
   agentName: string;
   location: string;
   docDate: string;
@@ -230,7 +230,7 @@ export type QueueMeta = {
   moduleType?: ModuleType;
   // Champs structurés spécifiques au module métier (voir module-fields.ts),
   // saisis directement par l'agent — ex: { surface_ha: "2.5", culture: "maïs" }
-  fieldData?: Record<string, string>;
+  fieldData?: Record<string, string | string[]>;
   // AGRO : parcelle choisie ou créée avant la saisie — liée au document
   // à la synchronisation (colonne documents.parcelle_id)
   parcelleId?: string;
