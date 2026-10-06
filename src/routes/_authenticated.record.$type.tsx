@@ -368,7 +368,7 @@ function RecordPage() {
   const [docTime, setDocTime] = useState(now.toTimeString().slice(0, 5));
   const [gps, setGps] = useState<GpsLocation | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [fieldValues, setFieldValues] = useState<Record<string, string | string[]>>({});
   // Déclaré ici (avant l'effet de sauvegarde du brouillon juste en dessous,
   // qui le persiste) plutôt qu'avec le reste de l'état "liaison parcelle"
   // plus bas dans ce composant.
@@ -1454,9 +1454,32 @@ function RecordPage() {
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
                   {f.label}{f.unit ? ` (${f.unit})` : ""}{f.required ? " *" : ""}
                 </span>
-                {f.type === "select" ? (
+                {f.type === "multiselect" ? (
+                  <div className="space-y-2 rounded-lg border border-border bg-input/30 p-2.5">
+                    {(f.options ?? []).map(opt => {
+                      const selected = Array.isArray(fieldValues[f.key]) ? fieldValues[f.key] as string[] : [];
+                      return (
+                        <label key={opt} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={selected.includes(opt)}
+                            onChange={e => setFieldValues(prev => {
+                              const current = Array.isArray(prev[f.key]) ? prev[f.key] as string[] : [];
+                              const next = e.target.checked
+                                ? [...current, opt]
+                                : current.filter(value => value !== opt);
+                              return { ...prev, [f.key]: next };
+                            })}
+                            className="h-4 w-4 accent-gold"
+                          />
+                          <span>{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : f.type === "select" ? (
                   <select
-                    value={fieldValues[f.key] ?? ""}
+                    value={typeof fieldValues[f.key] === "string" ? fieldValues[f.key] as string : ""}
                     onChange={e => setFieldValues(prev => ({ ...prev, [f.key]: e.target.value }))}
                     className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold"
                   >
