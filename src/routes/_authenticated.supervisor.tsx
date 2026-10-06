@@ -373,7 +373,7 @@ type DocumentDetails = {
   id: string;
   title: string | null;
   transcript: string;
-  fieldData: Record<string, string> | null;
+  fieldData: Record<string, unknown> | null;
   photoUrls: string[];
   videoUrls: string[];
   location: string | null;
@@ -434,7 +434,9 @@ function DocumentDetailRow({ documentId, onClose }: { documentId: string; onClos
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Données saisies</span>
                 <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   {Object.entries(details.fieldData).map(([k, v]) => (
-                    <li key={k}><span className="text-foreground">{humanizeFieldKey(k)}</span> : {String(v)}</li>
+                    <li key={k}>
+                      <span className="text-foreground">{humanizeFieldKey(k)}</span> : {Array.isArray(v) ? v.join(", ") : String(v)}
+                    </li>
                   ))}
                 </ul>
               </div>
