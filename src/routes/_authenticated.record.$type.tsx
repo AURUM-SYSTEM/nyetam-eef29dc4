@@ -389,13 +389,14 @@ function RecordPage() {
     void saveRecordDraft({
       missionKey, fieldValues, agentName, location, docDate, docTime,
       gps: gps ?? undefined,
+      selectedProducerId: selectedProducerId || undefined,
       // Persisté aussi : sans ça, un rechargement pendant une création de
       // parcelle hors-ligne perdrait le lien vers `pendingParcelles` côté
       // React (l'entrée locale, elle, survivrait — mais plus rien ne
       // saurait qu'elle est liée à cette saisie en cours).
       createdParcelleId: createdParcelleId ?? undefined,
     });
-  }, [draftCheckDone, missionKey, fieldValues, agentName, location, docDate, docTime, gps, createdParcelleId]);
+  }, [draftCheckDone, missionKey, fieldValues, agentName, location, docDate, docTime, gps, createdParcelleId, selectedProducerId]);
 
   // ── AGRO : liaison parcelle (recensement_plantations / visite_parcelle / suivi_parcelle) ──
   // Comportement fixe et exclusif par mission — jamais de bascule manuelle :
