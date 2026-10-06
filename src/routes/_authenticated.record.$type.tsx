@@ -492,7 +492,11 @@ function RecordPage() {
         if (!isParcelleSelectionMission) {
           // recensement_plantations hors-ligne : pas de liste requise, juste
           // pas de suggestions coop/producteur — comportement inchangé.
-          if (!cancelled) setParcelleList([]);
+          if (!cancelled) {
+            setParcelleList([]);
+            const cachedProducers = await getProducersCache(keyAtRunStart);
+            if (cachedProducers) setProducerList(cachedProducers);
+          }
         } else {
           const cached = await getParcellesCache(keyAtRunStart);
           if (cancelled) return;
