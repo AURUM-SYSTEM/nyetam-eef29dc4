@@ -97,6 +97,14 @@ export function useSyncEngine() {
             forceCreate: p.forceCreate,
             reason: p.reason,
             boundaryPoints: p.boundaryPoints,
+            species: p.species,
+            varieties: p.varieties,
+            plantingYear: p.plantingYear,
+            landTenure: p.landTenure,
+            agroforestry: p.agroforestry,
+            certification: p.certification,
+            estimatedYieldTonnes: p.estimatedYieldTonnes,
+            complianceStatus: p.complianceStatus,
           },
         });
 
