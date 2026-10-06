@@ -490,6 +490,14 @@ export const createParcelle = createServerFn({ method: "POST" })
     forceCreate?: boolean;
     reason?: string;
     boundaryPoints?: Array<{ lat: number; lng: number }>;
+    species?: string[];
+    varieties?: string[];
+    plantingYear?: number;
+    landTenure?: "owner" | "sharecropper" | "rental" | "unknown";
+    agroforestry?: boolean;
+    certification?: string;
+    estimatedYieldTonnes?: number;
+    complianceStatus?: "compliant" | "to_review" | "unknown";
   }) =>
     z.object({
       culture: z.string().min(1).max(120),
@@ -506,6 +514,14 @@ export const createParcelle = createServerFn({ method: "POST" })
         lat: z.number().min(-90).max(90),
         lng: z.number().min(-180).max(180),
       })).min(3).max(500).optional(),
+      species: z.array(z.string().min(1).max(100)).max(30).optional(),
+      varieties: z.array(z.string().min(1).max(100)).max(30).optional(),
+      plantingYear: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
+      landTenure: z.enum(["owner","sharecropper","rental","unknown"]).optional(),
+      agroforestry: z.boolean().optional(),
+      certification: z.string().max(200).optional(),
+      estimatedYieldTonnes: z.number().min(0).max(100000).optional(),
+      complianceStatus: z.enum(["compliant","to_review","unknown"]).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -626,6 +642,14 @@ export const createParcelle = createServerFn({ method: "POST" })
         surface_ha: data.surfaceHa ?? surfaceHaCalculated ?? null,
         surface_ha_calculated: surfaceHaCalculated,
         boundary_points: (data.boundaryPoints as any) ?? null,
+        species: data.species ?? [],
+        varieties: data.varieties ?? [],
+        planting_year: data.plantingYear ?? null,
+        land_tenure: data.landTenure ?? null,
+        agroforestry: data.agroforestry ?? null,
+        certification: data.certification?.trim() || null,
+        estimated_yield_tonnes: data.estimatedYieldTonnes ?? null,
+        compliance_status: data.complianceStatus ?? null,
         cooperative_id: cooperativeId,
         producer_id: producerId,
         lat: effectiveLat,
@@ -655,6 +679,14 @@ export const createParcelle = createServerFn({ method: "POST" })
           lat: effectiveLat,
           lng: effectiveLng,
           boundary_points_count: data.boundaryPoints?.length ?? 0,
+          species: data.species ?? [],
+          varieties: data.varieties ?? [],
+          planting_year: data.plantingYear ?? null,
+          land_tenure: data.landTenure ?? null,
+          agroforestry: data.agroforestry ?? null,
+          certification: data.certification?.trim() || null,
+          estimated_yield_tonnes: data.estimatedYieldTonnes ?? null,
+          compliance_status: data.complianceStatus ?? null,
           forced: forcingThroughDuplicate,
         } as any,
       } as any);
