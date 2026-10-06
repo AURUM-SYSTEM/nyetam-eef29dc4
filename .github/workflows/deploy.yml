@@ -159,7 +159,7 @@ jobs:
           done
 
           echo "Application des nouvelles migrations Supabase..."
-          supabase db push --linked
+          supabase db push --linked --include-all
 
           echo "Migrations Supabase appliquées ou déjà à jour."
 
