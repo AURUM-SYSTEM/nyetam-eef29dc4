@@ -403,6 +403,11 @@ export const updateProducer = createServerFn({ method: "POST" })
       ["idDocumentType", "id_document_type"],
       ["idDocumentNumber", "id_document_number"],
       ["cooperativeId", "cooperative_id"],
+      ["sex", "sex"],
+      ["village", "village"],
+      ["commune", "commune"],
+      ["department", "department"],
+      ["region", "region"],
     ];
 
     const updatePayload: Record<string, any> = {};
