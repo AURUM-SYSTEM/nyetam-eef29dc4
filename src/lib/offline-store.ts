@@ -183,6 +183,14 @@ export type PendingParcelle = {
   lng: number;
   notes?: string;
   boundaryPoints?: Array<{ lat: number; lng: number }>;
+  species?: string[];
+  varieties?: string[];
+  plantingYear?: number;
+  landTenure?: "owner" | "sharecropper" | "rental" | "unknown";
+  agroforestry?: boolean;
+  certification?: string;
+  estimatedYieldTonnes?: number;
+  complianceStatus?: "compliant" | "to_review" | "unknown";
   // Posé par l'agent une fois averti d'un doublon potentiel (voir status
   // "conflict") — rejoué avec forceCreate=true à la prochaine tentative.
   forceCreate?: boolean;
