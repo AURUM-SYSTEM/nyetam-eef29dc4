@@ -62,6 +62,51 @@ async function assertSupervisorOrAdminAndGetOrg(userId: string): Promise<string>
   return orgId;
 }
 
+
+export type OrganizationDataPolicy = {
+  organizationId: string;
+  exportEnabled: boolean;
+  commercialDataUse: boolean;
+  agreementStatus: "pending" | "active" | "suspended" | "terminated";
+  commissionType: "percentage" | "fixed_per_record" | "none";
+  commissionRate: number | null;
+  allowedScopes: string[];
+  agreementReference: string | null;
+  agreementStart: string | null;
+  agreementEnd: string | null;
+  notes: string | null;
+};
+
+export const getOrganizationDataPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const { data, error } = await supabaseAdmin.from("organization_data_policies")
+      .select("organization_id, export_enabled, commercial_data_use, agreement_status, commission_type, commission_rate, allowed_scopes, agreement_reference, agreement_start, agreement_end, notes")
+      .eq("organization_id", orgId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { organizationId: orgId, exportEnabled: true, commercialDataUse: false, agreementStatus: "pending", commissionType: "none", commissionRate: null, allowedScopes: [], agreementReference: null, agreementStart: null, agreementEnd: null, notes: null } satisfies OrganizationDataPolicy;
+    return { organizationId: data.organization_id, exportEnabled: data.export_enabled, commercialDataUse: data.commercial_data_use, agreementStatus: data.agreement_status, commissionType: data.commission_type, commissionRate: data.commission_rate, allowedScopes: data.allowed_scopes ?? [], agreementReference: data.agreement_reference, agreementStart: data.agreement_start, agreementEnd: data.agreement_end, notes: data.notes } satisfies OrganizationDataPolicy;
+  });
+
+export const updateOrganizationDataPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({
+    exportEnabled: z.boolean(), commercialDataUse: z.boolean(),
+    agreementStatus: z.enum(["pending", "active", "suspended", "terminated"]),
+    commissionType: z.enum(["percentage", "fixed_per_record", "none"]),
+    commissionRate: z.number().min(0).nullable(), allowedScopes: z.array(z.string()).max(30),
+    agreementReference: z.string().max(200).nullable(), agreementStart: z.string().nullable(), agreementEnd: z.string().nullable(), notes: z.string().max(2000).nullable(),
+  }))
+  .handler(async ({ context, data }) => {
+    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    if (data.commercialDataUse && data.agreementStatus !== "active") throw new Error("L'exploitation commerciale ne peut être activée que pour un accord actif.");
+    if (data.commissionType === "percentage" && data.commissionRate != null && data.commissionRate > 100) throw new Error("Le taux de commission en pourcentage ne peut pas dépasser 100.");
+    const { error } = await supabaseAdmin.from("organization_data_policies").upsert({ organization_id: orgId, export_enabled: data.exportEnabled, commercial_data_use: data.commercialDataUse, agreement_status: data.agreementStatus, commission_type: data.commissionType, commission_rate: data.commissionRate, allowed_scopes: data.allowedScopes, agreement_reference: data.agreementReference, agreement_start: data.agreementStart, agreement_end: data.agreementEnd, notes: data.notes, updated_by: context.userId, updated_at: new Date().toISOString() }, { onConflict: "organization_id" });
+    if (error) throw new Error(error.message);
+    return { ok: true, organizationId: orgId };
+  });
+
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
