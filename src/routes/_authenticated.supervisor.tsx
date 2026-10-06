@@ -23,6 +23,8 @@ import {
   BarChart3,
   Download,
   CheckCircle2,
+  ChevronDown,
+  Folder,
   History,
   Loader2,
   Lock,
@@ -2073,6 +2075,7 @@ function SupervisorDashboardContent() {
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [exportingActivities, setExportingActivities] = useState(false);
+  const [openFolder, setOpenFolder] = useState<"overview" | "terrain" | "data" | "traceability" | "assistant" | "activities">("overview");
 
   const agentOptions = useMemo(
     () => Array.from(new Set(Object.values(profilesById))).sort(),
@@ -2184,218 +2187,251 @@ function SupervisorDashboardContent() {
         </span>
       </div>
 
-      <header className="mb-8">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Supervision</p>
-        <h1 className="mt-2 font-display text-3xl leading-tight sm:text-4xl">
-          Tableau de bord <span className="gold-text">Superviseur</span>
-        </h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Vue d'ensemble des activités terrain de ton organisation, en temps réel.
-        </p>
-      </header>
-
-      <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard icon={Activity} label="Total activités" value={total} />
-        <MetricCard icon={Users} label="Agents actifs" value={activeAgents} />
-        <MetricCard icon={Radio} label="Aujourd'hui" value={todayCount} />
-        <MetricCard icon={CheckCircle2} label="Taux de synchro" value={`${syncRate}%`} />
-      </section>
-
-      <section className="glass-card mb-6 rounded-2xl p-5">
-        <h2 className="mb-3 font-display text-lg">Répartition géographique</h2>
-        <SupervisorMap docs={docs} />
-        <div className="mt-3 flex flex-wrap gap-3">
-          {moduleOptions.map((m) => (
-            <div key={m} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: moduleColor(m) }} />
-              {moduleLabel(m)}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="glass-card mb-6 rounded-2xl p-5">
-        <h2 className="mb-3 font-display text-lg">Activité — 14 derniers jours</h2>
-        <div className="h-56 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={byDay}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={false} tickLine={false} width={24} />
-              <RechartsTooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-              <Bar dataKey="count" fill="var(--gold)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      {/* Journal d'activité — pas réservé au module agro : documents couvre
-          tous les modules, et audit_log filtre déjà par organisation. */}
-      <AuditLogSection />
-
-      {/* AGRO — parcelles et producteurs (uniquement pour les superviseurs du module agro) */}
-      {profile?.module_type === "agro" && (
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 [&>section]:mb-0">
-          <ParcellesSection />
-          <ProducersSection />
-        </div>
-      )}
-
-      {/* AGRO — restitution prête pour le pilote UNAPROCAM */}
-      {profile?.module_type === "agro" && <UnaprocamRestitutionSection />}
-
-      {/* AGRO — qualité des données / alertes de doublons GPS */
-      {profile?.module_type === "agro" && <DataQualitySection />}
-
-      {/* AGRO — Data Analyst (complétude, validation, volumes) */}
-      {profile?.module_type === "agro" && <DataAnalystSection />}
-
-      {/* AGRO — module de valorisation, visible uniquement si AURUM l'a activé */}
-      {profile?.module_type === "agro" && <CommercialDataModuleSection />}
-
-      {/* AGRO — Conformité EUDR (extension optionnelle, n'affiche rien si désactivée) */}
-      {profile?.module_type === "agro" && <EudrComplianceSection />}
-
-      {/* AGRO — Assistant Agro (questions libres) et Agro Advisor (synthèse) — deux blocs distincts */}
-      {profile?.module_type === "agro" && (
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 [&>section]:mb-0">
-          <AgriAssistantSection />
-          <OrientationsSection />
-        </div>
-      )}
-
-      {alerts.length > 0 && (
-        <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
-          <h2 className="mb-3 flex items-center gap-2 font-display text-lg text-amber-300">
-            <AlertTriangle className="h-4 w-4" /> Alertes — agents inactifs
-          </h2>
-          <ul className="space-y-1.5 text-sm">
-            {alerts.map((a) => (
-              <li key={a.agent} className="flex items-center justify-between text-amber-200/90">
-                <span>{a.agent}</span>
-                <span className="text-xs text-amber-300/70">Dernière saisie il y a {a.hoursAgo}h</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className="glass-card rounded-2xl p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-lg">Activités récentes</h2>
-          <div className="flex flex-wrap gap-2">
-            <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs">
-              <option value="all">Tous les modules</option>
-              {moduleOptions.map((m) => (
-                <option key={m} value={m}>{moduleLabel(m)}</option>
-              ))}
-            </select>
-            <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs">
-              <option value="all">Tous les agents</option>
-              {agentOptions.map((a) => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | "draft" | "ready")} className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs">
-              <option value="all">Tous les statuts</option>
-              <option value="ready">Synchronisé</option>
-              <option value="draft">Brouillon</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => void handleExportActivitiesXlsx()}
-              disabled={exportingActivities || filteredDocs.length === 0}
-              className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
-            >
-              {exportingActivities ? "Export…" : "Exporter en Excel"}
-            </button>
-          </div>
-        </div>
-
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Agent</TableHead>
-              <TableHead>Module</TableHead>
-              <TableHead>Titre</TableHead>
-              <TableHead>Lieu</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Statut</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredDocs.slice(0, 30).map((d) => (
-              <Fragment key={d.id}>
-                <TableRow
-                  onClick={() => setViewingId(viewingId === d.id ? null : d.id)}
-                  className="cursor-pointer hover:bg-card/40"
-                >
-                  <TableCell className="font-medium">{profilesById[d.user_id] || "Agent"}</TableCell>
-                  <TableCell>
-                    <span
-                      className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider"
-                      style={{
-                        backgroundColor: `color-mix(in oklch, ${moduleColor(d.module_type)} 18%, transparent)`,
-                        color: moduleColor(d.module_type),
-                      }}
-                    >
-                      {moduleLabel(d.module_type)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="max-w-[180px] truncate">{d.title || "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{d.location_data?.city || d.location || "—"}</TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {new Date(d.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                  </TableCell>
-                  <TableCell>
-                    <span className={d.status === "ready" ? "text-xs text-emerald-400" : "text-xs text-muted-foreground"}>
-                      {d.status === "ready" ? "Synchronisé" : "Brouillon"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1.5">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setRequestingId(requestingId === d.id ? null : d.id); }}
-                        title="Demander une modification"
-                        className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleValidate(d.id); }}
-                        className={
-                          validated.has(d.id)
-                            ? "rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400"
-                            : "rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-                        }
-                      >
-                        {validated.has(d.id) ? "Validé ✓" : "Valider"}
-                      </button>
+      <SupervisorFolder title="Vue d’ensemble" description="Indicateurs, carte et activité récente" open={openFolder === "overview"} onToggle={() => setOpenFolder("overview")}>
+              <header className="mb-8">
+                <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Supervision</p>
+                <h1 className="mt-2 font-display text-3xl leading-tight sm:text-4xl">
+                  Tableau de bord <span className="gold-text">Superviseur</span>
+                </h1>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Vue d'ensemble des activités terrain de ton organisation, en temps réel.
+                </p>
+              </header>
+        
+              <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <MetricCard icon={Activity} label="Total activités" value={total} />
+                <MetricCard icon={Users} label="Agents actifs" value={activeAgents} />
+                <MetricCard icon={Radio} label="Aujourd'hui" value={todayCount} />
+                <MetricCard icon={CheckCircle2} label="Taux de synchro" value={`${syncRate}%`} />
+              </section>
+        
+              <section className="glass-card mb-6 rounded-2xl p-5">
+                <h2 className="mb-3 font-display text-lg">Répartition géographique</h2>
+                <SupervisorMap docs={docs} />
+                <div className="mt-3 flex flex-wrap gap-3">
+                  {moduleOptions.map((m) => (
+                    <div key={m} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: moduleColor(m) }} />
+                      {moduleLabel(m)}
                     </div>
-                  </TableCell>
-                </TableRow>
-                {requestingId === d.id && (
-                  <ModificationRequestRow doc={d} onClose={() => setRequestingId(null)} />
-                )}
-                {viewingId === d.id && (
-                  <DocumentDetailRow documentId={d.id} onClose={() => setViewingId(null)} />
-                )}
-              </Fragment>
-            ))}
-          </TableBody>
-        </Table>
+                  ))}
+                </div>
+              </section>
+        
+              <section className="glass-card mb-6 rounded-2xl p-5">
+                <h2 className="mb-3 font-display text-lg">Activité — 14 derniers jours</h2>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={byDay}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                      <XAxis dataKey="day" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={false} tickLine={false} width={24} />
+                      <RechartsTooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                      <Bar dataKey="count" fill="var(--gold)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+        
+              </SupervisorFolder>
 
-        {filteredDocs.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">Aucune activité ne correspond à ces filtres.</p>
-        )}
-        {filteredDocs.length > 30 && (
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            {filteredDocs.length - 30} activités supplémentaires non affichées (pagination à ajouter).
-          </p>
-        )}
-      </section>
+      <SupervisorFolder title="Terrain & journal" description="Journal d’activité, parcelles et producteurs" icon={Folder} open={openFolder === "terrain"} onToggle={() => setOpenFolder("terrain")}>
+              {/* Journal d'activité — pas réservé au module agro : documents couvre
+                  tous les modules, et audit_log filtre déjà par organisation. */}
+              <AuditLogSection />
+        
+              {/* AGRO — parcelles et producteurs (uniquement pour les superviseurs du module agro) */}
+              {profile?.module_type === "agro" && (
+                <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 [&>section]:mb-0">
+                  <ParcellesSection />
+                  <ProducersSection />
+                </div>
+              )}
+        
+              {/* AGRO — restitution prête pour le pilote UNAPROCAM */}
+              {profile?.module_type === "agro" && <UnaprocamRestitutionSection />}
+        
+              {/* AGRO — qualité des données / alertes de doublons GPS */
+              {profile?.module_type === "agro" && <DataQualitySection />}
+        
+              </SupervisorFolder>
+
+      <SupervisorFolder title="Données" description="Restitution, qualité et analyse des données" icon={Folder} open={openFolder === "data"} onToggle={() => setOpenFolder("data")}>
+              {/* AGRO — Data Analyst (complétude, validation, volumes) */}
+              {profile?.module_type === "agro" && <DataAnalystSection />}
+        
+              <SupervisorFolder title="Traçabilité & conformité" description="EUDR et fonctions de partenariat activées" icon={Folder} open={openFolder === "traceability"} onToggle={() => setOpenFolder("traceability")}>
+              {/* AGRO — module de valorisation, visible uniquement si AURUM l'a activé */}
+                      {profile?.module_type === "agro" && <CommercialDataModuleSection />}
+                
+                      </SupervisorFolder>
+        
+              {/* AGRO — Conformité EUDR (extension optionnelle, n'affiche rien si désactivée) */}
+              {profile?.module_type === "agro" && <EudrComplianceSection />}
+        
+              </SupervisorFolder>
+
+      <SupervisorFolder title="Assistant agricole" description="Assistant et recommandations pour l’agriculture" icon={Sprout} open={openFolder === "assistant"} onToggle={() => setOpenFolder("assistant")}>
+              {/* AGRO — Assistant Agro (questions libres) et Agro Advisor (synthèse) — deux blocs distincts */}
+              {profile?.module_type === "agro" && (
+                <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 [&>section]:mb-0">
+                  <AgriAssistantSection />
+                  <OrientationsSection />
+                </div>
+              )}
+        
+              </SupervisorFolder>
+
+      <SupervisorFolder title="Activités" description="Alertes et opérations récentes" icon={Activity} open={openFolder === "activities"} onToggle={() => setOpenFolder("activities")}>
+              {alerts.length > 0 && (
+                <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
+                  <h2 className="mb-3 flex items-center gap-2 font-display text-lg text-amber-300">
+                    <AlertTriangle className="h-4 w-4" /> Alertes — agents inactifs
+                  </h2>
+                  <ul className="space-y-1.5 text-sm">
+                    {alerts.map((a) => (
+                      <li key={a.agent} className="flex items-center justify-between text-amber-200/90">
+                        <span>{a.agent}</span>
+                        <span className="text-xs text-amber-300/70">Dernière saisie il y a {a.hoursAgo}h</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+        
+              <section className="glass-card rounded-2xl p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="font-display text-lg">Activités récentes</h2>
+                  <div className="flex flex-wrap gap-2">
+                    <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs">
+                      <option value="all">Tous les modules</option>
+                      {moduleOptions.map((m) => (
+                        <option key={m} value={m}>{moduleLabel(m)}</option>
+                      ))}
+                    </select>
+                    <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs">
+                      <option value="all">Tous les agents</option>
+                      {agentOptions.map((a) => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | "draft" | "ready")} className="rounded-lg border border-border bg-input px-2 py-1.5 text-xs">
+                      <option value="all">Tous les statuts</option>
+                      <option value="ready">Synchronisé</option>
+                      <option value="draft">Brouillon</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void handleExportActivitiesXlsx()}
+                      disabled={exportingActivities || filteredDocs.length === 0}
+                      className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+                    >
+                      {exportingActivities ? "Export…" : "Exporter en Excel"}
+                    </button>
+                  </div>
+                </div>
+        
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Agent</TableHead>
+                      <TableHead>Module</TableHead>
+                      <TableHead>Titre</TableHead>
+                      <TableHead>Lieu</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredDocs.slice(0, 30).map((d) => (
+                      <Fragment key={d.id}>
+                        <TableRow
+                          onClick={() => setViewingId(viewingId === d.id ? null : d.id)}
+                          className="cursor-pointer hover:bg-card/40"
+                        >
+                          <TableCell className="font-medium">{profilesById[d.user_id] || "Agent"}</TableCell>
+                          <TableCell>
+                            <span
+                              className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider"
+                              style={{
+                                backgroundColor: `color-mix(in oklch, ${moduleColor(d.module_type)} 18%, transparent)`,
+                                color: moduleColor(d.module_type),
+                              }}
+                            >
+                              {moduleLabel(d.module_type)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="max-w-[180px] truncate">{d.title || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{d.location_data?.city || d.location || "—"}</TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                            {new Date(d.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </TableCell>
+                          <TableCell>
+                            <span className={d.status === "ready" ? "text-xs text-emerald-400" : "text-xs text-muted-foreground"}>
+                              {d.status === "ready" ? "Synchronisé" : "Brouillon"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setRequestingId(requestingId === d.id ? null : d.id); }}
+                                title="Demander une modification"
+                                className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleValidate(d.id); }}
+                                className={
+                                  validated.has(d.id)
+                                    ? "rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400"
+                                    : "rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                                }
+                              >
+                                {validated.has(d.id) ? "Validé ✓" : "Valider"}
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {requestingId === d.id && (
+                          <ModificationRequestRow doc={d} onClose={() => setRequestingId(null)} />
+                        )}
+                        {viewingId === d.id && (
+                          <DocumentDetailRow documentId={d.id} onClose={() => setViewingId(null)} />
+                        )}
+                      </Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+        
+                {filteredDocs.length === 0 && (
+                  <p className="py-8 text-center text-sm text-muted-foreground">Aucune activité ne correspond à ces filtres.</p>
+                )}
+                {filteredDocs.length > 30 && (
+                  <p className="mt-3 text-center text-xs text-muted-foreground">
+                    {filteredDocs.length - 30} activités supplémentaires non affichées (pagination à ajouter).
+                  </p>
+                )}
+              </section>
+              </SupervisorFolder>
+
     </div>
+  );
+}
+
+function SupervisorFolder({ title, description, icon: Icon = Folder, open, onToggle, children }: { title: string; description: string; icon?: typeof Folder; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <section className="mb-4 overflow-hidden rounded-2xl border border-border bg-card/30 shadow-sm">
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-secondary/40 sm:px-5">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${open ? "border-gold/30 bg-gold/10 text-gold" : "border-border bg-secondary/40 text-muted-foreground"}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1"><span className="block font-display text-base sm:text-lg">{title}</span><span className="mt-0.5 block text-xs text-muted-foreground">{description}</span></span>
+        <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180 text-gold" : ""}`} />
+      </button>
+      {open && <div className="border-t border-border p-3 sm:p-5">{children}</div>}
+    </section>
   );
 }
 
