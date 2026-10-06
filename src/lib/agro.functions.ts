@@ -329,7 +329,13 @@ export const getProducerDetails = createServerFn({ method: "POST" })
     return {
       producer: {
         id: p.id as string,
+        producerCode: p.producer_code as string,
         fullName: p.full_name as string,
+        sex: (p.sex ?? null) as string | null,
+        village: (p.village ?? null) as string | null,
+        commune: (p.commune ?? null) as string | null,
+        department: (p.department ?? null) as string | null,
+        region: (p.region ?? null) as string | null,
         contactPhone: (p.contact_phone ?? null) as string | null,
         contactEmail: (p.contact_email ?? null) as string | null,
         idDocumentType: (p.id_document_type ?? null) as string | null,
