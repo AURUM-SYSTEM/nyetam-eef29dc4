@@ -443,7 +443,6 @@ function RecordPage() {
     setSelectedParcelleId("");
     setDupParcelle(null);
     setCreatedParcelleId(null);
-    setSelectedProducerId("");
     setForceReason("");
     setBoundaryPoints([]);
     setBoundaryClosed(false);
@@ -1156,7 +1155,7 @@ function RecordPage() {
           <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">Type de mission</h2>
           <select
             value={missionKey}
-            onChange={e => { setMissionKey(e.target.value); setFieldValues({}); }}
+            onChange={e => { setMissionKey(e.target.value); setFieldValues({}); setSelectedProducerId(""); }}
             className="w-full rounded-lg border border-border bg-input/50 px-3 py-2.5 text-sm outline-none focus:border-gold"
           >
             {missionForms.map(m => (
