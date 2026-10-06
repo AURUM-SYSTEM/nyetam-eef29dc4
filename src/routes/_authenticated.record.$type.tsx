@@ -502,6 +502,8 @@ function RecordPage() {
           if (cancelled) return;
           if (cached) {
             setParcelleList(cached);
+            const cachedProducers = await getProducersCache(keyAtRunStart);
+            if (cachedProducers) setProducerList(cachedProducers);
             setParcellesOfflineNoCache(false);
           } else {
             setParcelleList([]);
