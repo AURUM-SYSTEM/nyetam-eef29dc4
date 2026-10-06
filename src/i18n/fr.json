@@ -47,12 +47,12 @@
     "signed_out": "Déconnecté"
   },
   "home": {
-    "kicker": "Aurum System",
-    "title_a": "De la",
-    "title_b": "voix",
-    "title_c": "au document.",
-    "subtitle": "Enregistrez, structurez et exportez vos rapports terrain en quelques secondes.",
-    "newDoc": "Créer un document",
+    "kicker": "AURUM COLLECT",
+    "title_a": "Recensez",
+    "title_b": "chaque",
+    "title_c": "parcelle.",
+    "subtitle": "Producteur, GPS et données agricoles, directement sur le terrain — même hors connexion.",
+    "newDoc": "Nouveau recensement",
     "new": "Nouveau",
     "recent": "Documents récents",
     "empty_title": "Aucun document pour l'instant.",
