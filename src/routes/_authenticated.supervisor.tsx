@@ -903,7 +903,13 @@ function ProducerDetailRow({
   const [error, setError] = useState<string | null>(null);
   const [parcelles, setParcelles] = useState<Array<{ id: string; culture: string; surfaceHa: number | null; createdAt: string }>>([]);
   const [visitCount, setVisitCount] = useState(0);
+  const [producerCode, setProducerCode] = useState("");
   const [fullName, setFullName] = useState("");
+  const [sex, setSex] = useState("");
+  const [village, setVillage] = useState("");
+  const [commune, setCommune] = useState("");
+  const [department, setDepartment] = useState("");
+  const [region, setRegion] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [idDocumentType, setIdDocumentType] = useState("");
@@ -917,7 +923,13 @@ function ProducerDetailRow({
       try {
         const res = await fetchDetails({ data: { producerId } });
         if (cancelled) return;
+        setProducerCode(res.producer.producerCode);
         setFullName(res.producer.fullName);
+        setSex(res.producer.sex ?? "");
+        setVillage(res.producer.village ?? "");
+        setCommune(res.producer.commune ?? "");
+        setDepartment(res.producer.department ?? "");
+        setRegion(res.producer.region ?? "");
         setContactPhone(res.producer.contactPhone ?? "");
         setContactEmail(res.producer.contactEmail ?? "");
         setIdDocumentType(res.producer.idDocumentType ?? "");
@@ -951,6 +963,11 @@ function ProducerDetailRow({
           idDocumentType: idDocumentType.trim() || undefined,
           idDocumentNumber: idDocumentNumber.trim() || undefined,
           cooperativeId: cooperativeId || null,
+          sex: (sex || null) as "male" | "female" | "unknown" | null,
+          village: village.trim() || null,
+          commune: commune.trim() || null,
+          department: department.trim() || null,
+          region: region.trim() || null,
         },
       });
       toast.success("Producteur mis à jour");
@@ -973,6 +990,22 @@ function ProducerDetailRow({
           <p className="py-2 text-sm text-destructive">{error}</p>
         ) : (
           <div className="space-y-3 py-2">
+            <div className="rounded-xl border border-border bg-card/40 p-3">
+              <div className="flex items-center gap-4">
+                <img
+                  src={"https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=" + encodeURIComponent("AURUM:PRODUCER:" + producerCode)}
+                  alt={"QR code du producteur " + producerCode}
+                  className="h-28 w-28 rounded-lg bg-white p-1"
+                  loading="lazy"
+                />
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Code producteur</p>
+                  <p className="mt-1 text-xl font-semibold">{producerCode || "—"}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">QR de référence — aucune donnée personnelle n'est encodée.</p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Nom complet *</span>
@@ -988,8 +1021,38 @@ function ProducerDetailRow({
                 </select>
               </label>
               <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Sexe</span>
+                <select value={sex} onChange={e => setSex(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs">
+                  <option value="">— Non renseigné —</option>
+                  <option value="male">Homme</option>
+                  <option value="female">Femme</option>
+                  <option value="unknown">Non précisé</option>
+                </select>
+              </label>
+              <label className="block">
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Téléphone</span>
                 <input value={contactPhone} onChange={e => setContactPhone(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Village</span>
+                <input value={village} onChange={e => setVillage(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Commune</span>
+                <input value={commune} onChange={e => setCommune(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Département</span>
+                <input value={department} onChange={e => setDepartment(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Région</span>
+                <input value={region} onChange={e => setRegion(e.target.value)}
                   className="w-full rounded-lg border border-border bg-input px-2 py-1.5 text-xs" />
               </label>
               <label className="block">
@@ -1046,7 +1109,7 @@ function ProducersSection() {
   const fetchProducers = useServerFn(listProducers);
   const fetchCooperatives = useServerFn(listCooperatives);
   const [rows, setRows] = useState<Array<{
-    id: string; fullName: string; cooperativeName: string | null; parcelleCount: number;
+    id: string; producerCode: string; fullName: string; cooperativeName: string | null; parcelleCount: number;
   }>>([]);
   const [cooperatives, setCooperatives] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -1088,6 +1151,7 @@ function ProducersSection() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Code</TableHead>
               <TableHead>Nom</TableHead>
               <TableHead>Coopérative</TableHead>
               <TableHead className="text-right">Parcelles</TableHead>
@@ -1100,6 +1164,7 @@ function ProducersSection() {
                   onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                   className="cursor-pointer hover:bg-card/40"
                 >
+                  <TableCell className="font-mono text-xs text-gold">{p.producerCode}</TableCell>
                   <TableCell className="font-medium">{p.fullName}</TableCell>
                   <TableCell className="text-muted-foreground">{p.cooperativeName ?? "—"}</TableCell>
                   <TableCell className="text-right">{p.parcelleCount}</TableCell>
