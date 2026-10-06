@@ -711,6 +711,9 @@ function RecordPage() {
   async function handleCreateParcelle(force: boolean) {
     if (!gps) { toast.error("Capturez d'abord la position GPS (section ci-dessus)."); return; }
     if (!newCulture.trim()) { toast.error("Indiquez la culture de la parcelle."); return; }
+    if (!selectedProducerId) { toast.error("Sélectionnez le producteur de la parcelle."); return; }
+    const selectedProducer = producerList.find(p => p.id === selectedProducerId);
+    if (!selectedProducer) { toast.error("Producteur introuvable dans la liste locale. Rechargez la collecte en ligne."); return; }
     const surface = newSurface.trim() ? Number(newSurface) : undefined;
     if (surface !== undefined && (!Number.isFinite(surface) || surface <= 0)) {
       toast.error("Surface invalide.");
