@@ -428,6 +428,14 @@ function RecordPage() {
   const [selectedProducerId, setSelectedProducerId] = useState("");
   const [newCulture, setNewCulture] = useState("");
   const [newSurface, setNewSurface] = useState("");
+  const [newSpecies, setNewSpecies] = useState<string[]>([]);
+  const [newVarieties, setNewVarieties] = useState<string[]>([]);
+  const [newPlantingYear, setNewPlantingYear] = useState("");
+  const [newLandTenure, setNewLandTenure] = useState("");
+  const [newAgroforestry, setNewAgroforestry] = useState("");
+  const [newCertification, setNewCertification] = useState("");
+  const [newEstimatedYield, setNewEstimatedYield] = useState("");
+  const [newComplianceStatus, setNewComplianceStatus] = useState("unknown");
   const [newCoop, setNewCoop] = useState("");
   const [newProducer, setNewProducer] = useState("");
   const [newProducerPhone, setNewProducerPhone] = useState("");
@@ -513,6 +521,14 @@ function RecordPage() {
     setForceReason("");
     setBoundaryPoints([]);
     setBoundaryClosed(false);
+    setNewSpecies([]);
+    setNewVarieties([]);
+    setNewPlantingYear("");
+    setNewLandTenure("");
+    setNewAgroforestry("");
+    setNewCertification("");
+    setNewEstimatedYield("");
+    setNewComplianceStatus("unknown");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionKey]);
 
@@ -764,8 +780,17 @@ function RecordPage() {
 
   async function handleCreateParcelle(force: boolean) {
     if (!gps) { toast.error("Capturez d'abord la position GPS (section ci-dessus)."); return; }
-    if (!newCulture.trim()) { toast.error("Indiquez la culture de la parcelle."); return; }
+    if (newSpecies.length === 0) { toast.error("Sélectionnez au moins une espèce végétale."); return; }
+    const primaryCulture = newSpecies[0];
     const surface = newSurface.trim() ? Number(newSurface) : undefined;
+    const plantingYear = newPlantingYear.trim() ? Number(newPlantingYear) : undefined;
+    if (plantingYear !== undefined && (!Number.isInteger(plantingYear) || plantingYear < 1900 || plantingYear > new Date().getFullYear())) {
+      toast.error("Année de plantation invalide."); return;
+    }
+    const estimatedYieldTonnes = newEstimatedYield.trim() ? Number(newEstimatedYield) : undefined;
+    if (estimatedYieldTonnes !== undefined && (!Number.isFinite(estimatedYieldTonnes) || estimatedYieldTonnes < 0)) {
+      toast.error("Rendement estimé invalide."); return;
+    }
     if (surface !== undefined && (!Number.isFinite(surface) || surface <= 0)) {
       toast.error("Surface invalide.");
       return;
@@ -791,7 +816,7 @@ function RecordPage() {
       // /parcelles, qui affiche les conflits à résoudre).
       if (!online) {
         const pending = await enqueueParcelle({
-          culture: newCulture.trim(),
+          culture: primaryCulture,
           surfaceHa: surface,
           cooperativeName: newCoop.trim() || undefined,
           producerId: selectedProducerId || undefined,
@@ -799,6 +824,14 @@ function RecordPage() {
           lat: gps.lat,
           lng: gps.lng,
           boundaryPoints: useBoundary ? boundaryPoints : undefined,
+          species: newSpecies,
+          varieties: newVarieties,
+          plantingYear,
+          landTenure: (newLandTenure || undefined) as "owner" | "sharecropper" | "rental" | "unknown" | undefined,
+          agroforestry: newAgroforestry === "" ? undefined : newAgroforestry === "yes",
+          certification: newCertification.trim() || undefined,
+          estimatedYieldTonnes,
+          complianceStatus: (newComplianceStatus || "unknown") as "compliant" | "to_review" | "unknown" | undefined,
         });
         setCreatedParcelleId(pending.id);
         setDupParcelle(null);
@@ -1337,11 +1370,19 @@ function RecordPage() {
               ) : (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="block">
-                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Culture *</span>
-                      <input value={newCulture} onChange={e => setNewCulture(e.target.value)} placeholder="ex : cacao"
-                        className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
-                    </label>
+                    <div className="col-span-2 rounded-xl border border-gold/20 bg-card/20 p-3">
+                      <span className="mb-2 block text-[10px] uppercase tracking-widest text-gold-soft">Espèces végétales présentes *</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {["Cacao", "Banane / plantain", "Café", "Palmier à huile", "Manioc", "Maïs", "Agrumes", "Autre"].map(species => (
+                          <label key={species} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-2 text-xs">
+                            <input type="checkbox" checked={newSpecies.includes(species)}
+                              onChange={e => setNewSpecies(prev => e.target.checked ? [...prev, species] : prev.filter(x => x !== species))} />
+                            {species}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[10px] text-muted-foreground">Sélection multiple. La première espèce devient la culture principale.</p>
+                    </div>
                     <label className="block">
                       <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Surface (ha)</span>
                       <input type="number" inputMode="decimal" min="0" step="0.01" value={newSurface} onChange={e => setNewSurface(e.target.value)}
@@ -1352,6 +1393,55 @@ function RecordPage() {
                         </span>
                       )}
                     </label>
+                  <div className="col-span-2 grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Année de plantation / mise en culture</span>
+                      <input type="number" min="1900" max={new Date().getFullYear()} value={newPlantingYear} onChange={e => setNewPlantingYear(e.target.value)} placeholder="ex : 2018"
+                        className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                      {newPlantingYear && Number.isInteger(Number(newPlantingYear)) && Number(newPlantingYear) <= new Date().getFullYear() && (
+                        <span className="mt-1 block text-[11px] text-muted-foreground">Âge estimé : {new Date().getFullYear() - Number(newPlantingYear)} ans</span>
+                      )}
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Statut foncier</span>
+                      <select value={newLandTenure} onChange={e => setNewLandTenure(e.target.value)} className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+                        <option value="">— Choisir —</option><option value="owner">Propriétaire</option><option value="sharecropper">Métayer</option><option value="rental">Location</option><option value="unknown">Inconnu</option>
+                      </select>
+                    </label>
+                    <div className="col-span-2">
+                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Variété(s) cultivée(s)</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {["Forastero", "Trinitario", "Criollo", "Hybride", "Locale", "Inconnue / producteur ne sait pas"].map(v => (
+                          <label key={v} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-2 text-xs">
+                            <input type="checkbox" checked={newVarieties.includes(v)} onChange={e => setNewVarieties(prev => e.target.checked ? [...prev, v] : prev.filter(x => x !== v))} />{v}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Rendement estimé (tonnes)</span>
+                      <input type="number" min="0" step="0.01" value={newEstimatedYield} onChange={e => setNewEstimatedYield(e.target.value)} placeholder="ex : 1.5"
+                        className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Agroforesterie</span>
+                      <select value={newAgroforestry} onChange={e => setNewAgroforestry(e.target.value)} className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+                        <option value="">— Non renseigné —</option><option value="yes">Oui</option><option value="no">Non</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Certification</span>
+                      <select value={newCertification} onChange={e => setNewCertification(e.target.value)} className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+                        <option value="">Aucune / non renseignée</option><option value="Rainforest Alliance">Rainforest Alliance</option><option value="UTZ">UTZ</option><option value="Fairtrade">Fairtrade</option><option value="Bio">Bio</option><option value="Autre">Autre</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Conformité</span>
+                      <select value={newComplianceStatus} onChange={e => setNewComplianceStatus(e.target.value)} className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+                        <option value="unknown">À déterminer</option><option value="to_review">À vérifier</option><option value="compliant">Conforme selon les éléments collectés</option>
+                      </select>
+                    </label>
+                  </div>
                   </div>
                   <label className="block">
                     <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Coopérative</span>
