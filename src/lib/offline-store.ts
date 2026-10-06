@@ -177,6 +177,8 @@ export type PendingParcelle = {
   surfaceHa?: number;
   cooperativeName?: string;
   producerName?: string;
+  // ID stable du producteur — priorité à la liaison technique producteur ↔ parcelle.
+  producerId?: string;
   lat: number;
   lng: number;
   notes?: string;
