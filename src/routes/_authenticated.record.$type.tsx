@@ -431,6 +431,12 @@ function RecordPage() {
   const [newProducer, setNewProducer] = useState("");
   const [newProducerPhone, setNewProducerPhone] = useState("");
   const [newProducerCni, setNewProducerCni] = useState("");
+  const [newProducerSex, setNewProducerSex] = useState("");
+  const [newProducerVillage, setNewProducerVillage] = useState("");
+  const [newProducerCommune, setNewProducerCommune] = useState("");
+  const [newProducerDepartment, setNewProducerDepartment] = useState("");
+  const [newProducerRegion, setNewProducerRegion] = useState("");
+  const [newProducerCode, setNewProducerCode] = useState("");
   const [creatingProducer, setCreatingProducer] = useState(false);
   const [dupParcelle, setDupParcelle] = useState<null | { id: string; culture: string; distanceMeters: number }>(null);
   const [creatingParcelle, setCreatingParcelle] = useState(false);
@@ -454,15 +460,26 @@ function RecordPage() {
           contactPhone: newProducerPhone.trim() || undefined,
           idDocumentType: newProducerCni.trim() ? "CNI" : undefined,
           idDocumentNumber: newProducerCni.trim() || undefined,
+          sex: (newProducerSex || undefined) as "male" | "female" | "unknown" | undefined,
+          village: newProducerVillage.trim() || undefined,
+          commune: newProducerCommune.trim() || undefined,
+          department: newProducerDepartment.trim() || undefined,
+          region: newProducerRegion.trim() || undefined,
         },
       });
       if (res.success) {
         setSelectedProducerId(res.producerId);
+        setNewProducerCode(res.producerCode);
         setNewProducer(name);
         setProducerOptions(prev => [...prev, { id: res.producerId, name }].sort((a, b) => a.name.localeCompare(b.name)));
         setNewProducerPhone("");
         setNewProducerCni("");
-        toast.success("Producteur créé et sélectionné. La parcelle sera liée à ce producteur.");
+        setNewProducerSex("");
+        setNewProducerVillage("");
+        setNewProducerCommune("");
+        setNewProducerDepartment("");
+        setNewProducerRegion("");
+        toast.success("Producteur " + res.producerCode + " créé et sélectionné. La parcelle sera liée à ce producteur.");
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Échec de la création du producteur");
@@ -1359,8 +1376,28 @@ function RecordPage() {
                         placeholder="Téléphone" inputMode="tel" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
                       <input value={newProducerCni} onChange={e => setNewProducerCni(e.target.value)}
                         placeholder="N° CNI" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                      <select value={newProducerSex} onChange={e => setNewProducerSex(e.target.value)}
+                        className="col-span-2 w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+                        <option value="">Sexe — non renseigné</option>
+                        <option value="male">Homme</option>
+                        <option value="female">Femme</option>
+                        <option value="unknown">Non précisé</option>
+                      </select>
+                      <input value={newProducerVillage} onChange={e => setNewProducerVillage(e.target.value)}
+                        placeholder="Village" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                      <input value={newProducerCommune} onChange={e => setNewProducerCommune(e.target.value)}
+                        placeholder="Commune" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                      <input value={newProducerDepartment} onChange={e => setNewProducerDepartment(e.target.value)}
+                        placeholder="Département" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                      <input value={newProducerRegion} onChange={e => setNewProducerRegion(e.target.value)}
+                        placeholder="Région" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
                     </div>
-                    <button type="button" onClick={() => void handleCreateProducer()}
+                    {newProducerCode && (
+                      <div className="mb-2 rounded-lg border border-gold/30 bg-accent/20 px-3 py-2 text-xs">
+                        Code producteur : <span className="font-mono font-semibold">{newProducerCode}</span>
+                      </div>
+                    )}
+                    <button type="button" onClick={() => void handleCreateProducer()
                       disabled={creatingProducer || !newProducer.trim() || !online}
                       className="mt-2 w-full rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold disabled:opacity-40">
                       {creatingProducer ? "Création…" : !online ? "Connexion requise pour créer" : "Créer et sélectionner ce producteur"}
