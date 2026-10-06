@@ -1397,7 +1397,7 @@ function RecordPage() {
                         Code producteur : <span className="font-mono font-semibold">{newProducerCode}</span>
                       </div>
                     )}
-                    <button type="button" onClick={() => void handleCreateProducer()
+                    <button type="button" onClick={() => void handleCreateProducer()}
                       disabled={creatingProducer || !newProducer.trim() || !online}
                       className="mt-2 w-full rounded-lg border border-gold/40 px-3 py-2 text-sm text-gold disabled:opacity-40">
                       {creatingProducer ? "Création…" : !online ? "Connexion requise pour créer" : "Créer et sélectionner ce producteur"}
