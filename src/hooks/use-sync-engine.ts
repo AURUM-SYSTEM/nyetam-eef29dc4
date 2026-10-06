@@ -90,6 +90,7 @@ export function useSyncEngine() {
             culture: p.culture,
             surfaceHa: p.surfaceHa,
             cooperativeName: p.cooperativeName,
+            producerId: p.producerId,
             producerName: p.producerName,
             lat: p.lat,
             lng: p.lng,
