@@ -105,7 +105,7 @@ export const listParcelles = createServerFn({ method: "POST" })
 
     const { data: parcelles, error } = await supabaseAdmin
       .from("parcelles")
-      .select("id, culture, surface_ha, cooperative_id, lat, lng, notes, created_at")
+      .select("id, culture, surface_ha, surface_ha_calculated, cooperative_id, producer_id, lat, lng, boundary_points, species, varieties, planting_year, land_tenure, agroforestry, certification, estimated_yield_tonnes, compliance_status, notes, created_at")
       .eq("organization_id", orgId)
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
@@ -116,36 +116,56 @@ export const listParcelles = createServerFn({ method: "POST" })
       .eq("organization_id", orgId);
     const coopById = new Map(((coops ?? []) as Array<{ id: string; name: string }>).map(c => [c.id, c.name]));
 
-    // Nombre de visites (documents liés) par parcelle
+    const producerIds = Array.from(new Set(((parcelles ?? []) as Array<any>).map(p => p.producer_id).filter(Boolean)));
+    const { data: producers } = producerIds.length > 0
+      ? await supabaseAdmin.from("producers").select("id, producer_code, full_name, contact_phone, village, commune, department, region").in("id", producerIds).eq("organization_id", orgId)
+      : { data: [] as any[] };
+    const producerById = new Map(((producers ?? []) as Array<any>).map(p => [p.id, p]));
+
     const ids = ((parcelles ?? []) as Array<{ id: string }>).map(p => p.id);
     const visitCount = new Map<string, number>();
     if (ids.length > 0) {
-      const { data: docs } = await supabaseAdmin
-        .from("documents")
-        .select("parcelle_id")
-        .in("parcelle_id", ids);
+      const { data: docs } = await supabaseAdmin.from("documents").select("parcelle_id").in("parcelle_id", ids);
       for (const d of (docs ?? []) as Array<{ parcelle_id: string | null }>) {
         if (d.parcelle_id) visitCount.set(d.parcelle_id, (visitCount.get(d.parcelle_id) ?? 0) + 1);
       }
     }
 
     return {
-      parcelles: ((parcelles ?? []) as Array<any>).map(p => ({
-        id: p.id as string,
-        culture: p.culture as string,
-        surfaceHa: (p.surface_ha ?? null) as number | null,
-        cooperativeName: p.cooperative_id ? (coopById.get(p.cooperative_id) ?? null) : null,
-        lat: p.lat as number,
-        lng: p.lng as number,
-        notes: (p.notes ?? null) as string | null,
-        visitCount: visitCount.get(p.id) ?? 0,
-      })),
+      parcelles: ((parcelles ?? []) as Array<any>).map(p => {
+        const producer = p.producer_id ? producerById.get(p.producer_id) : null;
+        return {
+          id: p.id as string,
+          culture: p.culture as string,
+          surfaceHa: (p.surface_ha ?? null) as number | null,
+          surfaceHaCalculated: (p.surface_ha_calculated ?? null) as number | null,
+          cooperativeName: p.cooperative_id ? (coopById.get(p.cooperative_id) ?? null) : null,
+          producerId: (p.producer_id ?? null) as string | null,
+          producerCode: (producer?.producer_code ?? null) as string | null,
+          producerName: (producer?.full_name ?? null) as string | null,
+          producerPhone: (producer?.contact_phone ?? null) as string | null,
+          village: (producer?.village ?? null) as string | null,
+          commune: (producer?.commune ?? null) as string | null,
+          department: (producer?.department ?? null) as string | null,
+          region: (producer?.region ?? null) as string | null,
+          lat: p.lat as number,
+          lng: p.lng as number,
+          boundaryPoints: (p.boundary_points ?? null) as Array<{ lat: number; lng: number }> | null,
+          species: (p.species ?? []) as string[],
+          varieties: (p.varieties ?? []) as string[],
+          plantingYear: (p.planting_year ?? null) as number | null,
+          landTenure: (p.land_tenure ?? null) as string | null,
+          agroforestry: (p.agroforestry ?? null) as boolean | null,
+          certification: (p.certification ?? null) as string | null,
+          estimatedYieldTonnes: (p.estimated_yield_tonnes ?? null) as number | null,
+          complianceStatus: (p.compliance_status ?? null) as string | null,
+          notes: (p.notes ?? null) as string | null,
+          createdAt: p.created_at as string,
+          visitCount: visitCount.get(p.id) ?? 0,
+        };
+      }),
     };
   });
-
-// ============================================================
-// Coopératives de l'organisation
-// ============================================================
 
 export const listCooperatives = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
