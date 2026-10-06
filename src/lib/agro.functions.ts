@@ -534,6 +534,16 @@ export const createParcelle = createServerFn({ method: "POST" })
     // Producteur : lien direct par id, ou création/réutilisation par nom libre
     // (même pattern que la coopérative ci-dessus)
     let producerId: string | null = data.producerId ?? null;
+    if (producerId) {
+      const { data: selectedProducer, error: selectedProducerErr } = await supabaseAdmin
+        .from("producers")
+        .select("id")
+        .eq("id", producerId)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      if (selectedProducerErr) throw new Error(selectedProducerErr.message);
+      if (!selectedProducer) throw new Error("Le producteur sélectionné est introuvable dans votre organisation.");
+    }
     if (!producerId && data.producerName) {
       const wanted = data.producerName.trim();
       const { data: existingProducers, error: prodErr } = await supabaseAdmin
