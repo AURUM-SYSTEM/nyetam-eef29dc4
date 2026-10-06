@@ -422,7 +422,8 @@ function RecordPage() {
   const [parcellesOfflineNoCache, setParcellesOfflineNoCache] = useState(false);
   const [selectedParcelleId, setSelectedParcelleId] = useState("");
   const [coopNames, setCoopNames] = useState<string[]>([]);
-  const [producerNames, setProducerNames] = useState<string[]>([]);
+  const [producerOptions, setProducerOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedProducerId, setSelectedProducerId] = useState("");
   const [newCulture, setNewCulture] = useState("");
   const [newSurface, setNewSurface] = useState("");
   const [newCoop, setNewCoop] = useState("");
@@ -441,6 +442,7 @@ function RecordPage() {
   useEffect(() => {
     setParcelleMode(isParcelleCreationMission ? "new" : "existing");
     setSelectedParcelleId("");
+    setSelectedProducerId("");
     setDupParcelle(null);
     setCreatedParcelleId(null);
     setForceReason("");
@@ -476,7 +478,7 @@ function RecordPage() {
         if (cancelled) return;
         setParcelleList(p.parcelles);
         setCoopNames(c.cooperatives.map(x => x.name));
-        setProducerNames(pr.producers.map(x => x.fullName));
+        setProducerOptions(pr.producers.map(x => ({ id: x.id, name: x.fullName })));
         if (isParcelleSelectionMission) {
           setParcellesOfflineNoCache(false);
           void saveParcellesCache(keyAtRunStart, p.parcelles);
@@ -727,6 +729,8 @@ function RecordPage() {
           culture: newCulture.trim(),
           surfaceHa: surface,
           cooperativeName: newCoop.trim() || undefined,
+          producerId: selectedProducerId || undefined,
+          producerId: selectedProducerId || undefined,
           producerName: newProducer.trim() || undefined,
           lat: gps.lat,
           lng: gps.lng,
@@ -1293,12 +1297,18 @@ function RecordPage() {
                     </datalist>
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Producteur</span>
-                    <input list="agro-producer-list" value={newProducer} onChange={e => setNewProducer(e.target.value)} placeholder="ex : Jean Mballa"
-                      className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
-                    <datalist id="agro-producer-list">
-                      {producerNames.map(n => <option key={n} value={n} />)}
-                    </datalist>
+                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Producteur *</span>
+                    <select value={selectedProducerId}
+                      onChange={e => {
+                        const id = e.target.value;
+                        setSelectedProducerId(id);
+                        setNewProducer(producerOptions.find(p => p.id === id)?.name ?? "");
+                      }}
+                      className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+                      <option value="">Sélectionner un producteur</option>
+                      {producerOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <span className="mt-1 block text-[10px] text-muted-foreground">La parcelle sera reliée à l'identifiant du producteur.</span>
                   </label>
 
                   <div className="rounded-xl border border-border bg-card/30 p-3">
