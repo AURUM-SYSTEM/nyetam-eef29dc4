@@ -1192,6 +1192,43 @@ function ProducersSection() {
 }
 
 // ── AGRO : restitution de la base de données ─────────────────────────────
+function DataRestitutionSection() {
+  const fetchParcelles = useServerFn(listParcelles);
+  const fetchProducers = useServerFn(listProducers);
+  const [parcelles, setParcelles] = useState<any[]>([]);
+  const [producers, setProducers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchParcelles({ data: undefined as any }), fetchProducers({ data: undefined as any })])
+      .then(([p, pr]) => { if (!cancelled) { setParcelles(p.parcelles); setProducers(pr.producers); } })
+      .catch(() => { if (!cancelled) toast.error("Impossible de charger les données à restituer."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const csv = (v: unknown) => '"' + (v == null ? "" : Array.isArray(v) ? v.join(" | ") : String(v)).replace(/"/g, '""') + '"';
+  const download = (name: string, content: string, type: string) => { const url = URL.createObjectURL(new Blob(["\\uFEFF", content], { type })); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url); };
+  const exportProducers = () => download("AURUM_producteurs.csv", [["Code producteur","Nom","Sexe","Téléphone","Coopérative","Village","Commune","Département","Région","Nombre de parcelles"], ...producers.map(p => [p.producerCode,p.fullName,p.sex,p.contactPhone,p.cooperativeName,p.village,p.commune,p.department,p.region,p.parcelleCount])].map(r => r.map(csv).join(";")).join("\\n"), "text/csv;charset=utf-8");
+  const exportParcelles = () => download("AURUM_parcelles.csv", [["Code parcelle","Code producteur","Producteur","Téléphone","Coopérative","Village","Commune","Département","Région","Culture","Espèces","Variétés","Surface déclarée (ha)","Surface calculée (ha)","Latitude","Longitude","Année de plantation","Occupation du terrain","Agroforesterie","Certification","Rendement estimé (t)","Statut conformité","Date de collecte"], ...parcelles.map(p => [p.id,p.producerCode,p.producerName,p.producerPhone,p.cooperativeName,p.village,p.commune,p.department,p.region,p.culture,p.species,p.varieties,p.surfaceHa,p.surfaceHaCalculated,p.lat,p.lng,p.plantingYear,p.landTenure,p.agroforestry == null ? "" : p.agroforestry ? "Oui" : "Non",p.certification,p.estimatedYieldTonnes,p.complianceStatus,p.createdAt])].map(r => r.map(csv).join(";")).join("\\n"), "text/csv;charset=utf-8");
+  const exportGeoJson = () => download("AURUM_parcelles.geojson", JSON.stringify({ type:"FeatureCollection", features:parcelles.map(p => { const b=Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3?[...p.boundaryPoints,p.boundaryPoints[0]]:null; return { type:"Feature", geometry:b?{type:"Polygon",coordinates:[b.map((pt:any)=>[pt.lng,pt.lat])]}:{type:"Point",coordinates:[p.lng,p.lat]}, properties:{code_parcelle:p.id,code_producteur:p.producerCode,producteur:p.producerName,cooperative:p.cooperativeName,culture:p.culture,surface_ha:p.surfaceHa,surface_ha_calculee:p.surfaceHaCalculated,village:p.village,commune:p.commune,departement:p.department,region:p.region,especes:p.species,varietes:p.varieties,annee_plantation:p.plantingYear,occupation_terrain:p.landTenure,agroforesterie:p.agroforestry,certification:p.certification,rendement_estime_t:p.estimatedYieldTonnes,statut_conformite:p.complianceStatus,date_collecte:p.createdAt} }; }) }, null, 2), "application/geo+json;charset=utf-8");
+  const polygons=parcelles.filter(p=>Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3).length;
+  const gps=parcelles.filter(p=>typeof p.lat==="number"&&typeof p.lng==="number").length;
+  const surface=parcelles.reduce((s,p)=>s+(Number(p.surfaceHaCalculated??p.surfaceHa)||0),0);
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <div className="mb-4"><h2 className="flex items-center gap-2 font-display text-lg"><Download className="h-4 w-4 text-gold"/> Restitution des données</h2><p className="mt-1 text-xs text-muted-foreground">Export des données de votre organisation. Les téléchargements sont des copies : la base AURUM reste inchangée.</p></div>
+      {loading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold"/></div> : <>
+        <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">{[["Producteurs",producers.length],["Parcelles",parcelles.length],["Polygones",polygons+"/"+parcelles.length],["Surface",surface.toFixed(2)+" ha"]].map(([l,v])=><div key={String(l)} className="rounded-xl border border-border bg-card/40 p-3"><p className="text-[10px] uppercase tracking-widest text-muted-foreground">{l}</p><p className="mt-1 text-xl font-semibold">{v}</p></div>)}</div>
+        <div className="flex flex-wrap gap-2"><button type="button" onClick={exportProducers} disabled={!producers.length} className="rounded-lg btn-gold px-3 py-2 text-xs disabled:opacity-40">Producteurs CSV</button><button type="button" onClick={exportParcelles} disabled={!parcelles.length} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">Parcelles CSV</button><button type="button" onClick={exportGeoJson} disabled={!parcelles.length} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">Parcelles GeoJSON</button></div>
+        <p className="mt-3 text-[11px] text-muted-foreground">GPS disponible : {gps}/{parcelles.length}. Le GeoJSON utilise le polygone lorsqu'il existe, sinon le point GPS.</p>
+      </>}
+    </section>
+  );
+}
+
 function DataPolicySection() {
   const fetchPolicy = useServerFn(getOrganizationDataPolicy);
   const savePolicy = useServerFn(updateOrganizationDataPolicy);
