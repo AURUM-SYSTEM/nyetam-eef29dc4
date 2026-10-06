@@ -970,8 +970,8 @@ export const getDocumentDetails = createServerFn({ method: "POST" })
     // normalise en chaînes pour un affichage clé/valeur simple côté client
     // et pour rester strictement sérialisable par createServerFn.
     const rawFieldData = (d.field_data ?? null) as Record<string, unknown> | null;
-    const fieldData: Record<string, string> | null = rawFieldData
-      ? Object.fromEntries(Object.entries(rawFieldData).map(([k, v]) => [k, v == null ? "" : String(v)]))
+    const fieldData: Record<string, unknown> | null = rawFieldData
+      ? Object.fromEntries(Object.entries(rawFieldData).map(([k, v]) => [k, v ?? ""]))
       : null;
 
     return {
