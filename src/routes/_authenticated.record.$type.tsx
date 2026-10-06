@@ -841,7 +841,7 @@ function RecordPage() {
       }
       const res = await createParc({
         data: {
-          culture: newCulture.trim(),
+          culture: primaryCulture,
           surfaceHa: surface,
           cooperativeName: newCoop.trim() || undefined,
           producerId: selectedProducerId || undefined,
@@ -851,6 +851,14 @@ function RecordPage() {
           forceCreate: force,
           reason: force ? forceReason.trim() : undefined,
           boundaryPoints: useBoundary ? boundaryPoints : undefined,
+          species: newSpecies,
+          varieties: newVarieties,
+          plantingYear,
+          landTenure: (newLandTenure || undefined) as "owner" | "sharecropper" | "rental" | "unknown" | undefined,
+          agroforestry: newAgroforestry === "" ? undefined : newAgroforestry === "yes",
+          certification: newCertification.trim() || undefined,
+          estimatedYieldTonnes,
+          complianceStatus: (newComplianceStatus || "unknown") as "compliant" | "to_review" | "unknown" | undefined,
         },
       });
       if (!res.success && res.duplicateFound) {
