@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { moduleForOrgType } from "@/lib/organization-context";
 import { supabase } from "@/integrations/supabase/client";
 import { listParcelles, listCooperatives, listProducers, createProducer, checkGpsDuplicate, createParcelle, logUsedExistingParcelle } from "@/lib/agro.functions";
+import { CAMEROON_ADMINISTRATIVE_HIERARCHY } from "@/data/cameroon-administrative";
 // Instrumentation de diagnostic pour la capture GPS/périmètre — no-op en
 // production (voir debug-log.ts), gardée pour un futur diagnostic terrain.
 import { debugLog, debugWarn, debugError } from "@/lib/debug-log";
@@ -437,6 +438,14 @@ function RecordPage() {
   const [newProducerDepartment, setNewProducerDepartment] = useState("");
   const [newProducerRegion, setNewProducerRegion] = useState("");
   const [newProducerCode, setNewProducerCode] = useState("");
+
+  // Référentiel administratif camerounais : les choix sont hiérarchiques et
+  // embarqués localement pour rester utilisables hors-ligne.
+  const selectedRegion = CAMEROON_ADMINISTRATIVE_HIERARCHY.find(r => r.name === newProducerRegion);
+  const availableDepartments = selectedRegion?.departments ?? [];
+  const selectedDepartment = availableDepartments.find(d => d.name === newProducerDepartment);
+  const availableLocalities = selectedDepartment?.arrondissements ?? [];
+
   const [creatingProducer, setCreatingProducer] = useState(false);
   const [dupParcelle, setDupParcelle] = useState<null | { id: string; culture: string; distanceMeters: number }>(null);
   const [creatingParcelle, setCreatingParcelle] = useState(false);
@@ -1383,14 +1392,41 @@ function RecordPage() {
                         <option value="female">Femme</option>
                         <option value="unknown">Non précisé</option>
                       </select>
+                      <select value={newProducerRegion}
+                        onChange={e => {
+                          setNewProducerRegion(e.target.value);
+                          setNewProducerDepartment("");
+                          setNewProducerCommune("");
+                        }}
+                        className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+                        <option value="">Région — sélectionner</option>
+                        {CAMEROON_ADMINISTRATIVE_HIERARCHY.map(region => (
+                          <option key={region.id} value={region.name}>{region.name}</option>
+                        ))}
+                      </select>
+                      <select value={newProducerDepartment}
+                        onChange={e => {
+                          setNewProducerDepartment(e.target.value);
+                          setNewProducerCommune("");
+                        }}
+                        disabled={!newProducerRegion}
+                        className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold disabled:opacity-50">
+                        <option value="">{newProducerRegion ? "Département — sélectionner" : "Choisir d'abord une région"}</option>
+                        {availableDepartments.map(department => (
+                          <option key={department.id} value={department.name}>{department.name}</option>
+                        ))}
+                      </select>
+                      <select value={newProducerCommune}
+                        onChange={e => setNewProducerCommune(e.target.value)}
+                        disabled={!newProducerDepartment}
+                        className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold disabled:opacity-50">
+                        <option value="">{newProducerDepartment ? "Commune / arrondissement — sélectionner" : "Choisir d'abord un département"}</option>
+                        {availableLocalities.map(locality => (
+                          <option key={locality.id} value={locality.name}>{locality.name}</option>
+                        ))}
+                      </select>
                       <input value={newProducerVillage} onChange={e => setNewProducerVillage(e.target.value)}
-                        placeholder="Village" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
-                      <input value={newProducerCommune} onChange={e => setNewProducerCommune(e.target.value)}
-                        placeholder="Commune" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
-                      <input value={newProducerDepartment} onChange={e => setNewProducerDepartment(e.target.value)}
-                        placeholder="Département" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
-                      <input value={newProducerRegion} onChange={e => setNewProducerRegion(e.target.value)}
-                        placeholder="Région" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
+                        placeholder="Village / localité (libre)" className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
                     </div>
                     {newProducerCode && (
                       <div className="mb-2 rounded-lg border border-gold/30 bg-accent/20 px-3 py-2 text-xs">
