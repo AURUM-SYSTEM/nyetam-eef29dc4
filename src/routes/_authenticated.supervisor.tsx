@@ -21,6 +21,7 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Download,
   CheckCircle2,
   History,
   Loader2,
@@ -1183,6 +1184,193 @@ function ProducersSection() {
             ))}
           </TableBody>
         </Table>
+      )}
+    </section>
+  );
+}
+
+// ── AGRO : restitution de la base de données ─────────────────────────────
+function UnaprocamRestitutionSection() {
+  const fetchParcelles = useServerFn(listParcelles);
+  const fetchProducers = useServerFn(listProducers);
+  const [parcelles, setParcelles] = useState<Array<any>>([]);
+  const [producers, setProducers] = useState<Array<any>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [p, pr] = await Promise.all([
+          fetchParcelles({ data: undefined as any }),
+          fetchProducers({ data: undefined as any }),
+        ]);
+        if (!cancelled) {
+          setParcelles(p.parcelles as Array<any>);
+          setProducers(pr.producers as Array<any>);
+        }
+      } catch {
+        // La section reste silencieuse si les données ne peuvent pas être chargées.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function csvCell(value: unknown): string {
+    const raw = value == null ? "" : Array.isArray(value) ? value.join(" | ") : String(value);
+    return '"' + raw.replace(/"/g, '""') + '"';
+  }
+
+  function downloadFile(filename: string, content: string, type: string) {
+    const blob = new Blob(["\\uFEFF", content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportProducersCsv() {
+    const headers = ["Code producteur", "Nom", "Sexe", "Téléphone", "Coopérative", "Village", "Commune", "Département", "Région", "Nombre de parcelles"];
+    const rows = producers.map(p => [
+      p.producerCode, p.fullName, p.sex, p.contactPhone, p.cooperativeName,
+      p.village, p.commune, p.department, p.region, p.parcelleCount,
+    ]);
+    downloadFile(
+      "UNAPROCAM_producteurs.csv",
+      [headers, ...rows].map(row => row.map(csvCell).join(";")).join("\n"),
+      "text/csv;charset=utf-8",
+    );
+  }
+
+  function exportParcellesCsv() {
+    const headers = [
+      "Code parcelle", "Code producteur", "Producteur", "Téléphone", "Coopérative",
+      "Village", "Commune", "Département", "Région", "Culture", "Espèces",
+      "Variétés", "Surface déclarée (ha)", "Surface calculée (ha)", "Latitude",
+      "Longitude", "Année de plantation", "Occupation du terrain", "Agroforesterie",
+      "Certification", "Rendement estimé (t)", "Statut conformité", "Date de collecte",
+    ];
+    const rows = parcelles.map(p => [
+      p.id, p.producerCode, p.producerName, p.producerPhone, p.cooperativeName,
+      p.village, p.commune, p.department, p.region, p.culture, p.species,
+      p.varieties, p.surfaceHa, p.surfaceHaCalculated, p.lat, p.lng,
+      p.plantingYear, p.landTenure, p.agroforestry == null ? "" : (p.agroforestry ? "Oui" : "Non"),
+      p.certification, p.estimatedYieldTonnes, p.complianceStatus, p.createdAt,
+    ]);
+    downloadFile(
+      "UNAPROCAM_parcelles.csv",
+      [headers, ...rows].map(row => row.map(csvCell).join(";")).join("\n"),
+      "text/csv;charset=utf-8",
+    );
+  }
+
+  function exportGeoJson() {
+    const features = parcelles.map(p => {
+      const boundary = Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3
+        ? [...p.boundaryPoints, p.boundaryPoints[0]]
+        : null;
+      const geometry = boundary
+        ? { type: "Polygon", coordinates: [boundary.map((pt: { lat: number; lng: number }) => [pt.lng, pt.lat])] }
+        : { type: "Point", coordinates: [p.lng, p.lat] };
+
+      return {
+        type: "Feature",
+        geometry,
+        properties: {
+          code_parcelle: p.id,
+          code_producteur: p.producerCode,
+          producteur: p.producerName,
+          cooperative: p.cooperativeName,
+          culture: p.culture,
+          surface_ha: p.surfaceHa,
+          surface_ha_calculee: p.surfaceHaCalculated,
+          village: p.village,
+          commune: p.commune,
+          departement: p.department,
+          region: p.region,
+          espece: p.species,
+          varietes: p.varieties,
+          annee_plantation: p.plantingYear,
+          occupation_terrain: p.landTenure,
+          agroforesterie: p.agroforestry,
+          certification: p.certification,
+          rendement_estime_t: p.estimatedYieldTonnes,
+          statut_conformite: p.complianceStatus,
+          date_collecte: p.createdAt,
+        },
+      };
+    });
+    downloadFile(
+      "UNAPROCAM_parcelles.geojson",
+      JSON.stringify({ type: "FeatureCollection", features }, null, 2),
+      "application/geo+json;charset=utf-8",
+    );
+  }
+
+  const polygonCount = parcelles.filter(p => Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3).length;
+  const gpsCount = parcelles.filter(p => typeof p.lat === "number" && typeof p.lng === "number").length;
+  const totalSurface = parcelles.reduce((sum, p) => sum + (Number(p.surfaceHaCalculated ?? p.surfaceHa) || 0), 0);
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 font-display text-lg">
+            <Download className="h-4 w-4 text-gold" /> Restitution de la base
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Données de votre organisation — préparation de la restitution du pilote UNAPROCAM.
+          </p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+      ) : (
+        <>
+          <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="rounded-xl border border-border bg-card/40 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Producteurs</p>
+              <p className="mt-1 text-xl font-semibold">{producers.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/40 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Parcelles</p>
+              <p className="mt-1 text-xl font-semibold">{parcelles.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/40 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Polygones</p>
+              <p className="mt-1 text-xl font-semibold">{polygonCount}/{parcelles.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card/40 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Surface</p>
+              <p className="mt-1 text-xl font-semibold">{totalSurface.toFixed(2)} ha</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={exportProducersCsv} disabled={producers.length === 0}
+              className="rounded-lg btn-gold px-3 py-2 text-xs disabled:opacity-40">
+              Producteurs CSV
+            </button>
+            <button type="button" onClick={exportParcellesCsv} disabled={parcelles.length === 0}
+              className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">
+              Parcelles CSV
+            </button>
+            <button type="button" onClick={exportGeoJson} disabled={parcelles.length === 0}
+              className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">
+              Parcelles GeoJSON
+            </button>
+          </div>
+
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            GPS disponible : {gpsCount}/{parcelles.length}. Le GeoJSON utilise le polygone quand il existe, sinon le point GPS.
+          </p>
+        </>
       )}
     </section>
   );
