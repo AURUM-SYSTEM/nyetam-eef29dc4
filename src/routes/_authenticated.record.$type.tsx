@@ -1642,7 +1642,7 @@ function RecordPage() {
                   {!dupParcelle && (
                     <button
                       type="button"
-                      disabled={creatingParcelle || !gps || !newCulture.trim()}
+                      disabled={creatingParcelle || !gps || newSpecies.length === 0}
                       onClick={() => void handleCreateParcelle(false)}
                       className="flex w-full items-center justify-center gap-2 rounded-lg btn-gold px-4 py-2.5 text-sm disabled:opacity-40"
                     >
