@@ -908,7 +908,7 @@ function RecordPage() {
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
-        audio: true,
+        audio: false,
       });
     } catch (err: any) {
       toast.error("Accès caméra refusé : " + (err?.message || err?.name || "inconnu"));
