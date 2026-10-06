@@ -2414,11 +2414,10 @@ function SupervisorDashboardContent() {
                   </p>
                 )}
               </section>
-            </div>
-          );
-        }
-        
-              </SupervisorFolder>
+      </SupervisorFolder>
+    </div>
+  );
+}
 
 function SupervisorFolder({ title, description, icon: Icon = Folder, open, onToggle, children }: { title: string; description: string; icon?: typeof Folder; open: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
