@@ -304,6 +304,7 @@ function RecordPage() {
           if (draft.docTime) setDocTime(draft.docTime);
           if (draft.gps) setGps(draft.gps);
           if (draft.createdParcelleId) setCreatedParcelleId(draft.createdParcelleId);
+          if (draft.selectedProducerId) setSelectedProducerId(draft.selectedProducerId);
         }
       } catch {
         // Pas de brouillon récupérable — on repart d'un état neutre.
