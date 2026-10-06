@@ -29,7 +29,6 @@ import {
   MapPin,
   Pencil,
   Radio,
-  ShieldAlert,
   Sparkles,
   Sprout,
   Users,
@@ -74,8 +73,7 @@ import {
   getEudrCompliance,
   attestEudrCompliance,
   getParcelleMapInfo,
-  getOrganizationDataPolicy,
-  updateOrganizationDataPolicy,
+  getOrganizationCommercialAccess,
 } from "@/lib/agro.functions";
 import { BackofficeShell } from "@/components/BackofficeShell";
 import type { SupervisorMapMarker } from "@/components/LeafletMaps";
@@ -1229,101 +1227,6 @@ function DataRestitutionSection() {
   );
 }
 
-function DataPolicySection() {
-  const fetchPolicy = useServerFn(getOrganizationDataPolicy);
-  const savePolicy = useServerFn(updateOrganizationDataPolicy);
-  const [policy, setPolicy] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [scopes, setScopes] = useState<string[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchPolicy({ data: undefined as any }).then((p) => {
-      if (!cancelled) { setPolicy(p); setScopes(p.allowedScopes ?? []); }
-    }).catch(() => {
-      if (!cancelled) toast.error("Impossible de charger la politique de données.");
-    }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function save() {
-    if (!policy) return;
-    setSaving(true);
-    try {
-      await savePolicy({ data: { ...policy, allowedScopes: scopes } });
-      toast.success("Politique de données enregistrée.");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Échec de l'enregistrement.");
-    } finally { setSaving(false); }
-  }
-
-  function toggleScope(scope: string) {
-    setScopes((prev) => prev.includes(scope) ? prev.filter((x) => x !== scope) : [...prev, scope]);
-  }
-
-  if (loading) return <section className="glass-card mb-6 rounded-2xl p-5"><div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div></section>;
-  if (!policy) return null;
-
-  return (
-    <section className="glass-card mb-6 rounded-2xl p-5">
-      <div className="mb-4">
-        <h2 className="flex items-center gap-2 font-display text-lg"><ShieldAlert className="h-4 w-4 text-gold" /> Données & valorisation</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Politique propre à cette organisation. Les données restent conservées dans AURUM ; un export est une copie.</p>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <label className="flex items-center gap-2 rounded-xl border border-border bg-card/40 p-3 text-sm">
-          <input type="checkbox" checked={policy.exportEnabled} onChange={(e) => setPolicy((p: any) => ({ ...p, exportEnabled: e.target.checked }))} />
-          Autoriser les exports de données
-        </label>
-        <label className="flex items-center gap-2 rounded-xl border border-border bg-card/40 p-3 text-sm">
-          <input type="checkbox" checked={policy.commercialDataUse} onChange={(e) => setPolicy((p: any) => ({ ...p, commercialDataUse: e.target.checked }))} />
-          Autoriser la valorisation commerciale
-        </label>
-      </div>
-
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
-        <label className="text-xs text-muted-foreground">Statut de l'accord
-          <select value={policy.agreementStatus} onChange={(e) => setPolicy((p: any) => ({ ...p, agreementStatus: e.target.value }))} className="mt-1 w-full rounded-lg border border-border bg-input px-2 py-2 text-sm">
-            <option value="pending">En attente</option><option value="active">Actif</option><option value="suspended">Suspendu</option><option value="terminated">Terminé</option>
-          </select>
-        </label>
-        <label className="text-xs text-muted-foreground">Commission
-          <select value={policy.commissionType} onChange={(e) => setPolicy((p: any) => ({ ...p, commissionType: e.target.value }))} className="mt-1 w-full rounded-lg border border-border bg-input px-2 py-2 text-sm">
-            <option value="none">Aucune</option><option value="percentage">Pourcentage</option><option value="fixed_per_record">Montant par donnée</option>
-          </select>
-        </label>
-        <label className="text-xs text-muted-foreground">Taux / montant
-          <input type="number" min="0" value={policy.commissionRate ?? ""} onChange={(e) => setPolicy((p: any) => ({ ...p, commissionRate: e.target.value === "" ? null : Number(e.target.value) }))} className="mt-1 w-full rounded-lg border border-border bg-input px-2 py-2 text-sm" />
-        </label>
-      </div>
-
-      <div className="mt-3">
-        <p className="mb-2 text-xs text-muted-foreground">Données autorisées pour la valorisation</p>
-        <div className="flex flex-wrap gap-2">
-          {["parcelles", "surfaces", "production", "indicateurs_agreges", "cartographie_anonymisee"].map((scope) => (
-            <button key={scope} type="button" onClick={() => toggleScope(scope)} className={scopes.includes(scope) ? "rounded-full bg-emerald-500/15 px-3 py-1.5 text-xs text-emerald-300" : "rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground"}>
-              {scope.replace("_", " ")}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <input value={policy.agreementReference ?? ""} onChange={(e) => setPolicy((p: any) => ({ ...p, agreementReference: e.target.value || null }))} placeholder="Référence de l'accord" className="rounded-lg border border-border bg-input px-2 py-2 text-sm" />
-        <textarea value={policy.notes ?? ""} onChange={(e) => setPolicy((p: any) => ({ ...p, notes: e.target.value || null }))} placeholder="Notes / périmètre contractuel" className="min-h-20 rounded-lg border border-border bg-input px-2 py-2 text-sm" />
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="text-[11px] text-muted-foreground">L'exploitation commerciale ne peut être activée que si l'accord est « Actif ».</p>
-        <button type="button" onClick={() => void save()} disabled={saving} className="btn-gold rounded-lg px-4 py-2 text-xs disabled:opacity-40">{saving ? "Enregistrement…" : "Enregistrer"}</button>
-      </div>
-    </section>
-  );
-}
-
 // ── AGRO : assistant IA conversationnel ───────────────────────────────────
 
 const AGRI_ASSISTANT_EXAMPLES = [
@@ -2124,6 +2027,41 @@ function AuditLogSection() {
   );
 }
 
+function CommercialDataModuleSection() {
+  const fetchAccess = useServerFn(getOrganizationCommercialAccess);
+  const [access, setAccess] = useState<{ enabled: boolean; allowedScopes: string[] } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAccess({ data: undefined as any })
+      .then((result) => {
+        if (!cancelled) setAccess(result);
+      })
+      .catch(() => {
+        if (!cancelled) setAccess({ enabled: false, allowedScopes: [] });
+      });
+    return () => { cancelled = true; };
+  }, [fetchAccess]);
+
+  if (!access?.enabled) return null;
+
+  return (
+    <section className="glass-card mb-6 rounded-2xl border border-gold/20 p-5">
+      <div className="mb-2">
+        <h2 className="font-display text-lg">Partenariat données</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Cette organisation bénéficie d’un dispositif de valorisation des données activé par AURUM.
+        </p>
+      </div>
+      {access.allowedScopes.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Périmètres autorisés : {access.allowedScopes.join(", ")}.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function SupervisorDashboardContent() {
   const { profile } = useAuth();
   const { docs, profilesById, loading, error, reload } = useSupervisorData();
@@ -2311,6 +2249,9 @@ function SupervisorDashboardContent() {
 
       {/* AGRO — Data Analyst (complétude, validation, volumes) */}
       {profile?.module_type === "agro" && <DataAnalystSection />}
+
+      {/* AGRO — module de valorisation, visible uniquement si AURUM l'a activé */}
+      {profile?.module_type === "agro" && <CommercialDataModuleSection />}
 
       {/* AGRO — Conformité EUDR (extension optionnelle, n'affiche rien si désactivée) */}
       {profile?.module_type === "agro" && <EudrComplianceSection />}
