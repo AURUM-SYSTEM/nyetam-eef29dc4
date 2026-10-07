@@ -1210,17 +1210,22 @@ function DataRestitutionSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const download = (name: string, content: string, type: string) => { const url = URL.createObjectURL(new Blob(["\\uFEFF", content], { type })); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url); };
+  const download = (name: string, content: string, type: string) => {
+    const url = URL.createObjectURL(new Blob(["\\uFEFF", content], { type }));
+    const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
+  };
+
   const exportWorkbook = async () => {
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
-    const producerRows = producers.map(p => ({
+
+    const producersRows = producers.map(p => ({
       "Code producteur": p.producerCode ?? "", "Nom complet": p.fullName ?? "", "Sexe": p.sex ?? "",
       "Téléphone": p.contactPhone ?? "", "Email": p.contactEmail ?? "", "Type pièce d'identité": p.idDocumentType ?? "",
       "Numéro pièce": p.idDocumentNumber ?? "", "Coopérative": p.cooperativeName ?? "", "Village": p.village ?? "",
       "Commune": p.commune ?? "", "Département": p.department ?? "", "Région": p.region ?? "", "Nombre de parcelles": p.parcelleCount ?? 0,
     }));
-    const wsProducers = XLSX.utils.json_to_sheet(producerRows);
+    const wsProducers = XLSX.utils.json_to_sheet(producersRows);
     wsProducers["!cols"] = [18,28,12,18,28,24,22,24,20,20,20,20,18].map(w => ({ wch: w }));
     XLSX.utils.book_append_sheet(wb, wsProducers, "01_Producteurs");
 
@@ -1229,11 +1234,11 @@ function DataRestitutionSection() {
       "Téléphone": p.producerPhone ?? "", "Coopérative": p.cooperativeName ?? "", "Village": p.village ?? "",
       "Commune": p.commune ?? "", "Département": p.department ?? "", "Région": p.region ?? "", "Culture": p.culture ?? "",
       "Espèces": Array.isArray(p.species) ? p.species.join(" | ") : p.species ?? "", "Variétés": Array.isArray(p.varieties) ? p.varieties.join(" | ") : p.varieties ?? "",
-      "Surface déclarée (ha)": p.surfaceHa ?? "", "Surface calculée (ha)": p.surfaceHaCalculated ?? "",
-      "Latitude": p.lat ?? "", "Longitude": p.lng ?? "", "Année de plantation": p.plantingYear ?? "",
-      "Occupation du terrain": p.landTenure ?? "", "Agroforesterie": p.agroforestry == null ? "" : p.agroforestry ? "Oui" : "Non",
-      "Certification": p.certification ?? "", "Rendement estimé (t)": p.estimatedYieldTonnes ?? "", "Statut conformité": p.complianceStatus ?? "",
-      "Nombre de visites": p.visitCount ?? 0, "Date de collecte": p.createdAt ? new Date(p.createdAt).toLocaleString("fr-FR") : "",
+      "Surface déclarée (ha)": p.surfaceHa ?? "", "Surface calculée (ha)": p.surfaceHaCalculated ?? "", "Latitude": p.lat ?? "", "Longitude": p.lng ?? "",
+      "Année de plantation": p.plantingYear ?? "", "Occupation du terrain": p.landTenure ?? "",
+      "Agroforesterie": p.agroforestry == null ? "" : p.agroforestry ? "Oui" : "Non", "Certification": p.certification ?? "",
+      "Rendement estimé (t)": p.estimatedYieldTonnes ?? "", "Statut conformité": p.complianceStatus ?? "", "Nombre de visites": p.visitCount ?? 0,
+      "Date de collecte": p.createdAt ? new Date(p.createdAt).toLocaleString("fr-FR") : "",
     }));
     const wsParcelles = XLSX.utils.json_to_sheet(parcelRows);
     wsParcelles["!cols"] = [22,18,28,18,24,20,20,20,20,18,26,26,20,20,14,14,20,22,16,22,20,20,18,22].map(w => ({ wch: w }));
@@ -1242,46 +1247,75 @@ function DataRestitutionSection() {
     const gpsRows: any[] = [];
     for (const p of parcelles) {
       if (Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3) {
-        p.boundaryPoints.forEach((pt: any, index: number) => gpsRows.push({"Code parcelle":p.id??"","Code producteur":p.producerCode??"","N° point":index+1,"Latitude":pt.lat??"","Longitude":pt.lng??""}));
+        p.boundaryPoints.forEach((pt: any, index: number) => gpsRows.push({
+          "Code parcelle": p.id ?? "", "Code producteur": p.producerCode ?? "", "N° point": index + 1, "Latitude": pt.lat ?? "", "Longitude": pt.lng ?? "",
+        }));
       } else if (typeof p.lat === "number" && typeof p.lng === "number") {
-        gpsRows.push({"Code parcelle":p.id??"","Code producteur":p.producerCode??"","N° point":1,"Latitude":p.lat,"Longitude":p.lng});
+        gpsRows.push({ "Code parcelle": p.id ?? "", "Code producteur": p.producerCode ?? "", "N° point": 1, "Latitude": p.lat, "Longitude": p.lng });
       }
     }
     const wsGps = XLSX.utils.json_to_sheet(gpsRows);
     wsGps["!cols"] = [22,18,12,16,16].map(w => ({ wch: w }));
     XLSX.utils.book_append_sheet(wb, wsGps, "03_GPS_Polygones");
 
-    const surface = parcelles.reduce((s,p)=>s+(Number(p.surfaceHaCalculated??p.surfaceHa)||0),0);
-    const gpsCount = parcelles.filter(p=>typeof p.lat==="number"&&typeof p.lng==="number").length;
-    const polygonCount = parcelles.filter(p=>Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3).length;
-    const noGpsCount = parcelles.length-gpsCount;
-    const noParcelProducerCount = producers.filter(p=>!(Number(p.parcelleCount)>0)).length;
-    const cultureCounts = new Map<string,number>(), coopCounts = new Map<string,number>();
-    for(const p of parcelles){const k=p.culture||"Non renseignée"; cultureCounts.set(k,(cultureCounts.get(k)??0)+1); const c=p.cooperativeName||"Non renseignée"; coopCounts.set(c,(coopCounts.get(c)??0)+1);}
+    const surface = parcelles.reduce((sum, p) => sum + (Number(p.surfaceHaCalculated ?? p.surfaceHa) || 0), 0);
+    const gpsCount = parcelles.filter(p => typeof p.lat === "number" && typeof p.lng === "number").length;
+    const polygonCount = parcelles.filter(p => Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3).length;
+    const cultureCounts = new Map<string, number>();
+    const coopCounts = new Map<string, number>();
+    for (const p of parcelles) {
+      const culture = p.culture || "Non renseignée"; cultureCounts.set(culture, (cultureCounts.get(culture) ?? 0) + 1);
+      const coop = p.cooperativeName || "Non renseignée"; coopCounts.set(coop, (coopCounts.get(coop) ?? 0) + 1);
+    }
     const summaryRows = [
-      {"Indicateur":"Total producteurs","Valeur":producers.length},{"Indicateur":"Total parcelles","Valeur":parcelles.length},
-      {"Indicateur":"Surface totale (ha)","Valeur":Number(surface.toFixed(2))},{"Indicateur":"Parcelles avec GPS","Valeur":gpsCount},
-      {"Indicateur":"Parcelles avec polygone","Valeur":polygonCount},{"Indicateur":"Parcelles sans GPS","Valeur":noGpsCount},
-      {"Indicateur":"Producteurs sans parcelle","Valeur":noParcelProducerCount},
-      {"Indicateur":"Nombre total de visites","Valeur":parcelles.reduce((s,p)=>s+(Number(p.visitCount)||0),0)},
-      ...Array.from(cultureCounts.entries()).map(([k,v])=>({"Indicateur":`Culture — ${k}`,"Valeur":v})),
-      ...Array.from(coopCounts.entries()).map(([k,v])=>({"Indicateur":`Coopérative — ${k}`,"Valeur":v})),
+      { "Indicateur": "Total producteurs", "Valeur": producers.length },
+      { "Indicateur": "Total parcelles", "Valeur": parcelles.length },
+      { "Indicateur": "Surface totale (ha)", "Valeur": Number(surface.toFixed(2)) },
+      { "Indicateur": "Parcelles avec GPS", "Valeur": gpsCount },
+      { "Indicateur": "Parcelles avec polygone", "Valeur": polygonCount },
+      { "Indicateur": "Parcelles sans GPS", "Valeur": parcelles.length - gpsCount },
+      { "Indicateur": "Producteurs sans parcelle", "Valeur": producers.filter(p => !(Number(p.parcelleCount) > 0)).length },
+      { "Indicateur": "Nombre total de visites", "Valeur": parcelles.reduce((sum, p) => sum + (Number(p.visitCount) || 0), 0) },
+      ...Array.from(cultureCounts.entries()).map(([name, count]) => ({ "Indicateur": `Culture — ${name}`, "Valeur": count })),
+      ...Array.from(coopCounts.entries()).map(([name, count]) => ({ "Indicateur": `Coopérative — ${name}`, "Valeur": count })),
     ];
     const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
-    wsSummary["!cols"] = [{wch:34},{wch:18}];
+    wsSummary["!cols"] = [{ wch: 34 }, { wch: 18 }];
     XLSX.utils.book_append_sheet(wb, wsSummary, "04_Synthèse");
-    XLSX.writeFile(wb, `AURUM_restitution_donnees-${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `AURUM_restitution_donnees-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const exportGeoJson =parcelles.filter(p=>Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3).length;
-  const gps=parcelles.filter(p=>typeof p.lat==="number"&&typeof p.lng==="number").length;
-  const surface=parcelles.reduce((s,p)=>s+(Number(p.surfaceHaCalculated??p.surfaceHa)||0),0);
+  const exportGeoJson = () => download("AURUM_parcelles.geojson", JSON.stringify({
+    type: "FeatureCollection",
+    features: parcelles.map(p => {
+      const b = Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3 ? [...p.boundaryPoints, p.boundaryPoints[0]] : null;
+      return {
+        type: "Feature",
+        geometry: b ? { type: "Polygon", coordinates: [b.map((pt: any) => [pt.lng, pt.lat])] } : { type: "Point", coordinates: [p.lng, p.lat] },
+        properties: {
+          code_parcelle: p.id, code_producteur: p.producerCode, producteur: p.producerName, cooperative: p.cooperativeName, culture: p.culture,
+          surface_ha: p.surfaceHa, surface_ha_calculee: p.surfaceHaCalculated, village: p.village, commune: p.commune, departement: p.department,
+          region: p.region, especes: p.species, varietes: p.varieties, annee_plantation: p.plantingYear, occupation_terrain: p.landTenure,
+          agroforesterie: p.agroforestry, certification: p.certification, rendement_estime_t: p.estimatedYieldTonnes,
+          statut_conformite: p.complianceStatus, date_collecte: p.createdAt,
+        },
+      };
+    }),
+  }, null, 2), "application/geo+json;charset=utf-8");
+
+  const polygons = parcelles.filter(p => Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3).length;
+  const gps = parcelles.filter(p => typeof p.lat === "number" && typeof p.lng === "number").length;
+  const surface = parcelles.reduce((sum, p) => sum + (Number(p.surfaceHaCalculated ?? p.surfaceHa) || 0), 0);
+
   return (
     <section className="glass-card mb-6 rounded-2xl p-5">
-      <div className="mb-4"><h2 className="flex items-center gap-2 font-display text-lg"><Download className="h-4 w-4 text-gold"/> Restitution des données</h2><p className="mt-1 text-xs text-muted-foreground">Export des données de votre organisation. Les téléchargements sont des copies : la base AURUM reste inchangée.</p></div>
+      <div className="mb-4"><h2 className="flex items-center gap-2 font-display text-lg"><Download className="h-4 w-4 text-gold"/> Restitution des données</h2><p className="mt-1 text-xs text-muted-foreground">Un classeur Excel structuré en 4 feuilles, plus le GeoJSON pour la cartographie. Les téléchargements sont des copies : la base AURUM reste inchangée.</p></div>
       {loading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold"/></div> : <>
         <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">{[["Producteurs",producers.length],["Parcelles",parcelles.length],["Polygones",polygons+"/"+parcelles.length],["Surface",surface.toFixed(2)+" ha"]].map(([l,v])=><div key={String(l)} className="rounded-xl border border-border bg-card/40 p-3"><p className="text-[10px] uppercase tracking-widest text-muted-foreground">{l}</p><p className="mt-1 text-xl font-semibold">{v}</p></div>)}</div>
-        <div className="flex flex-wrap gap-2"><button type="button" onClick={exportProducers} disabled={!producers.length} className="rounded-lg btn-gold px-3 py-2 text-xs disabled:opacity-40">Producteurs CSV</button><button type="button" onClick={exportParcelles} disabled={!parcelles.length} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">Parcelles CSV</button><button type="button" onClick={exportGeoJson} disabled={!parcelles.length} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">Parcelles GeoJSON</button></div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => void exportWorkbook()} disabled={!producers.length && !parcelles.length} className="rounded-lg btn-gold px-3 py-2 text-xs disabled:opacity-40">Classeur Excel (4 feuilles)</button>
+          <button type="button" onClick={exportGeoJson} disabled={!parcelles.length} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">Parcelles GeoJSON</button>
+        </div>
         <p className="mt-3 text-[11px] text-muted-foreground">GPS disponible : {gps}/{parcelles.length}. Le GeoJSON utilise le polygone lorsqu'il existe, sinon le point GPS.</p>
       </>}
     </section>
