@@ -1391,7 +1391,7 @@ function DataRestitutionSection() {
           "Visites : "+String(p.visitCount||0)+" | Collecte : "+(p.createdAt?new Date(p.createdAt).toLocaleDateString("fr-FR"):"—")
         ];
         rows.forEach((r,i)=>pdf.text(r.slice(0,115),18,30+i*5));
-        drawPdfMap(pdf,[p],"Carte de la parcelle",18+0,88,150);
+        drawPdfMap(pdf,[p],"Carte de la parcelle",88,150);
       });
     });
     pdf.save("AURUM_rapports_producteurs-"+new Date().toISOString().slice(0,10)+".pdf");
