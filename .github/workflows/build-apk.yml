@@ -54,6 +54,16 @@ jobs:
       - name: Install Bubblewrap
         run: npm install --global @bubblewrap/cli@1.25.0
 
+      - name: Prepare Android SDK for Bubblewrap
+        run: |
+          set -euo pipefail
+          SDKMANAGER_DIR="$(dirname "$(command -v sdkmanager)")"
+          mkdir -p "$ANDROID_HOME"
+          ln -sfn "$SDKMANAGER_DIR" "$ANDROID_HOME/bin"
+          test -x "$ANDROID_HOME/bin/sdkmanager"
+          echo "Bubblewrap SDK bin: $ANDROID_HOME/bin"
+          ls -la "$ANDROID_HOME/bin"
+
       - name: Configure Bubblewrap environment
         run: |
           set -euo pipefail
