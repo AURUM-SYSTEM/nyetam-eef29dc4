@@ -57,9 +57,14 @@ jobs:
       - name: Configure Bubblewrap environment
         run: |
           set -euo pipefail
-          bubblewrap updateConfig \
-            --jdkPath="$JAVA_HOME" \
-            --androidSdkPath="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          mkdir -p "$HOME/.bubblewrap"
+          cat > "$HOME/.bubblewrap/config.json" <<EOF
+          {
+            "jdkPath": "$JAVA_HOME",
+            "androidSdkPath": "$ANDROID_HOME"
+          }
+          EOF
+          cat "$HOME/.bubblewrap/config.json"
           bubblewrap doctor
 
       - name: Generate Android TWA project
@@ -84,6 +89,7 @@ jobs:
             printf '%s\n' "$GITHUB_WORKSPACE/android/android-keystore"
             printf '%s\n' 'aurum'
           } | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory android
+
       - name: Build signed APK
         run: |
           set -euo pipefail
