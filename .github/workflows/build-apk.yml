@@ -105,7 +105,7 @@ jobs:
           NODE
           echo "Prepared Bubblewrap answers:"
           sed -E 's#(android-keystore).*#\1#' /tmp/bubblewrap-input
-          bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory android < /tmp/bubblewrap-input
+          script -q -c "bubblewrap init --manifest=\"$PWA_MANIFEST_URL\" --directory android" /dev/null < /tmp/bubblewrap-input
 
       - name: Build signed APK
         run: |
