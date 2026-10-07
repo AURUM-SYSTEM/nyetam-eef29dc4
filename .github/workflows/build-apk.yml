@@ -53,18 +53,8 @@ jobs:
         working-directory: android
         shell: bash
         run: |
-          set -o pipefail
-          printf '%s\n' \
-            "tanstack-start-app.aurumsystem76.workers.dev" \
-            "/" \
-            "AURUM SYSTEM" \
-            "AURUM" \
-            "com.aurumsystem.app" \
-            "1" \
-            "standalone" \
-            "portrait" \
-            "android-keystore" \
-            "aurum" | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory .
+          set -euo pipefail
+          printf 'No\n%s\n' "$JAVA_HOME" | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory .
 
       - name: Build signed APK
         working-directory: android
