@@ -1210,12 +1210,70 @@ function DataRestitutionSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const csv = (v: unknown) => '"' + (v == null ? "" : Array.isArray(v) ? v.join(" | ") : String(v)).replace(/"/g, '""') + '"';
   const download = (name: string, content: string, type: string) => { const url = URL.createObjectURL(new Blob(["\\uFEFF", content], { type })); const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url); };
-  const exportProducers = () => download("AURUM_producteurs.csv", [["Code producteur","Nom","Sexe","Téléphone","Coopérative","Village","Commune","Département","Région","Nombre de parcelles"], ...producers.map(p => [p.producerCode,p.fullName,p.sex,p.contactPhone,p.cooperativeName,p.village,p.commune,p.department,p.region,p.parcelleCount])].map(r => r.map(csv).join(";")).join("\\n"), "text/csv;charset=utf-8");
-  const exportParcelles = () => download("AURUM_parcelles.csv", [["Code parcelle","Code producteur","Producteur","Téléphone","Coopérative","Village","Commune","Département","Région","Culture","Espèces","Variétés","Surface déclarée (ha)","Surface calculée (ha)","Latitude","Longitude","Année de plantation","Occupation du terrain","Agroforesterie","Certification","Rendement estimé (t)","Statut conformité","Date de collecte"], ...parcelles.map(p => [p.id,p.producerCode,p.producerName,p.producerPhone,p.cooperativeName,p.village,p.commune,p.department,p.region,p.culture,p.species,p.varieties,p.surfaceHa,p.surfaceHaCalculated,p.lat,p.lng,p.plantingYear,p.landTenure,p.agroforestry == null ? "" : p.agroforestry ? "Oui" : "Non",p.certification,p.estimatedYieldTonnes,p.complianceStatus,p.createdAt])].map(r => r.map(csv).join(";")).join("\\n"), "text/csv;charset=utf-8");
-  const exportGeoJson = () => download("AURUM_parcelles.geojson", JSON.stringify({ type:"FeatureCollection", features:parcelles.map(p => { const b=Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3?[...p.boundaryPoints,p.boundaryPoints[0]]:null; return { type:"Feature", geometry:b?{type:"Polygon",coordinates:[b.map((pt:any)=>[pt.lng,pt.lat])]}:{type:"Point",coordinates:[p.lng,p.lat]}, properties:{code_parcelle:p.id,code_producteur:p.producerCode,producteur:p.producerName,cooperative:p.cooperativeName,culture:p.culture,surface_ha:p.surfaceHa,surface_ha_calculee:p.surfaceHaCalculated,village:p.village,commune:p.commune,departement:p.department,region:p.region,especes:p.species,varietes:p.varieties,annee_plantation:p.plantingYear,occupation_terrain:p.landTenure,agroforesterie:p.agroforestry,certification:p.certification,rendement_estime_t:p.estimatedYieldTonnes,statut_conformite:p.complianceStatus,date_collecte:p.createdAt} }; }) }, null, 2), "application/geo+json;charset=utf-8");
-  const polygons=parcelles.filter(p=>Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3).length;
+  const exportWorkbook = async () => {
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+    const producerRows = producers.map(p => ({
+      "Code producteur": p.producerCode ?? "", "Nom complet": p.fullName ?? "", "Sexe": p.sex ?? "",
+      "Téléphone": p.contactPhone ?? "", "Email": p.contactEmail ?? "", "Type pièce d'identité": p.idDocumentType ?? "",
+      "Numéro pièce": p.idDocumentNumber ?? "", "Coopérative": p.cooperativeName ?? "", "Village": p.village ?? "",
+      "Commune": p.commune ?? "", "Département": p.department ?? "", "Région": p.region ?? "", "Nombre de parcelles": p.parcelleCount ?? 0,
+    }));
+    const wsProducers = XLSX.utils.json_to_sheet(producerRows);
+    wsProducers["!cols"] = [18,28,12,18,28,24,22,24,20,20,20,20,18].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsProducers, "01_Producteurs");
+
+    const parcelRows = parcelles.map(p => ({
+      "Code parcelle": p.id ?? "", "Code producteur": p.producerCode ?? "", "Producteur": p.producerName ?? "",
+      "Téléphone": p.producerPhone ?? "", "Coopérative": p.cooperativeName ?? "", "Village": p.village ?? "",
+      "Commune": p.commune ?? "", "Département": p.department ?? "", "Région": p.region ?? "", "Culture": p.culture ?? "",
+      "Espèces": Array.isArray(p.species) ? p.species.join(" | ") : p.species ?? "", "Variétés": Array.isArray(p.varieties) ? p.varieties.join(" | ") : p.varieties ?? "",
+      "Surface déclarée (ha)": p.surfaceHa ?? "", "Surface calculée (ha)": p.surfaceHaCalculated ?? "",
+      "Latitude": p.lat ?? "", "Longitude": p.lng ?? "", "Année de plantation": p.plantingYear ?? "",
+      "Occupation du terrain": p.landTenure ?? "", "Agroforesterie": p.agroforestry == null ? "" : p.agroforestry ? "Oui" : "Non",
+      "Certification": p.certification ?? "", "Rendement estimé (t)": p.estimatedYieldTonnes ?? "", "Statut conformité": p.complianceStatus ?? "",
+      "Nombre de visites": p.visitCount ?? 0, "Date de collecte": p.createdAt ? new Date(p.createdAt).toLocaleString("fr-FR") : "",
+    }));
+    const wsParcelles = XLSX.utils.json_to_sheet(parcelRows);
+    wsParcelles["!cols"] = [22,18,28,18,24,20,20,20,20,18,26,26,20,20,14,14,20,22,16,22,20,20,18,22].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsParcelles, "02_Parcelles");
+
+    const gpsRows: any[] = [];
+    for (const p of parcelles) {
+      if (Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3) {
+        p.boundaryPoints.forEach((pt: any, index: number) => gpsRows.push({"Code parcelle":p.id??"","Code producteur":p.producerCode??"","N° point":index+1,"Latitude":pt.lat??"","Longitude":pt.lng??""}));
+      } else if (typeof p.lat === "number" && typeof p.lng === "number") {
+        gpsRows.push({"Code parcelle":p.id??"","Code producteur":p.producerCode??"","N° point":1,"Latitude":p.lat,"Longitude":p.lng});
+      }
+    }
+    const wsGps = XLSX.utils.json_to_sheet(gpsRows);
+    wsGps["!cols"] = [22,18,12,16,16].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsGps, "03_GPS_Polygones");
+
+    const surface = parcelles.reduce((s,p)=>s+(Number(p.surfaceHaCalculated??p.surfaceHa)||0),0);
+    const gpsCount = parcelles.filter(p=>typeof p.lat==="number"&&typeof p.lng==="number").length;
+    const polygonCount = parcelles.filter(p=>Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3).length;
+    const noGpsCount = parcelles.length-gpsCount;
+    const noParcelProducerCount = producers.filter(p=>!(Number(p.parcelleCount)>0)).length;
+    const cultureCounts = new Map<string,number>(), coopCounts = new Map<string,number>();
+    for(const p of parcelles){const k=p.culture||"Non renseignée"; cultureCounts.set(k,(cultureCounts.get(k)??0)+1); const c=p.cooperativeName||"Non renseignée"; coopCounts.set(c,(coopCounts.get(c)??0)+1);}
+    const summaryRows = [
+      {"Indicateur":"Total producteurs","Valeur":producers.length},{"Indicateur":"Total parcelles","Valeur":parcelles.length},
+      {"Indicateur":"Surface totale (ha)","Valeur":Number(surface.toFixed(2))},{"Indicateur":"Parcelles avec GPS","Valeur":gpsCount},
+      {"Indicateur":"Parcelles avec polygone","Valeur":polygonCount},{"Indicateur":"Parcelles sans GPS","Valeur":noGpsCount},
+      {"Indicateur":"Producteurs sans parcelle","Valeur":noParcelProducerCount},
+      {"Indicateur":"Nombre total de visites","Valeur":parcelles.reduce((s,p)=>s+(Number(p.visitCount)||0),0)},
+      ...Array.from(cultureCounts.entries()).map(([k,v])=>({"Indicateur":`Culture — ${k}`,"Valeur":v})),
+      ...Array.from(coopCounts.entries()).map(([k,v])=>({"Indicateur":`Coopérative — ${k}`,"Valeur":v})),
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    wsSummary["!cols"] = [{wch:34},{wch:18}];
+    XLSX.utils.book_append_sheet(wb, wsSummary, "04_Synthèse");
+    XLSX.writeFile(wb, `AURUM_restitution_donnees-${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  const exportGeoJson =parcelles.filter(p=>Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3).length;
   const gps=parcelles.filter(p=>typeof p.lat==="number"&&typeof p.lng==="number").length;
   const surface=parcelles.reduce((s,p)=>s+(Number(p.surfaceHaCalculated??p.surfaceHa)||0),0);
   return (
