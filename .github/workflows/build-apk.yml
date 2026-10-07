@@ -105,7 +105,55 @@ jobs:
           NODE
           echo "Prepared Bubblewrap answers:"
           sed -E 's#(android-keystore).*#\1#' /tmp/bubblewrap-input
-          script -q -c "bubblewrap init --manifest=\"$PWA_MANIFEST_URL\" --directory android" /dev/null < /tmp/bubblewrap-input
+          python3 - <<'PY'
+          import os, re, sys, pexpect
+
+          answers = open("/tmp/bubblewrap-input", encoding="utf-8").read().splitlines()
+          child = pexpect.spawn(
+              "bubblewrap",
+              ["init", "--manifest", os.environ["PWA_MANIFEST_URL"], "--directory", "android"],
+              encoding="utf-8",
+              timeout=120,
+          )
+          child.logfile = sys.stdout
+
+          prompts = [
+              r"Domain:",
+              r"URL path:",
+              r"Name:",
+              r"Launcher name:",
+              r"Package ID:",
+              r"Version code:",
+              r"Display mode:",
+              r"Orientation:",
+              r"Theme color:",
+              r"Background color:",
+              r"Icon URL:",
+              r"Maskable icon URL:",
+              r"Monochrome icon URL:",
+              r"Play Billing:",
+              r"Location Delegation:",
+              r"Key path:",
+              r"Key alias:",
+          ]
+
+          i = 0
+          while i < len(prompts):
+              child.expect(prompts[i])
+              if i >= len(answers):
+                  raise RuntimeError(f"Missing answer for prompt {prompts[i]}")
+              child.sendline(answers[i])
+              i += 1
+
+          child.expect(pexpect.EOF)
+          rc = child.exitstatus if child.exitstatus is not None else child.signalstatus
+          if rc not in (0, None):
+              raise RuntimeError(f"Bubblewrap init exited with status {rc}")
+
+          if not os.path.isfile("android/twa-manifest.json"):
+              raise RuntimeError("Bubblewrap init finished without android/twa-manifest.json")
+          print("Bubblewrap init completed and twa-manifest.json exists.")
+          PY
 
       - name: Build signed APK
         run: |
