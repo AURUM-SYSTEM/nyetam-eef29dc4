@@ -79,10 +79,6 @@ jobs:
             ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
             -lc '
               set -e
-              SDKMANAGER="$(find / -type f -name sdkmanager 2>/dev/null | head -n 1)"
-              test -n "$SDKMANAGER"
-              yes | "$SDKMANAGER" --licenses >/dev/null
-              yes | "$SDKMANAGER" "build-tools;36.1.0" >/dev/null
               test -f twa-manifest.json
               bubblewrap build --skipPwaValidation
             '
