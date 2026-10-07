@@ -41,15 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p android
-          keytool -genkeypair -v \
-            -keystore android/android-keystore \
-            -alias aurum \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass "$BUBBLEWRAP_KEYSTORE_PASSWORD" \
-            -keypass "$BUBBLEWRAP_KEY_PASSWORD" \
-            -dname "CN=AURUM SYSTEM, OU=AURUM, O=AURUM SYSTEM, L=Yaounde, ST=Centre, C=CM"
+          keytool -genkeypair -v             -keystore android/android-keystore             -alias aurum             -keyalg RSA             -keysize 2048             -validity 10000             -storepass "$BUBBLEWRAP_KEYSTORE_PASSWORD"             -keypass "$BUBBLEWRAP_KEY_PASSWORD"             -dname "CN=AURUM SYSTEM, OU=AURUM, O=AURUM SYSTEM, L=Yaounde, ST=Centre, C=CM"
 
       - name: Install Bubblewrap
         run: npm install --global @bubblewrap/cli@1.25.0
@@ -80,25 +72,35 @@ jobs:
       - name: Generate Android TWA project
         run: |
           set -euo pipefail
-          {
-            printf '%s\n' ''
-            printf '%s\n' ''
-            printf '%s\n' 'AURUM SYSTEM'
-            printf '%s\n' 'AURUM SYSTEM'
-            printf '%s\n' 'com.aurumsystem.app'
-            printf '%s\n' ''
-            printf '%s\n' ''
-            printf '%s\n' ''
-            printf '%s\n' ''
-            printf '%s\n' ''
-            printf '%s\n' ''
-            printf '%s\n' ''
-            printf '%s\n' ''
-            printf '%s\n' 'N'
-            printf '%s\n' 'N'
-            printf '%s\n' "$GITHUB_WORKSPACE/android/android-keystore"
-            printf '%s\n' 'aurum'
-          } | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory android
+          node > /tmp/bubblewrap-input <<'NODE'
+          const manifestUrl = process.env.PWA_MANIFEST_URL;
+          const m = await (await fetch(manifestUrl)).json();
+          const base = new URL(manifestUrl);
+          const abs = (v) => v ? new URL(v, base).toString() : "";
+          const icon = (m.icons || []).find(i => i.purpose === "any" || !i.purpose)?.src || (m.icons || [])[0]?.src;
+          const maskable = (m.icons || []).find(i => String(i.purpose || "").split(/\s+/).includes("maskable"))?.src || "";
+          const monochrome = (m.icons || []).find(i => String(i.purpose || "").split(/\s+/).includes("monochrome"))?.src || "";
+          const lines = [
+            m.start_url || "/",
+            m.start_url || "/",
+            m.name || "AURUM SYSTEM",
+            m.short_name || "AURUM",
+            "com.aurumsystem.app",
+            "1",
+            m.display || "",
+            m.orientation || "",
+            m.theme_color || "#141414",
+            m.background_color || m.theme_color || "#141414",
+            abs(icon),
+            abs(maskable),
+          ];
+          if ((m.shortcuts || []).length > 0) lines.push("N");
+          lines.push(abs(monochrome), "N", "N", "$GITHUB_WORKSPACE/android/android-keystore", "aurum");
+          process.stdout.write(lines.join("\n") + "\n");
+          NODE
+          echo "Prepared Bubblewrap answers:"
+          sed -E 's#(android-keystore).*#\1#' /tmp/bubblewrap-input
+          bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory android < /tmp/bubblewrap-input
 
       - name: Build signed APK
         run: |
