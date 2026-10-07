@@ -54,33 +54,36 @@ jobs:
       - name: Install Bubblewrap
         run: npm install --global @bubblewrap/cli@1.25.0
 
+      - name: Configure Bubblewrap environment
+        run: |
+          set -euo pipefail
+          bubblewrap updateConfig \
+            --jdkPath="$JAVA_HOME" \
+            --androidSdkPath="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          bubblewrap doctor
+
       - name: Generate Android TWA project
         run: |
           set -euo pipefail
           {
-            printf '%s\n' "$PWA_MANIFEST_URL"
+            printf '%s\n' ''
+            printf '%s\n' ''
+            printf '%s\n' 'AURUM SYSTEM'
             printf '%s\n' 'AURUM SYSTEM'
             printf '%s\n' 'com.aurumsystem.app'
-            printf '%s\n' 'https://tanstack-start-app.aurumsystem76.workers.dev/'
-            printf '%s\n' 'android'
-            printf '%s\n' 'Android'
-            printf '%s\n' 'AURUM SYSTEM'
-            printf '%s\n' 'AURUM SYSTEM'
-            printf '%s\n' 'Yaounde'
-            printf '%s\n' 'Centre'
-            printf '%s\n' 'CM'
+            printf '%s\n' ''
+            printf '%s\n' ''
+            printf '%s\n' ''
+            printf '%s\n' ''
+            printf '%s\n' ''
+            printf '%s\n' ''
+            printf '%s\n' ''
+            printf '%s\n' ''
             printf '%s\n' 'N'
             printf '%s\n' 'N'
-            printf '%s\n' 'N'
-            printf '%s\n' 'N'
-            printf '%s\n' 'N'
-            printf '%s\n' "$JAVA_HOME"
             printf '%s\n' "$GITHUB_WORKSPACE/android/android-keystore"
             printf '%s\n' 'aurum'
-            printf '%s\n' 'aurum-test-keystore'
-            printf '%s\n' 'aurum-test-keystore'
           } | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory android
-
       - name: Build signed APK
         run: |
           set -euo pipefail
