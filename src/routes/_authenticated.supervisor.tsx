@@ -1558,7 +1558,7 @@ function DataRestitutionSection() {
       });
     }
 
-    pdf.save("AURUM_rapports_producteurs- + new Date().toISOString().slice(0, 10) + ".pdf");
+    pdf.save("AURUM_rapports_producteurs-" + new Date().toISOString().slice(0, 10) + ".pdf");
   };
 
   const polygons = parcelles.filter(p => Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3).length;
