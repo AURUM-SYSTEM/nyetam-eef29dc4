@@ -1,0 +1,86 @@
+name: Build AURUM Android APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PWA_MANIFEST_URL: https://tanstack-start-app.aurumsystem76.workers.dev/manifest.json
+      BUBBLEWRAP_KEYSTORE_PASSWORD: aurum-test-keystore
+      BUBBLEWRAP_KEY_PASSWORD: aurum-test-key
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
+
+      - name: Prepare signing key
+        run: |
+          mkdir -p android
+          keytool -genkeypair -v \
+            -keystore android/android-keystore \
+            -alias aurum \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "$BUBBLEWRAP_KEYSTORE_PASSWORD" \
+            -keypass "$BUBBLEWRAP_KEY_PASSWORD" \
+            -dname "CN=AURUM SYSTEM, OU=AURUM, O=AURUM SYSTEM, L=Yaounde, ST=Centre, C=CM"
+
+      - name: Generate Android TWA project
+        working-directory: android
+        shell: bash
+        run: |
+          set -o pipefail
+          printf '%s\n' \
+            "tanstack-start-app.aurumsystem76.workers.dev" \
+            "/" \
+            "AURUM SYSTEM" \
+            "AURUM" \
+            "com.aurumsystem.app" \
+            "1" \
+            "standalone" \
+            "portrait" \
+            "android-keystore" \
+            "aurum" | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory .
+
+      - name: Build signed APK
+        working-directory: android
+        run: bubblewrap build --skipPwaValidation
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: aurum-system-apk
+          path: android/app-release-signed.apk
+          if-no-files-found: error
+          archive: false
+          retention-days: 30
+
+      - name: Upload Android metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: aurum-system-android-metadata
+          path: |
+            android/assetlinks.json
+            android/twa-manifest.json
+          if-no-files-found: warn
+          retention-days: 30
