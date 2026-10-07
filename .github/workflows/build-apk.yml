@@ -17,27 +17,14 @@ jobs:
     env:
       PWA_MANIFEST_URL: https://tanstack-start-app.aurumsystem76.workers.dev/manifest.json
       BUBBLEWRAP_KEYSTORE_PASSWORD: aurum-test-keystore
-      BUBBLEWRAP_KEY_PASSWORD: aurum-test-key
+      BUBBLEWRAP_KEY_PASSWORD: aurum-test-keystore
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
       - name: Prepare signing key
         run: |
+          set -euo pipefail
           mkdir -p android
           keytool -genkeypair -v \
             -keystore android/android-keystore \
@@ -46,32 +33,35 @@ jobs:
             -keysize 2048 \
             -validity 10000 \
             -storepass "$BUBBLEWRAP_KEYSTORE_PASSWORD" \
-            -keypass "$BUBBLEWRAP_KEY_PASSWORD" \
+            -keypass "$BUBBLEWRAP_KEYSTORE_PASSWORD" \
             -dname "CN=AURUM SYSTEM, OU=AURUM, O=AURUM SYSTEM, L=Yaounde, ST=Centre, C=CM"
 
-      - name: Configure Bubblewrap environment
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.bubblewrap"
-          cat > "$HOME/.bubblewrap/config.json" <<EOF
-          {
-            "jdkPath": "$JAVA_HOME",
-            "androidSdkPath": "${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          }
-          EOF
-          bubblewrap doctor
-
       - name: Generate Android TWA project
-        working-directory: android
-        shell: bash
         run: |
           set -euo pipefail
-          for i in {1..40}; do printf '\n'; done | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory .
+          docker pull ghcr.io/googlechromelabs/bubblewrap:1.25.0
+          printf '\n%.0s' {1..60} | docker run --rm -i \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace/android \
+            ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
+            init --manifest="$PWA_MANIFEST_URL" --directory .
 
       - name: Build signed APK
-        working-directory: android
-        run: bubblewrap build --skipPwaValidation
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e BUBBLEWRAP_KEYSTORE_PASSWORD="$BUBBLEWRAP_KEYSTORE_PASSWORD" \
+            -e BUBBLEWRAP_KEY_PASSWORD="$BUBBLEWRAP_KEY_PASSWORD" \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace/android \
+            ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
+            build --skipPwaValidation
+
+      - name: Verify APK
+        run: |
+          set -euo pipefail
+          test -f android/app-release-signed.apk
+          ls -lh android/app-release-signed.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v7
