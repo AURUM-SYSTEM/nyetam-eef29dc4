@@ -46,6 +46,20 @@ jobs:
             ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
             init --manifest="$PWA_MANIFEST_URL" --directory .
 
+      - name: Accept Android SDK licenses
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace/android \
+            ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
+            sh -lc '
+              set -e
+              SDKMANAGER="$(find / -type f -name sdkmanager 2>/dev/null | head -n 1)"
+              test -n "$SDKMANAGER"
+              yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+            '
+
       - name: Build signed APK
         run: |
           set -euo pipefail
