@@ -71,17 +71,12 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm \
-            --entrypoint /bin/sh \
             -e BUBBLEWRAP_KEYSTORE_PASSWORD="$BUBBLEWRAP_KEYSTORE_PASSWORD" \
             -e BUBBLEWRAP_KEY_PASSWORD="$BUBBLEWRAP_KEY_PASSWORD" \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace/android \
             ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
-            -lc '
-              set -e
-              test -f twa-manifest.json
-              bubblewrap build --skipPwaValidation
-            '
+            build --skipPwaValidation
 
       - name: Verify APK
         run: |
