@@ -122,7 +122,7 @@ jobs:
               r"URL path:",
               r"Application name:",
               r"Short name:",
-              r"Package ID:",
+              r"Application ID:",
               r"Version code:",
               r"Display mode:",
               r"Orientation:",
@@ -131,10 +131,10 @@ jobs:
               r"Icon URL:",
               r"Maskable icon URL:",
               r"Monochrome icon URL:",
-              r"Play Billing:",
-              r"Location Delegation:",
-              r"Key path:",
-              r"Key alias:",
+              r"Include support for Play Billing?",
+              r"Request geolocation permission?",
+              r"Key store location:",
+              r"Key name:",
           ]
 
           i = 0
