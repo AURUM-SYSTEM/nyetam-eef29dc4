@@ -26,15 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p android
-          keytool -genkeypair -v \
-            -keystore android/android-keystore \
-            -alias aurum \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass "$BUBBLEWRAP_KEYSTORE_PASSWORD" \
-            -keypass "$BUBBLEWRAP_KEY_PASSWORD" \
-            -dname "CN=AURUM SYSTEM, OU=AURUM, O=AURUM SYSTEM, L=Yaounde, ST=Centre, C=CM"
+          keytool -genkeypair -v             -keystore android/android-keystore             -alias aurum             -keyalg RSA             -keysize 2048             -validity 10000             -storepass "$BUBBLEWRAP_KEYSTORE_PASSWORD"             -keypass "$BUBBLEWRAP_KEY_PASSWORD"             -dname "CN=AURUM SYSTEM, OU=AURUM, O=AURUM SYSTEM, L=Yaounde, ST=Centre, C=CM"
 
       - name: Generate Android TWA project
         run: |
@@ -61,22 +53,12 @@ jobs:
             printf '%s\n' 'aurum'
             printf '%s\n' 'aurum-test-keystore'
             printf '%s\n' 'aurum-test-keystore'
-          } | docker run --rm -i \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            -w /workspace/android \
-            ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
-            init --manifest="$PWA_MANIFEST_URL" --directory .
+          } | docker run --rm -i             -v "$GITHUB_WORKSPACE:/workspace"             -w /workspace/android             ghcr.io/googlechromelabs/bubblewrap:1.25.0             init --manifest="$PWA_MANIFEST_URL" --directory .
 
       - name: Build signed APK
         run: |
           set -euo pipefail
-          docker run --rm \
-            -e BUBBLEWRAP_KEYSTORE_PASSWORD="$BUBBLEWRAP_KEYSTORE_PASSWORD" \
-            -e BUBBLEWRAP_KEY_PASSWORD="$BUBBLEWRAP_KEY_PASSWORD" \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            -w /workspace/android \
-            ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
-            build --skipPwaValidation
+          docker run --rm             -e BUBBLEWRAP_KEYSTORE_PASSWORD="$BUBBLEWRAP_KEYSTORE_PASSWORD"             -e BUBBLEWRAP_KEY_PASSWORD="$BUBBLEWRAP_KEY_PASSWORD"             -v "$GITHUB_WORKSPACE:/workspace"             -w /workspace/android             --entrypoint /bin/bash             ghcr.io/googlechromelabs/bubblewrap:1.25.0             -lc 'set -euo pipefail; yes | sdkmanager --licenses >/dev/null 2>&1; bubblewrap build --skipPwaValidation'
 
       - name: Verify APK
         run: |
