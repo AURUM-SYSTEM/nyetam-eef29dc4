@@ -74,7 +74,8 @@ jobs:
             printf '%s\n' 'N'
             printf '%s\n' 'N'
             printf '%s\n' 'N'
-            printf '%s\n' '/workspace/android/android-keystore'
+            printf '%s\n' "$JAVA_HOME"
+            printf '%s\n' "$GITHUB_WORKSPACE/android/android-keystore"
             printf '%s\n' 'aurum'
             printf '%s\n' 'aurum-test-keystore'
             printf '%s\n' 'aurum-test-keystore'
