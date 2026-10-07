@@ -1446,7 +1446,8 @@ function DataRestitutionSection() {
       return;
     }
 
-    list.forEach((producer, pi) => {
+    for (let pi = 0; pi < list.length; pi++) {
+      const producer = list[pi];
       const ps = parcelles.filter(
         (q) => q.producerCode === producer.producerCode || q.producerId === producer.id,
       );
@@ -1555,9 +1556,9 @@ function DataRestitutionSection() {
         rows.forEach((row, i) => pdf.text(row.slice(0, 115), 18, 30 + i * 5));
         drawPdfMap(pdf, [p], "Carte individuelle de la parcelle", 92, 145);
       });
-    });
+    }
 
-    pdf.save("AURUM_rapports_producteurs-" + new Date().toISOString().slice(0, 10) + ".pdf");
+    pdf.save("AURUM_rapports_producteurs- + new Date().toISOString().slice(0, 10) + ".pdf");
   };
 
   const polygons = parcelles.filter(p => Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3).length;
