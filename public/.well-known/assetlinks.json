@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.aurumsystem.app",
+      "sha256_cert_fingerprints": [
+        "10:35:27:3D:C9:40:1C:AC:B4:6D:1A:52:C6:76:3D:E7:57:63:89:31:77:86:8D:C0:1A:C1:E3:82:C9:AE:54:40"
+      ]
+    }
+  }
+]
