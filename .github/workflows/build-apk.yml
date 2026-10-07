@@ -111,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          bubblewrap build --skipPwaValidation
+          bubblewrap build --skipPwaValidation --manifest=twa-manifest.json
 
       - name: Verify APK
         run: |
