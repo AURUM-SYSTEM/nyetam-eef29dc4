@@ -2252,7 +2252,7 @@ function SupervisorDashboardContent() {
 
       <SupervisorFolder title="Données" description="Restitution, qualité et analyse des données" icon={Folder} open={openFolder === "data"} onToggle={() => setOpenFolder("data")}>
               {/* AGRO — restitution prête pour le pilote UNAPROCAM */}
-              {profile?.module_type === "agro" && <UnaprocamRestitutionSection />}
+              {profile?.module_type === "agro" && <DataRestitutionSection />}
         
               {/* AGRO — qualité des données / alertes de doublons GPS */}
               {profile?.module_type === "agro" && <DataQualitySection />}
