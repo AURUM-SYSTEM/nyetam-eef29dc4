@@ -31,6 +31,7 @@ import {
   MapPin,
   Pencil,
   Radio,
+  ShieldAlert,
   Sparkles,
   Sprout,
   Users,
