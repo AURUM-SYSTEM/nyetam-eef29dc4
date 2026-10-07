@@ -49,12 +49,25 @@ jobs:
             -keypass "$BUBBLEWRAP_KEY_PASSWORD" \
             -dname "CN=AURUM SYSTEM, OU=AURUM, O=AURUM SYSTEM, L=Yaounde, ST=Centre, C=CM"
 
+      - name: Configure Bubblewrap environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.bubblewrap"
+          cat > "$HOME/.bubblewrap/config.json" <<EOF
+          {
+            "jdkPath": "$JAVA_HOME",
+            "androidSdkPath": "${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          }
+          EOF
+          bubblewrap doctor
+
       - name: Generate Android TWA project
         working-directory: android
         shell: bash
         run: |
           set -euo pipefail
-          printf 'No\n%s\n' "$JAVA_HOME" | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory .
+          for i in {1..40}; do printf '\n'; done | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory .
 
       - name: Build signed APK
         working-directory: android
