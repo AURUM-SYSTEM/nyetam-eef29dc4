@@ -1303,6 +1303,100 @@ function DataRestitutionSection() {
     }),
   }, null, 2), "application/geo+json;charset=utf-8");
 
+
+  const drawPdfMap = (pdf: any, items: any[], title: string, y: number, height: number) => {
+    const pts: Array<{lat:number;lng:number}> = [];
+    items.forEach(p => {
+      if (Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3) p.boundaryPoints.forEach((q:any) => {
+        if (Number.isFinite(Number(q.lat)) && Number.isFinite(Number(q.lng))) pts.push({lat:Number(q.lat),lng:Number(q.lng)});
+      });
+      else if (Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))) pts.push({lat:Number(p.lat),lng:Number(p.lng)});
+    });
+    pdf.setDrawColor(190); pdf.setFillColor(248); pdf.rect(18,y,174,height,"FD");
+    pdf.setFontSize(8); pdf.setTextColor(70); pdf.text(title,18,y-3);
+    if (!pts.length) { pdf.setFontSize(9); pdf.text("Aucune donnée GPS disponible.",24,y+height/2); return; }
+    const minLat=Math.min(...pts.map(q=>q.lat)), maxLat=Math.max(...pts.map(q=>q.lat));
+    const minLng=Math.min(...pts.map(q=>q.lng)), maxLng=Math.max(...pts.map(q=>q.lng));
+    const latSpan=Math.max(maxLat-minLat,0.00001), lngSpan=Math.max(maxLng-minLng,0.00001);
+    const project=(lat:number,lng:number)=>({x:25+((lng-minLng)/lngSpan)*160,y:y+height-8-((lat-minLat)/latSpan)*(height-16)});
+    items.forEach((p,idx)=>{
+      const b=Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3?p.boundaryPoints.map((q:any)=>({lat:Number(q.lat),lng:Number(q.lng)})).filter((q:any)=>Number.isFinite(q.lat)&&Number.isFinite(q.lng)):[];
+      if(b.length>=3){
+        const z=b.map((q:any)=>project(q.lat,q.lng));
+        pdf.setDrawColor(45,90,55); pdf.setFillColor(225,238,220); pdf.setLineWidth(0.6);
+        pdf.lines(z.slice(1).map((q:any,i:number)=>[q.x-z[i].x,q.y-z[i].y]),z[0].x,z[0].y,[1,1],"FD",true);
+        const center=z.reduce((a:any,q:any)=>({x:a.x+q.x/z.length,y:a.y+q.y/z.length}),{x:0,y:0});
+        pdf.setFontSize(6); pdf.setTextColor(40,70,45); pdf.text(String(p.id||("PAR-"+(idx+1))),center.x,center.y);
+      } else if(Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))){
+        const q=project(Number(p.lat),Number(p.lng)); pdf.setDrawColor(35,75,150); pdf.setFillColor(220,230,250); pdf.circle(q.x,q.y,2,"FD");
+        pdf.setFontSize(6); pdf.setTextColor(35,60,110); pdf.text(String(p.id||("PAR-"+(idx+1))),q.x+3,q.y+1);
+      }
+    });
+  };
+
+  const exportGlobalPdf = async () => {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    const surface=parcelles.reduce((s,p)=>s+(Number(p.surfaceHaCalculated??p.surfaceHa)||0),0);
+    pdf.setFont("helvetica","bold"); pdf.setFontSize(17); pdf.text("AURUM — Carte générale des parcelles",18,20);
+    pdf.setFont("helvetica","normal"); pdf.setFontSize(9);
+    pdf.text("Généré le "+new Date().toLocaleDateString("fr-FR"),18,27);
+    pdf.text("Producteurs : "+producers.length+" | Parcelles : "+parcelles.length+" | Surface : "+surface.toFixed(2)+" ha",18,34);
+    drawPdfMap(pdf,parcelles,"Carte spatiale générale",47,145);
+    pdf.setFontSize(8); pdf.setTextColor(90); pdf.text("Polygones GPS disponibles et points GPS lorsque le polygone n'est pas disponible.",18,199);
+    pdf.text("Document généré depuis AURUM SUPERVISOR. Les données originales restent dans AURUM.",18,288);
+    pdf.save("AURUM_carte_generale-"+new Date().toISOString().slice(0,10)+".pdf");
+  };
+
+  const exportProducerReportsPdf = async () => {
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    const list=producers.filter(p=>parcelles.some(q=>q.producerCode===p.producerCode||q.producerId===p.id));
+    if(!list.length){toast.error("Aucun producteur avec des parcelles à rapporter.");return;}
+    list.forEach((producer,pi)=>{
+      if(pi>0) pdf.addPage();
+      const ps=parcelles.filter(q=>q.producerCode===producer.producerCode||q.producerId===producer.id);
+      const surface=ps.reduce((s,p)=>s+(Number(p.surfaceHaCalculated??p.surfaceHa)||0),0);
+      pdf.setFont("helvetica","bold");pdf.setFontSize(15);pdf.text("AURUM — Fiche de traçabilité producteur",18,18);
+      pdf.setFontSize(12);pdf.text(String(producer.fullName||"Producteur"),18,31);
+      pdf.setFont("helvetica","normal");pdf.setFontSize(8);
+      pdf.text("Code : "+String(producer.producerCode||"—")+" | Coopérative : "+String(producer.cooperativeName||"—"),18,38);
+      pdf.text("Village : "+String(producer.village||"—")+" | Commune : "+String(producer.commune||"—")+" | Région : "+String(producer.region||"—"),18,44);
+      pdf.text("Parcelles : "+ps.length+" | Surface totale : "+surface.toFixed(2)+" ha",18,50);
+      drawPdfMap(pdf,ps,"Carte des parcelles du producteur",59,90);
+      let y=157;
+      pdf.setFont("helvetica","bold");pdf.text("Parcelles enregistrées",18,y);y+=6;pdf.setFontSize(7);
+      ps.forEach((p,i)=>{
+        if(y>270){pdf.addPage();y=20;}
+        pdf.text(String(p.id||("PAR-"+(i+1))).slice(0,20),18,y);
+        pdf.text(String(p.culture||"—").slice(0,18),60,y);
+        pdf.text((Number(p.surfaceHaCalculated??p.surfaceHa)||0).toFixed(2)+" ha",100,y);
+        pdf.text(Number.isFinite(Number(p.lat))?"GPS":"Sans GPS",132,y);
+        pdf.text(String(p.complianceStatus||"—").slice(0,16),158,y); y+=5;
+      });
+      ps.forEach((p,idx)=>{
+        pdf.addPage();
+        pdf.setFont("helvetica","bold");pdf.setFontSize(13);pdf.text("Parcelle "+String(p.id||("PAR-"+(idx+1))),18,20);
+        pdf.setFont("helvetica","normal");pdf.setFontSize(8);
+        const rows=[
+          "Producteur : "+String(producer.fullName||"—"),
+          "Culture : "+String(p.culture||"—"),
+          "Espèces : "+String(Array.isArray(p.species)?p.species.join(", "):(p.species||"—")),
+          "Variétés : "+String(Array.isArray(p.varieties)?p.varieties.join(", "):(p.varieties||"—")),
+          "Surface déclarée : "+String(p.surfaceHa||"—")+" ha | Surface calculée : "+String(p.surfaceHaCalculated||"—")+" ha",
+          "GPS : "+(Number.isFinite(Number(p.lat))?String(p.lat)+", "+String(p.lng):"Non disponible"),
+          "Année plantation : "+String(p.plantingYear||"—")+" | Agroforesterie : "+(p.agroforestry==null?"—":p.agroforestry?"Oui":"Non"),
+          "Occupation : "+String(p.landTenure||"—")+" | Certification : "+String(p.certification||"—"),
+          "Rendement estimé : "+String(p.estimatedYieldTonnes||"—")+" t | Conformité : "+String(p.complianceStatus||"—"),
+          "Visites : "+String(p.visitCount||0)+" | Collecte : "+(p.createdAt?new Date(p.createdAt).toLocaleDateString("fr-FR"):"—")
+        ];
+        rows.forEach((r,i)=>pdf.text(r.slice(0,115),18,30+i*5));
+        drawPdfMap(pdf,[p],"Carte de la parcelle",18+0,88,150);
+      });
+    });
+    pdf.save("AURUM_rapports_producteurs-"+new Date().toISOString().slice(0,10)+".pdf");
+  };
+
   const polygons = parcelles.filter(p => Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3).length;
   const gps = parcelles.filter(p => typeof p.lat === "number" && typeof p.lng === "number").length;
   const surface = parcelles.reduce((sum, p) => sum + (Number(p.surfaceHaCalculated ?? p.surfaceHa) || 0), 0);
@@ -1314,9 +1408,11 @@ function DataRestitutionSection() {
         <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">{[["Producteurs",producers.length],["Parcelles",parcelles.length],["Polygones",polygons+"/"+parcelles.length],["Surface",surface.toFixed(2)+" ha"]].map(([l,v])=><div key={String(l)} className="rounded-xl border border-border bg-card/40 p-3"><p className="text-[10px] uppercase tracking-widest text-muted-foreground">{l}</p><p className="mt-1 text-xl font-semibold">{v}</p></div>)}</div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => void exportWorkbook()} disabled={!producers.length && !parcelles.length} className="rounded-lg btn-gold px-3 py-2 text-xs disabled:opacity-40">Classeur Excel (4 feuilles)</button>
+          <button type="button" onClick={() => void exportGlobalPdf()} disabled={!parcelles.length} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">Carte générale PDF</button>
+          <button type="button" onClick={() => void exportProducerReportsPdf()} disabled={!producers.length || !parcelles.length} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">Rapports producteurs PDF</button>
           <button type="button" onClick={exportGeoJson} disabled={!parcelles.length} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-40">Parcelles GeoJSON</button>
         </div>
-        <p className="mt-3 text-[11px] text-muted-foreground">GPS disponible : {gps}/{parcelles.length}. Le GeoJSON utilise le polygone lorsqu'il existe, sinon le point GPS.</p>
+        <p className="mt-3 text-[11px] text-muted-foreground">GPS disponible : {gps}/{parcelles.length}. Le PDF général cartographie toutes les parcelles. Les rapports producteurs incluent la carte du producteur et une fiche cartographique pour chaque parcelle.</p>
       </>}
     </section>
   );
