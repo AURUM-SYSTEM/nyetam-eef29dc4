@@ -22,6 +22,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+
       - name: Prepare signing key
         run: |
           set -euo pipefail
@@ -36,12 +49,14 @@ jobs:
             -keypass "$BUBBLEWRAP_KEY_PASSWORD" \
             -dname "CN=AURUM SYSTEM, OU=AURUM, O=AURUM SYSTEM, L=Yaounde, ST=Centre, C=CM"
 
+      - name: Install Bubblewrap
+        run: npm install --global @bubblewrap/cli@1.25.0
+
       - name: Generate Android TWA project
         run: |
           set -euo pipefail
-          docker pull ghcr.io/googlechromelabs/bubblewrap:1.25.0
           {
-            printf '%s\n' 'https://tanstack-start-app.aurumsystem76.workers.dev/manifest.json'
+            printf '%s\n' "$PWA_MANIFEST_URL"
             printf '%s\n' 'AURUM SYSTEM'
             printf '%s\n' 'com.aurumsystem.app'
             printf '%s\n' 'https://tanstack-start-app.aurumsystem76.workers.dev/'
@@ -61,23 +76,13 @@ jobs:
             printf '%s\n' 'aurum'
             printf '%s\n' 'aurum-test-keystore'
             printf '%s\n' 'aurum-test-keystore'
-          } | docker run --rm -i \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            -w /workspace/android \
-            ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
-            init --manifest="$PWA_MANIFEST_URL" --directory .
+          } | bubblewrap init --manifest="$PWA_MANIFEST_URL" --directory android
 
       - name: Build signed APK
         run: |
           set -euo pipefail
-          docker run --rm \
-            -e BUBBLEWRAP_KEYSTORE_PASSWORD="$BUBBLEWRAP_KEYSTORE_PASSWORD" \
-            -e BUBBLEWRAP_KEY_PASSWORD="$BUBBLEWRAP_KEY_PASSWORD" \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            -w /workspace/android \
-            --entrypoint /bin/bash \
-            ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
-            -lc 'set -euo pipefail; SDKMANAGER=$(find / -type f -name sdkmanager 2>/dev/null | head -n 1); test -n "$SDKMANAGER"; yes | "$SDKMANAGER" --licenses >/dev/null 2>&1; bubblewrap build --skipPwaValidation'
+          cd android
+          bubblewrap build --skipPwaValidation
 
       - name: Verify APK
         run: |
