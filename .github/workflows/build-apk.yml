@@ -123,7 +123,7 @@ jobs:
               r"Application name:",
               r"Short name:",
               r"Application ID:",
-              r"Version code:",
+              r"Starting version code for the new app version:",
               r"Display mode:",
               r"Orientation:",
               r"Status bar color:",
