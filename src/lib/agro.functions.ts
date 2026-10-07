@@ -358,7 +358,32 @@ export const getProducerDetails = createServerFn({ method: "POST" })
       .eq("producer_id", data.producerId)
       .order("created_at", { ascending: false });
     if (parcErr) throw new Error(parcErr.message);
-    const parcelles = (parcelleRows ?? []) as Array<any>;
+    const parcelles = (parcelleRows ?? []).map((pc: any) => {
+      // Supabase JSONB arrive normalement comme un tableau, mais certains
+      // anciens enregistrements peuvent contenir une chaîne JSON ou une
+      // structure { points: [...] }. On normalise ici pour tous les exports
+      // et cartes Supervisor.
+      let rawBoundary = pc.boundary_points;
+      if (typeof rawBoundary === "string") {
+        try { rawBoundary = JSON.parse(rawBoundary); } catch { rawBoundary = null; }
+      }
+      if (rawBoundary && !Array.isArray(rawBoundary) && Array.isArray(rawBoundary.points)) {
+        rawBoundary = rawBoundary.points;
+      }
+      const boundaryPoints = Array.isArray(rawBoundary)
+        ? rawBoundary.map((pt: any) => ({
+            lat: Number(pt?.lat ?? pt?.latitude),
+            lng: Number(pt?.lng ?? pt?.longitude),
+          })).filter((pt: any) => Number.isFinite(pt.lat) && Number.isFinite(pt.lng))
+        : null;
+
+      return {
+        ...pc,
+        boundary_points: boundaryPoints && boundaryPoints.length >= 3 ? boundaryPoints : null,
+        lat: pc.lat == null ? null : Number(pc.lat),
+        lng: pc.lng == null ? null : Number(pc.lng),
+      };
+    }) as Array<any>;
 
     const parcelleIds = parcelles.map(pc => pc.id);
     let visitCount = 0;
