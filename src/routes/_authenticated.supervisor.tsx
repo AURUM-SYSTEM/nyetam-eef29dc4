@@ -1480,6 +1480,32 @@ function DataRestitutionSection() {
         18, 50,
       );
 
+      // QR de référence du producteur : seul le code producteur est encodé.
+      // Il ne contient aucune donnée personnelle.
+      try {
+        const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" +
+          encodeURIComponent("AURUM:PRODUCER:" + String(producer.producerCode || producer.id));
+        const qrResponse = await fetch(qrUrl);
+        if (qrResponse.ok) {
+          const qrBlob = await qrResponse.blob();
+          const qrDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("QR invalide"));
+            reader.onerror = () => reject(reader.error ?? new Error("Lecture QR impossible"));
+            reader.readAsDataURL(qrBlob);
+          });
+          pdf.setFillColor(255, 255, 255);
+          pdf.rect(174, 12, 24, 24, "F");
+          pdf.addImage(qrDataUrl, "PNG", 176, 14, 20, 20);
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(6);
+          pdf.setTextColor(90);
+          pdf.text("QR producteur", 174, 39);
+        }
+      } catch {
+        // Le PDF reste générable même si le service QR est indisponible.
+      }
+
       // Carte individuelle du producteur : elle ne contient QUE ses parcelles.
       drawPdfMap(pdf, ps, "Carte individuelle du producteur", 59, 105);
 
