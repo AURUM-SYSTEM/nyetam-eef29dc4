@@ -33,14 +33,35 @@ jobs:
             -keysize 2048 \
             -validity 10000 \
             -storepass "$BUBBLEWRAP_KEYSTORE_PASSWORD" \
-            -keypass "$BUBBLEWRAP_KEYSTORE_PASSWORD" \
+            -keypass "$BUBBLEWRAP_KEY_PASSWORD" \
             -dname "CN=AURUM SYSTEM, OU=AURUM, O=AURUM SYSTEM, L=Yaounde, ST=Centre, C=CM"
 
       - name: Generate Android TWA project
         run: |
           set -euo pipefail
           docker pull ghcr.io/googlechromelabs/bubblewrap:1.25.0
-          yes '' | docker run --rm -i \
+          {
+            printf '%s\n' 'https://tanstack-start-app.aurumsystem76.workers.dev/manifest.json'
+            printf '%s\n' 'AURUM SYSTEM'
+            printf '%s\n' 'com.aurumsystem.app'
+            printf '%s\n' 'https://tanstack-start-app.aurumsystem76.workers.dev/'
+            printf '%s\n' 'android'
+            printf '%s\n' 'Android'
+            printf '%s\n' 'AURUM SYSTEM'
+            printf '%s\n' 'AURUM SYSTEM'
+            printf '%s\n' 'Yaounde'
+            printf '%s\n' 'Centre'
+            printf '%s\n' 'CM'
+            printf '%s\n' 'N'
+            printf '%s\n' 'N'
+            printf '%s\n' 'N'
+            printf '%s\n' 'N'
+            printf '%s\n' 'N'
+            printf '%s\n' '/workspace/android/android-keystore'
+            printf '%s\n' 'aurum'
+            printf '%s\n' 'aurum-test-keystore'
+            printf '%s\n' 'aurum-test-keystore'
+          } | docker run --rm -i \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace/android \
             ghcr.io/googlechromelabs/bubblewrap:1.25.0 \
