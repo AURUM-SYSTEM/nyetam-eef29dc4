@@ -1305,33 +1305,119 @@ function DataRestitutionSection() {
 
 
   const drawPdfMap = (pdf: any, items: any[], title: string, y: number, height: number) => {
-    const pts: Array<{lat:number;lng:number}> = [];
-    items.forEach(p => {
-      if (Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3) p.boundaryPoints.forEach((q:any) => {
-        if (Number.isFinite(Number(q.lat)) && Number.isFinite(Number(q.lng))) pts.push({lat:Number(q.lat),lng:Number(q.lng)});
-      });
-      else if (Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))) pts.push({lat:Number(p.lat),lng:Number(p.lng)});
-    });
-    pdf.setDrawColor(190); pdf.setFillColor(248); pdf.rect(18,y,174,height,"FD");
-    pdf.setFontSize(8); pdf.setTextColor(70); pdf.text(title,18,y-3);
-    if (!pts.length) { pdf.setFontSize(9); pdf.text("Aucune donnée GPS disponible.",24,y+height/2); return; }
-    const minLat=Math.min(...pts.map(q=>q.lat)), maxLat=Math.max(...pts.map(q=>q.lat));
-    const minLng=Math.min(...pts.map(q=>q.lng)), maxLng=Math.max(...pts.map(q=>q.lng));
-    const latSpan=Math.max(maxLat-minLat,0.00001), lngSpan=Math.max(maxLng-minLng,0.00001);
-    const project=(lat:number,lng:number)=>({x:25+((lng-minLng)/lngSpan)*160,y:y+height-8-((lat-minLat)/latSpan)*(height-16)});
-    items.forEach((p,idx)=>{
-      const b=Array.isArray(p.boundaryPoints)&&p.boundaryPoints.length>=3?p.boundaryPoints.map((q:any)=>({lat:Number(q.lat),lng:Number(q.lng)})).filter((q:any)=>Number.isFinite(q.lat)&&Number.isFinite(q.lng)):[];
-      if(b.length>=3){
-        const z=b.map((q:any)=>project(q.lat,q.lng));
-        pdf.setDrawColor(45,90,55); pdf.setFillColor(225,238,220); pdf.setLineWidth(0.6);
-        pdf.lines(z.slice(1).map((q:any,i:number)=>[q.x-z[i].x,q.y-z[i].y]),z[0].x,z[0].y,[1,1],"FD",true);
-        const center=z.reduce((a:any,q:any)=>({x:a.x+q.x/z.length,y:a.y+q.y/z.length}),{x:0,y:0});
-        pdf.setFontSize(6); pdf.setTextColor(40,70,45); pdf.text(String(p.id||("PAR-"+(idx+1))),center.x,center.y);
-      } else if(Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))){
-        const q=project(Number(p.lat),Number(p.lng)); pdf.setDrawColor(35,75,150); pdf.setFillColor(220,230,250); pdf.circle(q.x,q.y,2,"FD");
-        pdf.setFontSize(6); pdf.setTextColor(35,60,110); pdf.text(String(p.id||("PAR-"+(idx+1))),q.x+3,q.y+1);
+    const pts: Array<{ lat: number; lng: number }> = [];
+    items.forEach((p) => {
+      if (Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3) {
+        p.boundaryPoints.forEach((q: any) => {
+          const lat = Number(q?.lat);
+          const lng = Number(q?.lng);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) pts.push({ lat, lng });
+        });
+      } else {
+        const lat = Number(p?.lat);
+        const lng = Number(p?.lng);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) pts.push({ lat, lng });
       }
     });
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(55);
+    pdf.text(title, 18, y - 4);
+
+    pdf.setDrawColor(160);
+    pdf.setFillColor(250);
+    pdf.setLineWidth(0.3);
+    pdf.rect(18, y, 174, height, "FD");
+
+    if (!pts.length) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.setTextColor(100);
+      pdf.text("Aucune donnée GPS disponible pour cette carte.", 24, y + height / 2);
+      return;
+    }
+
+    const minLat = Math.min(...pts.map((q) => q.lat));
+    const maxLat = Math.max(...pts.map((q) => q.lat));
+    const minLng = Math.min(...pts.map((q) => q.lng));
+    const maxLng = Math.max(...pts.map((q) => q.lng));
+
+    // Padding + minimum span évitent les cartes écrasées lorsqu'un producteur
+    // n'a qu'un seul point GPS ou des coordonnées très proches.
+    const latSpan = Math.max(maxLat - minLat, 0.00005);
+    const lngSpan = Math.max(maxLng - minLng, 0.00005);
+    const padLat = latSpan * 0.08;
+    const padLng = lngSpan * 0.08;
+    const mapMinLat = minLat - padLat;
+    const mapMaxLat = maxLat + padLat;
+    const mapMinLng = minLng - padLng;
+    const mapMaxLng = maxLng + padLng;
+    const mapLatSpan = Math.max(mapMaxLat - mapMinLat, 0.0001);
+    const mapLngSpan = Math.max(mapMaxLng - mapMinLng, 0.0001);
+
+    const project = (lat: number, lng: number) => ({
+      x: 24 + ((lng - mapMinLng) / mapLngSpan) * 162,
+      y: y + height - 7 - ((lat - mapMinLat) / mapLatSpan) * (height - 14),
+    });
+
+    items.forEach((p, idx) => {
+      const boundary = Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3
+        ? p.boundaryPoints
+            .map((q: any) => ({ lat: Number(q?.lat), lng: Number(q?.lng) }))
+            .filter((q: any) => Number.isFinite(q.lat) && Number.isFinite(q.lng))
+        : [];
+
+      if (boundary.length >= 3) {
+        const projected = boundary.map((q: any) => project(q.lat, q.lng));
+
+        // Remplissage puis contour explicite : plus fiable que pdf.lines(..., "FD")
+        // selon les versions de jsPDF.
+        pdf.setFillColor(225, 238, 220);
+        pdf.setDrawColor(45, 90, 55);
+        pdf.setLineWidth(0.7);
+
+        for (let i = 0; i < projected.length; i++) {
+          const a = projected[i];
+          const b = projected[(i + 1) % projected.length];
+          pdf.line(a.x, a.y, b.x, b.y);
+        }
+
+        const cx = projected.reduce((sum: number, q: any) => sum + q.x, 0) / projected.length;
+        const cy = projected.reduce((sum: number, q: any) => sum + q.y, 0) / projected.length;
+        pdf.setFillColor(225, 238, 220);
+        const path = projected.map((q: any, i: number) => ({ op: i === 0 ? "m" : "l", x: q.x, y: q.y }));
+        path.push({ op: "l", x: projected[0].x, y: projected[0].y });
+        try {
+          pdf.path(path, "F");
+        } catch {
+          // Le contour reste visible même si la version de jsPDF ne supporte pas path().
+        }
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(35, 70, 40);
+        pdf.text(String(p.id || ("PAR-" + (idx + 1))).slice(0, 18), cx, cy, { align: "center" });
+      } else {
+        const lat = Number(p?.lat);
+        const lng = Number(p?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        const q = project(lat, lng);
+
+        pdf.setDrawColor(35, 75, 150);
+        pdf.setFillColor(220, 230, 250);
+        pdf.circle(q.x, q.y, 2.8, "FD");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(35, 60, 110);
+        pdf.text(String(p.id || ("PAR-" + (idx + 1))).slice(0, 18), q.x + 4, q.y + 1.5);
+      }
+    });
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6);
+    pdf.setTextColor(110);
+    pdf.text("Représentation spatiale basée sur les coordonnées GPS enregistrées dans AURUM.", 24, y + height - 2);
   };
 
   const exportGlobalPdf = async () => {
@@ -1350,51 +1436,102 @@ function DataRestitutionSection() {
 
   const exportProducerReportsPdf = async () => {
     const { jsPDF } = await import("jspdf");
-    const pdf = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-    const list=producers.filter(p=>parcelles.some(q=>q.producerCode===p.producerCode||q.producerId===p.id));
-    if(!list.length){toast.error("Aucun producteur avec des parcelles à rapporter.");return;}
-    list.forEach((producer,pi)=>{
-      if(pi>0) pdf.addPage();
-      const ps=parcelles.filter(q=>q.producerCode===producer.producerCode||q.producerId===producer.id);
-      const surface=ps.reduce((s,p)=>s+(Number(p.surfaceHaCalculated??p.surfaceHa)||0),0);
-      pdf.setFont("helvetica","bold");pdf.setFontSize(15);pdf.text("AURUM — Fiche de traçabilité producteur",18,18);
-      pdf.setFontSize(12);pdf.text(String(producer.fullName||"Producteur"),18,31);
-      pdf.setFont("helvetica","normal");pdf.setFontSize(8);
-      pdf.text("Code : "+String(producer.producerCode||"—")+" | Coopérative : "+String(producer.cooperativeName||"—"),18,38);
-      pdf.text("Village : "+String(producer.village||"—")+" | Commune : "+String(producer.commune||"—")+" | Région : "+String(producer.region||"—"),18,44);
-      pdf.text("Parcelles : "+ps.length+" | Surface totale : "+surface.toFixed(2)+" ha",18,50);
-      drawPdfMap(pdf,ps,"Carte des parcelles du producteur",59,90);
-      let y=157;
-      pdf.setFont("helvetica","bold");pdf.text("Parcelles enregistrées",18,y);y+=6;pdf.setFontSize(7);
-      ps.forEach((p,i)=>{
-        if(y>270){pdf.addPage();y=20;}
-        pdf.text(String(p.id||("PAR-"+(i+1))).slice(0,20),18,y);
-        pdf.text(String(p.culture||"—").slice(0,18),60,y);
-        pdf.text((Number(p.surfaceHaCalculated??p.surfaceHa)||0).toFixed(2)+" ha",100,y);
-        pdf.text(Number.isFinite(Number(p.lat))?"GPS":"Sans GPS",132,y);
-        pdf.text(String(p.complianceStatus||"—").slice(0,16),158,y); y+=5;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const list = producers.filter((p) =>
+      parcelles.some((q) => q.producerCode === p.producerCode || q.producerId === p.id),
+    );
+
+    if (!list.length) {
+      toast.error("Aucun producteur avec des parcelles à rapporter.");
+      return;
+    }
+
+    list.forEach((producer, pi) => {
+      const ps = parcelles.filter(
+        (q) => q.producerCode === producer.producerCode || q.producerId === producer.id,
+      );
+      const surface = ps.reduce(
+        (s, p) => s + (Number(p.surfaceHaCalculated ?? p.surfaceHa) || 0),
+        0,
+      );
+
+      // Chaque producteur commence par sa propre fiche + SA carte.
+      if (pi > 0) pdf.addPage();
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(15);
+      pdf.text("AURUM — Fiche de traçabilité producteur", 18, 18);
+      pdf.setFontSize(12);
+      pdf.text(String(producer.fullName || "Producteur"), 18, 31);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8);
+      pdf.text(
+        "Code : " + String(producer.producerCode || "—") +
+        " | Coopérative : " + String(producer.cooperativeName || "—"),
+        18, 38,
+      );
+      pdf.text(
+        "Village : " + String(producer.village || "—") +
+        " | Commune : " + String(producer.commune || "—") +
+        " | Région : " + String(producer.region || "—"),
+        18, 44,
+      );
+      pdf.text(
+        "Parcelles : " + ps.length + " | Surface totale : " + surface.toFixed(2) + " ha",
+        18, 50,
+      );
+
+      // Carte individuelle du producteur : elle ne contient QUE ses parcelles.
+      drawPdfMap(pdf, ps, "Carte individuelle du producteur", 59, 105);
+
+      let y = 174;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.text("Parcelles enregistrées", 18, y);
+      y += 7;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+
+      ps.forEach((p, i) => {
+        if (y > 270) {
+          pdf.addPage();
+          y = 20;
+        }
+        pdf.text(String(p.id || ("PAR-" + (i + 1))).slice(0, 20), 18, y);
+        pdf.text(String(p.culture || "—").slice(0, 18), 60, y);
+        pdf.text((Number(p.surfaceHaCalculated ?? p.surfaceHa) || 0).toFixed(2) + " ha", 100, y);
+        pdf.text(Number.isFinite(Number(p.lat)) ? "GPS" : "Sans GPS", 132, y);
+        pdf.text(String(p.complianceStatus || "—").slice(0, 16), 158, y);
+        y += 5;
       });
-      ps.forEach((p,idx)=>{
+
+      // Une page cartographique dédiée pour chaque parcelle du producteur.
+      ps.forEach((p, idx) => {
         pdf.addPage();
-        pdf.setFont("helvetica","bold");pdf.setFontSize(13);pdf.text("Parcelle "+String(p.id||("PAR-"+(idx+1))),18,20);
-        pdf.setFont("helvetica","normal");pdf.setFontSize(8);
-        const rows=[
-          "Producteur : "+String(producer.fullName||"—"),
-          "Culture : "+String(p.culture||"—"),
-          "Espèces : "+String(Array.isArray(p.species)?p.species.join(", "):(p.species||"—")),
-          "Variétés : "+String(Array.isArray(p.varieties)?p.varieties.join(", "):(p.varieties||"—")),
-          "Surface déclarée : "+String(p.surfaceHa||"—")+" ha | Surface calculée : "+String(p.surfaceHaCalculated||"—")+" ha",
-          "GPS : "+(Number.isFinite(Number(p.lat))?String(p.lat)+", "+String(p.lng):"Non disponible"),
-          "Année plantation : "+String(p.plantingYear||"—")+" | Agroforesterie : "+(p.agroforestry==null?"—":p.agroforestry?"Oui":"Non"),
-          "Occupation : "+String(p.landTenure||"—")+" | Certification : "+String(p.certification||"—"),
-          "Rendement estimé : "+String(p.estimatedYieldTonnes||"—")+" t | Conformité : "+String(p.complianceStatus||"—"),
-          "Visites : "+String(p.visitCount||0)+" | Collecte : "+(p.createdAt?new Date(p.createdAt).toLocaleDateString("fr-FR"):"—")
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(13);
+        pdf.text("Parcelle " + String(p.id || ("PAR-" + (idx + 1))), 18, 20);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+
+        const rows = [
+          "Producteur : " + String(producer.fullName || "—"),
+          "Code producteur : " + String(producer.producerCode || "—"),
+          "Culture : " + String(p.culture || "—"),
+          "Espèces : " + String(Array.isArray(p.species) ? p.species.join(", ") : (p.species || "—")),
+          "Variétés : " + String(Array.isArray(p.varieties) ? p.varieties.join(", ") : (p.varieties || "—")),
+          "Surface déclarée : " + String(p.surfaceHa || "—") + " ha | Surface calculée : " + String(p.surfaceHaCalculated || "—") + " ha",
+          "GPS : " + (Number.isFinite(Number(p.lat)) ? String(p.lat) + ", " + String(p.lng) : "Non disponible"),
+          "Année plantation : " + String(p.plantingYear || "—") + " | Agroforesterie : " + (p.agroforestry == null ? "—" : p.agroforestry ? "Oui" : "Non"),
+          "Occupation : " + String(p.landTenure || "—") + " | Certification : " + String(p.certification || "—"),
+          "Rendement estimé : " + String(p.estimatedYieldTonnes || "—") + " t | Conformité : " + String(p.complianceStatus || "—"),
+          "Visites : " + String(p.visitCount || 0) + " | Collecte : " + (p.createdAt ? new Date(p.createdAt).toLocaleDateString("fr-FR") : "—"),
         ];
-        rows.forEach((r,i)=>pdf.text(r.slice(0,115),18,30+i*5));
-        drawPdfMap(pdf,[p],"Carte de la parcelle",88,150);
+        rows.forEach((row, i) => pdf.text(row.slice(0, 115), 18, 30 + i * 5));
+        drawPdfMap(pdf, [p], "Carte individuelle de la parcelle", 92, 145);
       });
     });
-    pdf.save("AURUM_rapports_producteurs-"+new Date().toISOString().slice(0,10)+".pdf");
+
+    pdf.save("AURUM_rapports_producteurs-" + new Date().toISOString().slice(0, 10) + ".pdf");
   };
 
   const polygons = parcelles.filter(p => Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3).length;
