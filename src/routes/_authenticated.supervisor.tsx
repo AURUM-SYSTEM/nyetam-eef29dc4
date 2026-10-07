@@ -2254,7 +2254,7 @@ function SupervisorDashboardContent() {
               {/* AGRO — restitution prête pour le pilote UNAPROCAM */}
               {profile?.module_type === "agro" && <UnaprocamRestitutionSection />}
         
-              {/* AGRO — qualité des données / alertes de doublons GPS */*/
+              {/* AGRO — qualité des données / alertes de doublons GPS */
               {profile?.module_type === "agro" && <DataQualitySection />}
         
               {/* AGRO — Data Analyst (complétude, validation, volumes) */}
