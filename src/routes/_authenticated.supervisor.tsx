@@ -905,7 +905,24 @@ function ProducerDetailRow({
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [parcelles, setParcelles] = useState<Array<{ id: string; culture: string; surfaceHa: number | null; createdAt: string }>>([]);
+  const [parcelles, setParcelles] = useState<Array<{
+    id: string;
+    culture: string;
+    surfaceHa: number | null;
+    surfaceHaCalculated: number | null;
+    lat: number | null;
+    lng: number | null;
+    boundaryPoints: Array<{ lat: number; lng: number }> | null;
+    species: string[];
+    varieties: string[];
+    plantingYear: number | null;
+    landTenure: string | null;
+    agroforestry: boolean | null;
+    certification: string | null;
+    estimatedYieldTonnes: number | null;
+    complianceStatus: string | null;
+    createdAt: string;
+  }>>([]);
   const [visitCount, setVisitCount] = useState(0);
   const [producerCode, setProducerCode] = useState("");
   const [fullName, setFullName] = useState("");
@@ -951,6 +968,156 @@ function ProducerDetailRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [producerId]);
 
+  async function exportProducerPdf() {
+    if (!producerCode) {
+      toast.error("Code producteur indisponible.");
+      return;
+    }
+    try {
+      const { jsPDF } = await import("jspdf");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(16);
+      pdf.text("AURUM — Fiche producteur", 18, 18);
+      pdf.setFontSize(12);
+      pdf.text(fullName || "Producteur", 18, 28);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8);
+      pdf.text("Code : " + producerCode, 18, 35);
+      pdf.text("Coopérative : " + (cooperatives.find(c => c.id === cooperativeId)?.name ?? "—"), 18, 40);
+      pdf.text("Village : " + (village || "—") + " | Commune : " + (commune || "—") + " | Région : " + (region || "—"), 18, 45);
+      pdf.text("Parcelles : " + parcelles.length + " | Visites : " + visitCount, 18, 50);
+
+      try {
+        const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" +
+          encodeURIComponent("AURUM:PRODUCER:" + producerCode);
+        const qrResponse = await fetch(qrUrl);
+        if (qrResponse.ok) {
+          const qrBlob = await qrResponse.blob();
+          const qrDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("QR invalide"));
+            reader.onerror = () => reject(reader.error ?? new Error("Lecture QR impossible"));
+            reader.readAsDataURL(qrBlob);
+          });
+          pdf.setFillColor(255, 255, 255);
+          pdf.rect(174, 12, 24, 24, "F");
+          pdf.addImage(qrDataUrl, "PNG", 176, 14, 20, 20);
+          pdf.setFontSize(6);
+          pdf.setTextColor(90);
+          pdf.text("QR producteur", 174, 39);
+          pdf.setTextColor(0);
+        }
+      } catch {
+        // Le PDF reste générable si le service QR est indisponible.
+      }
+
+      const drawMap = (items: typeof parcelles, title: string) => {
+        const pts = items.flatMap(p =>
+          Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3
+            ? p.boundaryPoints
+            : (typeof p.lat === "number" && typeof p.lng === "number" ? [{ lat: p.lat, lng: p.lng }] : []),
+        );
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(10);
+        pdf.text(title, 18, 61);
+        const x0 = 18, y0 = 65, w = 174, h = 85;
+        pdf.setDrawColor(180);
+        pdf.rect(x0, y0, w, h);
+        if (!pts.length) {
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(8);
+          pdf.text("Aucune donnée GPS disponible.", 24, y0 + 12);
+          return;
+        }
+        const minLat = Math.min(...pts.map(p => p.lat));
+        const maxLat = Math.max(...pts.map(p => p.lat));
+        const minLng = Math.min(...pts.map(p => p.lng));
+        const maxLng = Math.max(...pts.map(p => p.lng));
+        const latSpan = Math.max(maxLat - minLat, 0.000001);
+        const lngSpan = Math.max(maxLng - minLng, 0.000001);
+        const project = (p: { lat: number; lng: number }) => ({
+          x: x0 + 8 + ((p.lng - minLng) / lngSpan) * (w - 16),
+          y: y0 + h - 8 - ((p.lat - minLat) / latSpan) * (h - 16),
+        });
+        for (let i = 0; i < items.length; i++) {
+          const parcel = items[i];
+          const parcelPts = Array.isArray(parcel.boundaryPoints) && parcel.boundaryPoints.length >= 3
+            ? parcel.boundaryPoints
+            : (typeof parcel.lat === "number" && typeof parcel.lng === "number" ? [{ lat: parcel.lat, lng: parcel.lng }] : []);
+          if (!parcelPts.length) continue;
+          const projected = parcelPts.map(project);
+          if (projected.length >= 3) {
+            pdf.setFillColor(218, 239, 218);
+            pdf.setDrawColor(70, 120, 70);
+            pdf.lines(projected.slice(1).map((p, j) => [p.x - projected[j].x, p.y - projected[j].y]), projected[0].x, projected[0].y, [1, 1], "FD", true);
+            const last = projected[projected.length - 1];
+            pdf.line(last.x, last.y, projected[0].x, projected[0].y);
+          } else {
+            pdf.setFillColor(40, 110, 70);
+            pdf.circle(projected[0].x, projected[0].y, 1.8, "F");
+          }
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(6);
+          pdf.text(String(parcel.id).slice(0, 12), projected[0].x + 2, projected[0].y - 2);
+        }
+      };
+
+      drawMap(parcelles, "Carte des parcelles du producteur");
+
+      let y = 160;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text("Parcelles enregistrées", 18, y);
+      y += 7;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      for (let i = 0; i < parcelles.length; i++) {
+        const p = parcelles[i];
+        if (y > 270) {
+          pdf.addPage();
+          y = 20;
+        }
+        pdf.text(String(p.id).slice(0, 18), 18, y);
+        pdf.text(String(p.culture || "—").slice(0, 18), 55, y);
+        pdf.text((Number(p.surfaceHaCalculated ?? p.surfaceHa) || 0).toFixed(2) + " ha", 95, y);
+        pdf.text(typeof p.lat === "number" && typeof p.lng === "number" ? "GPS" : "Sans GPS", 130, y);
+        pdf.text(String(p.complianceStatus || "—").slice(0, 15), 155, y);
+        y += 5;
+      }
+
+      for (let i = 0; i < parcelles.length; i++) {
+        const p = parcelles[i];
+        pdf.addPage();
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(13);
+        pdf.text("Parcelle " + String(p.id), 18, 20);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        const details = [
+          "Producteur : " + (fullName || "—"),
+          "Code producteur : " + producerCode,
+          "Culture : " + (p.culture || "—"),
+          "Espèces : " + (p.species.length ? p.species.join(", ") : "—"),
+          "Variétés : " + (p.varieties.length ? p.varieties.join(", ") : "—"),
+          "Surface : " + String(p.surfaceHaCalculated ?? p.surfaceHa ?? "—") + " ha",
+          "GPS : " + (typeof p.lat === "number" && typeof p.lng === "number" ? p.lat + ", " + p.lng : "Non disponible"),
+          "Année plantation : " + String(p.plantingYear ?? "—") + " | Agroforesterie : " + (p.agroforestry == null ? "—" : p.agroforestry ? "Oui" : "Non"),
+          "Occupation : " + String(p.landTenure ?? "—") + " | Certification : " + String(p.certification ?? "—"),
+          "Rendement estimé : " + String(p.estimatedYieldTonnes ?? "—") + " t | Conformité : " + String(p.complianceStatus ?? "—"),
+        ];
+        details.forEach((line, j) => pdf.text(line.slice(0, 115), 18, 30 + j * 5));
+        drawMap([p], "Carte de la parcelle");
+      }
+
+      pdf.save("AURUM_producteur-" + producerCode + "-" + new Date().toISOString().slice(0, 10) + ".pdf");
+      toast.success("PDF du producteur généré.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de génération du PDF producteur.");
+    }
+  }
+
   async function handleSave() {
     if (!fullName.trim()) {
       toast.error("Le nom complet est obligatoire.");
@@ -987,7 +1154,7 @@ function ProducerDetailRow({
 
   return (
     <TableRow>
-      <TableCell colSpan={3} className="bg-card/30">
+      <TableCell colSpan={4} className="bg-card/30">
         {loading ? (
           <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
         ) : error ? (
@@ -1093,7 +1260,12 @@ function ProducerDetailRow({
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void exportProducerPdf()} disabled={saving || !producerCode}
+                className="rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-xs text-gold disabled:opacity-40">
+                <Download className="mr-1 inline h-3.5 w-3.5" />
+                PDF du producteur
+              </button>
               <button type="button" onClick={() => void handleSave()} disabled={saving}
                 className="btn-gold rounded-lg px-3 py-1.5 text-xs disabled:opacity-40">
                 {saving ? "Enregistrement…" : "Enregistrer"}
