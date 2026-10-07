@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "com.aurumsystem.app",
       "sha256_cert_fingerprints": [
-        "10:35:27:3D:C9:40:1C:AC:B4:6D:1A:52:C6:76:3D:E7:57:63:89:31:77:86:8D:C0:1A:C1:E3:82:C9:AE:54:40"
+        "10:35:27:3D:C9:40:1C:AC:B4:6D:1A:52:C6:76:3D:E7:57:63:89:31:77:86:8D:C0:1A:C1:E3:82:C9:AE:54:40",
+        "0E:90:07:6F:82:82:BF:88:03:14:9A:50:64:EB:0C:40:93:78:C8:46:8A:B2:88:76:90:AC:9D:A5:56:49:1A:2B"
       ]
     }
   }
