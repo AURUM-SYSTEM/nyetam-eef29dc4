@@ -354,11 +354,11 @@ export const getProducerDetails = createServerFn({ method: "POST" })
 
     const { data: parcelleRows, error: parcErr } = await supabaseAdmin
       .from("parcelles")
-      .select("id, culture, surface_ha, created_at")
+      .select("id, culture, surface_ha, surface_ha_calculated, lat, lng, boundary_points, species, varieties, planting_year, land_tenure, agroforestry, certification, estimated_yield_tonnes, compliance_status, created_at")
       .eq("producer_id", data.producerId)
       .order("created_at", { ascending: false });
     if (parcErr) throw new Error(parcErr.message);
-    const parcelles = (parcelleRows ?? []) as Array<{ id: string; culture: string; surface_ha: number | null; created_at: string }>;
+    const parcelles = (parcelleRows ?? []) as Array<any>;
 
     const parcelleIds = parcelles.map(pc => pc.id);
     let visitCount = 0;
@@ -390,6 +390,18 @@ export const getProducerDetails = createServerFn({ method: "POST" })
         id: pc.id,
         culture: pc.culture,
         surfaceHa: pc.surface_ha,
+        surfaceHaCalculated: pc.surface_ha_calculated ?? null,
+        lat: pc.lat ?? null,
+        lng: pc.lng ?? null,
+        boundaryPoints: pc.boundary_points ?? null,
+        species: pc.species ?? [],
+        varieties: pc.varieties ?? [],
+        plantingYear: pc.planting_year ?? null,
+        landTenure: pc.land_tenure ?? null,
+        agroforestry: pc.agroforestry ?? null,
+        certification: pc.certification ?? null,
+        estimatedYieldTonnes: pc.estimated_yield_tonnes ?? null,
+        complianceStatus: pc.compliance_status ?? null,
         createdAt: pc.created_at,
       })),
       visitCount,
