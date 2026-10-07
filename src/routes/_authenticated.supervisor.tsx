@@ -1477,119 +1477,96 @@ function DataRestitutionSection() {
 
 
   const drawPdfMap = (pdf: any, items: any[], title: string, y: number, height: number) => {
-    const pts: Array<{ lat: number; lng: number }> = [];
-    items.forEach((p) => {
-      if (Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3) {
-        p.boundaryPoints.forEach((q: any) => {
-          const lat = Number(q?.lat);
-          const lng = Number(q?.lng);
-          if (Number.isFinite(lat) && Number.isFinite(lng)) pts.push({ lat, lng });
-        });
-      } else {
-        const lat = Number(p?.lat);
-        const lng = Number(p?.lng);
-        if (Number.isFinite(lat) && Number.isFinite(lng)) pts.push({ lat, lng });
-      }
+    const boxX = 18, boxW = 174;
+    const boxY = y, boxH = height;
+    const points: Array<{ lat:number; lng:number }> = [];
+    const normalized = items.map((p:any, idx:number) => {
+      let boundary:any[] = Array.isArray(p.boundaryPoints) ? p.boundaryPoints : [];
+      boundary = boundary.map((q:any) => ({
+        lat: Number(q?.lat ?? q?.latitude),
+        lng: Number(q?.lng ?? q?.longitude),
+      })).filter((q:any) => Number.isFinite(q.lat) && Number.isFinite(q.lng));
+      const lat = Number(p?.lat), lng = Number(p?.lng);
+      if (boundary.length >= 3) boundary.forEach(q => points.push(q));
+      else if (Number.isFinite(lat) && Number.isFinite(lng)) points.push({lat,lng});
+      return { p, idx, boundary, lat, lng };
     });
 
-    pdf.setFont("helvetica", "bold");
+    pdf.setFont("helvetica","bold");
     pdf.setFontSize(9);
-    pdf.setTextColor(55);
-    pdf.text(title, 18, y - 4);
+    pdf.setTextColor(35,45,55);
+    pdf.text(title, boxX, boxY - 4);
 
-    pdf.setDrawColor(160);
-    pdf.setFillColor(250);
-    pdf.setLineWidth(0.3);
-    pdf.rect(18, y, 174, height, "FD");
+    pdf.setFillColor(248,250,247);
+    pdf.setDrawColor(205,212,205);
+    pdf.setLineWidth(0.35);
+    pdf.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "FD");
 
-    if (!pts.length) {
-      pdf.setFont("helvetica", "normal");
+    if (!points.length) {
+      pdf.setFont("helvetica","normal");
       pdf.setFontSize(9);
-      pdf.setTextColor(100);
-      pdf.text("Aucune donnée GPS disponible pour cette carte.", 24, y + height / 2);
+      pdf.setTextColor(100,108,105);
+      pdf.text("Aucune coordonnée GPS disponible.", boxX+8, boxY+boxH/2);
       return;
     }
 
-    const minLat = Math.min(...pts.map((q) => q.lat));
-    const maxLat = Math.max(...pts.map((q) => q.lat));
-    const minLng = Math.min(...pts.map((q) => q.lng));
-    const maxLng = Math.max(...pts.map((q) => q.lng));
-
-    // Padding + minimum span évitent les cartes écrasées lorsqu'un producteur
-    // n'a qu'un seul point GPS ou des coordonnées très proches.
-    const latSpan = Math.max(maxLat - minLat, 0.00005);
-    const lngSpan = Math.max(maxLng - minLng, 0.00005);
-    const padLat = latSpan * 0.08;
-    const padLng = lngSpan * 0.08;
-    const mapMinLat = minLat - padLat;
-    const mapMaxLat = maxLat + padLat;
-    const mapMinLng = minLng - padLng;
-    const mapMaxLng = maxLng + padLng;
-    const mapLatSpan = Math.max(mapMaxLat - mapMinLat, 0.0001);
-    const mapLngSpan = Math.max(mapMaxLng - mapMinLng, 0.0001);
-
-    const project = (lat: number, lng: number) => ({
-      x: 24 + ((lng - mapMinLng) / mapLngSpan) * 162,
-      y: y + height - 7 - ((lat - mapMinLat) / mapLatSpan) * (height - 14),
+    const minLat=Math.min(...points.map(q=>q.lat)), maxLat=Math.max(...points.map(q=>q.lat));
+    const minLng=Math.min(...points.map(q=>q.lng)), maxLng=Math.max(...points.map(q=>q.lng));
+    const latSpan=Math.max(maxLat-minLat,0.00005), lngSpan=Math.max(maxLng-minLng,0.00005);
+    const padLat=latSpan*0.12, padLng=lngSpan*0.12;
+    const loLat=minLat-padLat, hiLat=maxLat+padLat, loLng=minLng-padLng, hiLng=maxLng+padLng;
+    const innerX=boxX+8, innerY=boxY+8, innerW=boxW-16, innerH=boxH-20;
+    const project=(q:{lat:number;lng:number})=>({
+      x:innerX+((q.lng-loLng)/Math.max(hiLng-loLng,0.0001))*innerW,
+      y:innerY+innerH-((q.lat-loLat)/Math.max(hiLat-loLat,0.0001))*innerH
     });
 
-    items.forEach((p, idx) => {
-      const boundary = Array.isArray(p.boundaryPoints) && p.boundaryPoints.length >= 3
-        ? p.boundaryPoints
-            .map((q: any) => ({ lat: Number(q?.lat), lng: Number(q?.lng) }))
-            .filter((q: any) => Number.isFinite(q.lat) && Number.isFinite(q.lng))
-        : [];
+    // Grille cartographique légère.
+    pdf.setDrawColor(225,230,225); pdf.setLineWidth(0.18);
+    for(let i=1;i<5;i++){
+      pdf.line(innerX,innerY+(innerH*i/5),innerX+innerW,innerY+(innerH*i/5));
+      pdf.line(innerX+(innerW*i/5),innerY,innerX+(innerW*i/5),innerY+innerH);
+    }
 
-      if (boundary.length >= 3) {
-        const projected = boundary.map((q: any) => project(q.lat, q.lng));
-
-        // Remplissage puis contour explicite : plus fiable que pdf.lines(..., "FD")
-        // selon les versions de jsPDF.
-        pdf.setFillColor(225, 238, 220);
-        pdf.setDrawColor(45, 90, 55);
-        pdf.setLineWidth(0.7);
-
-        for (let i = 0; i < projected.length; i++) {
-          const a = projected[i];
-          const b = projected[(i + 1) % projected.length];
-          pdf.line(a.x, a.y, b.x, b.y);
+    normalized.forEach(({p,idx,boundary,lat,lng})=>{
+      const polygon=boundary.length>=3 ? boundary.map(project) : [];
+      if(polygon.length>=3){
+        // Remplissage robuste : scanlines horizontales, sans dépendre de pdf.path().
+        const ys=polygon.map((q:any)=>q.y);
+        const minY=Math.max(innerY,Math.min(...ys)), maxY=Math.min(innerY+innerH,Math.max(...ys));
+        pdf.setDrawColor(58,108,68); pdf.setFillColor(214,232,216); pdf.setLineWidth(0.65);
+        for(let yy=minY; yy<=maxY; yy+=0.8){
+          const xs:number[]=[];
+          for(let i=0;i<polygon.length;i++){
+            const a=polygon[i], b=polygon[(i+1)%polygon.length];
+            if((a.y<=yy && b.y>yy)||(b.y<=yy && a.y>yy)){
+              xs.push(a.x+(yy-a.y)*(b.x-a.x)/(b.y-a.y));
+            }
+          }
+          xs.sort((a,b)=>a-b);
+          for(let i=0;i+1<xs.length;i+=2) pdf.line(xs[i],yy,xs[i+1],yy);
         }
-
-        const cx = projected.reduce((sum: number, q: any) => sum + q.x, 0) / projected.length;
-        const cy = projected.reduce((sum: number, q: any) => sum + q.y, 0) / projected.length;
-        pdf.setFillColor(225, 238, 220);
-        const path = projected.map((q: any, i: number) => ({ op: i === 0 ? "m" : "l", x: q.x, y: q.y }));
-        path.push({ op: "l", x: projected[0].x, y: projected[0].y });
-        try {
-          pdf.path(path, "F");
-        } catch {
-          // Le contour reste visible même si la version de jsPDF ne supporte pas path().
+        for(let i=0;i<polygon.length;i++){
+          const a=polygon[i], b=polygon[(i+1)%polygon.length];
+          pdf.line(a.x,a.y,b.x,b.y);
         }
-
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(6.5);
-        pdf.setTextColor(35, 70, 40);
-        pdf.text(String(p.id || ("PAR-" + (idx + 1))).slice(0, 18), cx, cy, { align: "center" });
-      } else {
-        const lat = Number(p?.lat);
-        const lng = Number(p?.lng);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-        const q = project(lat, lng);
-
-        pdf.setDrawColor(35, 75, 150);
-        pdf.setFillColor(220, 230, 250);
-        pdf.circle(q.x, q.y, 2.8, "FD");
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(6.5);
-        pdf.setTextColor(35, 60, 110);
-        pdf.text(String(p.id || ("PAR-" + (idx + 1))).slice(0, 18), q.x + 4, q.y + 1.5);
+        const c=polygon.reduce((s:any,q:any)=>({x:s.x+q.x,y:s.y+q.y}),{x:0,y:0});
+        c.x/=polygon.length; c.y/=polygon.length;
+        pdf.setFillColor(255,255,255); pdf.setDrawColor(58,108,68);
+        pdf.circle(c.x,c.y,2.2,"FD");
+        pdf.setFont("helvetica","bold"); pdf.setFontSize(5.5); pdf.setTextColor(35,75,45);
+        pdf.text(String(p.id||("PAR-"+(idx+1))).slice(0,14),c.x,c.y+1.8,{align:"center"});
+      } else if(Number.isFinite(lat)&&Number.isFinite(lng)){
+        const q=project({lat,lng});
+        pdf.setFillColor(49,105,170); pdf.setDrawColor(255,255,255); pdf.setLineWidth(0.7);
+        pdf.circle(q.x,q.y,3,"FD");
+        pdf.setFont("helvetica","bold"); pdf.setFontSize(5.5); pdf.setTextColor(35,65,110);
+        pdf.text(String(p.id||("PAR-"+(idx+1))).slice(0,14),q.x+4,q.y+1.5);
       }
     });
 
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(6);
-    pdf.setTextColor(110);
-    pdf.text("Représentation spatiale basée sur les coordonnées GPS enregistrées dans AURUM.", 24, y + height - 2);
+    pdf.setFont("helvetica","normal"); pdf.setFontSize(5.5); pdf.setTextColor(115,120,115);
+    pdf.text("Projection schématique basée sur les coordonnées GPS enregistrées.",boxX+8,boxY+boxH-4);
   };
 
   const exportGlobalPdf = async () => {
