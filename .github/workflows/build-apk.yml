@@ -80,22 +80,27 @@ jobs:
           const icon = (m.icons || []).find(i => i.purpose === "any" || !i.purpose)?.src || (m.icons || [])[0]?.src;
           const maskable = (m.icons || []).find(i => String(i.purpose || "").split(/\s+/).includes("maskable"))?.src || "";
           const monochrome = (m.icons || []).find(i => String(i.purpose || "").split(/\s+/).includes("monochrome"))?.src || "";
+          const domain = new URL(manifestUrl).hostname;
+          const startPath = new URL(m.start_url || "/", base).pathname + (new URL(m.start_url || "/", base).search || "");
           const lines = [
-            m.start_url || "/",
-            m.start_url || "/",
+            domain,
+            startPath || "/",
             m.name || "AURUM SYSTEM",
             m.short_name || "AURUM",
             "com.aurumsystem.app",
             "1",
-            m.display || "",
-            m.orientation || "",
+            m.display || "standalone",
+            m.orientation || "default",
             m.theme_color || "#141414",
             m.background_color || m.theme_color || "#141414",
             abs(icon),
             abs(maskable),
+            abs(monochrome),
+            "N",
+            "N",
+            process.env.GITHUB_WORKSPACE + "/android/android-keystore",
+            "aurum",
           ];
-          if ((m.shortcuts || []).length > 0) lines.push("N");
-          lines.push(abs(monochrome), "N", "N", "$GITHUB_WORKSPACE/android/android-keystore", "aurum");
           process.stdout.write(lines.join("\n") + "\n");
           NODE
           echo "Prepared Bubblewrap answers:"
