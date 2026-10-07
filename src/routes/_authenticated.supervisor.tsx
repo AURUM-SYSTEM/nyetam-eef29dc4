@@ -988,16 +988,15 @@ function ProducerDetailRow({
         pdf.setTextColor(35,45,55);
       };
 
-      const drawMap = (items: typeof parcelles, title: string, y: number, h: number) => {
+      const drawMap = async (items: typeof parcelles, title: string, y: number, h: number, mode: "street" | "satellite" = "street") => {
         const x=18,w=174;
-        const normalized=items.map((p:any,idx:number)=>{
+        const points=items.flatMap((p:any)=>{
           const boundary=(Array.isArray(p.boundaryPoints)?p.boundaryPoints:[])
             .map((q:any)=>({lat:Number(q?.lat??q?.latitude),lng:Number(q?.lng??q?.longitude)}))
             .filter((q:any)=>Number.isFinite(q.lat)&&Number.isFinite(q.lng));
           const lat=Number(p.lat),lng=Number(p.lng);
-          return {p,idx,boundary,lat,lng};
+          return boundary.length>=3?boundary:(Number.isFinite(lat)&&Number.isFinite(lng)?[{lat,lng}]:[]);
         });
-        const points=normalized.flatMap(q=>q.boundary.length>=3?q.boundary:(Number.isFinite(q.lat)&&Number.isFinite(q.lng)?[{lat:q.lat,lng:q.lng}]:[]));
 
         pdf.setFont("helvetica","bold"); pdf.setFontSize(9); pdf.setTextColor(35,45,55);
         pdf.text(title,x,y-4);
@@ -1010,39 +1009,86 @@ function ProducerDetailRow({
           return;
         }
 
+        const canvas=document.createElement("canvas");
+        const cw=1100,ch=600;
+        canvas.width=cw;canvas.height=ch;
+        const ctx=canvas.getContext("2d");
+        if(!ctx) throw new Error("Canvas cartographique indisponible.");
+
         const minLat=Math.min(...points.map(q=>q.lat)),maxLat=Math.max(...points.map(q=>q.lat));
         const minLng=Math.min(...points.map(q=>q.lng)),maxLng=Math.max(...points.map(q=>q.lng));
         const latSpan=Math.max(maxLat-minLat,0.00005),lngSpan=Math.max(maxLng-minLng,0.00005);
-        const loLat=minLat-latSpan*0.12,hiLat=maxLat+latSpan*0.12,loLng=minLng-lngSpan*0.12,hiLng=maxLng+lngSpan*0.12;
-        const ix=x+8,iy=y+8,iw=w-16,ih=h-20;
-        const project=(q:{lat:number;lng:number})=>({x:ix+((q.lng-loLng)/Math.max(hiLng-loLng,0.0001))*iw,y:iy+ih-((q.lat-loLat)/Math.max(hiLat-loLat,0.0001))*ih});
+        const centerLat=(minLat+maxLat)/2,centerLng=(minLng+maxLng)/2;
+        const zoom=Math.max(12,Math.min(18,Math.floor(Math.log2(Math.min(cw/lngSpan,ch/latSpan)/256*360))-1));
+        const n=2**zoom;
+        const lon2x=(lng:number)=>((lng+180)/360)*n;
+        const lat2y=(lat:number)=>{
+          const r=lat*Math.PI/180;
+          return (1-Math.asinh(Math.tan(r))/Math.PI)/2*n;
+        };
+        const cx=lon2x(centerLng),cy=lat2y(centerLat);
+        const tileX=Math.floor(cx),tileY=Math.floor(cy);
+        const originX=cx*256-cw/2,originY=cy*256-ch/2;
+        const tileUrl=(tx:number,ty:number)=>{
+          const xmod=((tx%n)+n)%n;
+          if(ty<0||ty>=n) return null;
+          if(mode==="satellite")
+            return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"+ty+"/"+xmod;
+          return "https://tile.openstreetmap.org/"+zoom+"/"+xmod+"/"+ty+".png";
+        };
 
-        pdf.setDrawColor(225,230,225);pdf.setLineWidth(0.18);
-        for(let i=1;i<5;i++){pdf.line(ix,iy+ih*i/5,ix+iw,iy+ih*i/5);pdf.line(ix+iw*i/5,iy,ix+iw*i/5,iy+ih);}
-
-        normalized.forEach(({p,idx,boundary,lat,lng})=>{
-          if(boundary.length>=3){
-            const poly=boundary.map(project);
-            const ys=poly.map((q:any)=>q.y);
-            const minY=Math.max(iy,Math.min(...ys)),maxY=Math.min(iy+ih,Math.max(...ys));
-            pdf.setDrawColor(58,108,68);pdf.setFillColor(214,232,216);pdf.setLineWidth(0.65);
-            for(let yy=minY;yy<=maxY;yy+=0.8){
-              const xs:number[]=[];
-              for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];if((a.y<=yy&&b.y>yy)||(b.y<=yy&&a.y>yy))xs.push(a.x+(yy-a.y)*(b.x-a.x)/(b.y-a.y));}
-              xs.sort((a,b)=>a-b);for(let i=0;i+1<xs.length;i+=2)pdf.line(xs[i],yy,xs[i+1],yy);
-            }
-            for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];pdf.line(a.x,a.y,b.x,b.y);}
-            const cx=poly.reduce((s:any,q:any)=>s+q.x,0)/poly.length,cy=poly.reduce((s:any,q:any)=>s+q.y,0)/poly.length;
-            pdf.setFillColor(255,255,255);pdf.setDrawColor(58,108,68);pdf.circle(cx,cy,2,"FD");
-            pdf.setFont("helvetica","bold");pdf.setFontSize(5.5);pdf.setTextColor(35,75,45);
-            pdf.text(String(p.id||("PAR-"+(idx+1))).slice(0,14),cx,cy+1.8,{align:"center"});
-          }else if(Number.isFinite(lat)&&Number.isFinite(lng)){
-            const q=project({lat,lng});pdf.setFillColor(49,105,170);pdf.setDrawColor(255,255,255);pdf.setLineWidth(0.7);pdf.circle(q.x,q.y,3,"FD");
-            pdf.setFont("helvetica","bold");pdf.setFontSize(5.5);pdf.setTextColor(35,65,110);pdf.text(String(p.id||("PAR-"+(idx+1))).slice(0,14),q.x+4,q.y+1.5);
+        ctx.fillStyle=mode==="satellite"?"#d8d8d8":"#eef2ed";ctx.fillRect(0,0,cw,ch);
+        const minTX=Math.floor(originX/256)-1,maxTX=Math.floor((originX+cw)/256)+1;
+        const minTY=Math.floor(originY/256)-1,maxTY=Math.floor((originY+ch)/256)+1;
+        const tileTasks:Array<Promise<void>>=[];
+        for(let ty=minTY;ty<=maxTY;ty++){
+          for(let tx=minTX;tx<=maxTX;tx++){
+            const url=tileUrl(tx,ty);if(!url)continue;
+            tileTasks.push((async()=>{
+              try{
+                const res=await fetch(url,{mode:"cors"});
+                if(!res.ok) throw new Error("tile");
+                const blob=await res.blob();
+                const src=URL.createObjectURL(blob);
+                try{
+                  const img=new Image();
+                  await new Promise<void>((resolve,reject)=>{img.onload=()=>resolve();img.onerror=()=>reject(new Error("image"));img.src=src;});
+                  ctx.drawImage(img,tx*256-originX,ty*256-originY,256,256);
+                }finally{URL.revokeObjectURL(src);}
+              }catch{/* une tuile indisponible ne bloque pas le PDF */}
+            })());
           }
+        }
+        await Promise.all(tileTasks);
+
+        const px=(q:{lat:number;lng:number})=>({x:lon2x(q.lng)*256-originX,y:lat2y(q.lat)*256-originY});
+        items.forEach((p:any,idx:number)=>{
+          const boundary=(Array.isArray(p.boundaryPoints)?p.boundaryPoints:[])
+            .map((q:any)=>({lat:Number(q?.lat??q?.latitude),lng:Number(q?.lng??q?.longitude)}))
+            .filter((q:any)=>Number.isFinite(q.lat)&&Number.isFinite(q.lng));
+          const lat=Number(p.lat),lng=Number(p.lng);
+          if(boundary.length>=3){
+            const poly=boundary.map(px);
+            ctx.beginPath();poly.forEach((q:any,i:number)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();
+            ctx.fillStyle="rgba(35,145,65,0.24)";ctx.fill();
+            ctx.strokeStyle="#159447";ctx.lineWidth=4;ctx.stroke();
+            const c=poly.reduce((a:any,q:any)=>({x:a.x+q.x/poly.length,y:a.y+q.y/poly.length}),{x:0,y:0});
+            ctx.fillStyle="#ffffff";ctx.strokeStyle="#0b6b32";ctx.lineWidth=3;ctx.beginPath();ctx.arc(c.x,c.y,7,0,Math.PI*2);ctx.fill();ctx.stroke();
+          }else if(Number.isFinite(lat)&&Number.isFinite(lng)){
+            const q=px({lat,lng});ctx.fillStyle="#e53935";ctx.strokeStyle="#ffffff";ctx.lineWidth=4;ctx.beginPath();ctx.arc(q.x,q.y,9,0,Math.PI*2);ctx.fill();ctx.stroke();
+          }
+          const label=String(p.id||("PAR-"+(idx+1))).slice(0,14);
+          const anchor=boundary.length>=3?px(boundary[0]):px({lat,lng});
+          ctx.font="bold 22px Arial";ctx.lineWidth=5;ctx.strokeStyle="rgba(255,255,255,0.9)";ctx.strokeText(label,anchor.x+12,anchor.y-10);ctx.fillStyle="#173b2b";ctx.fillText(label,anchor.x+12,anchor.y-10);
         });
-        pdf.setFont("helvetica","normal");pdf.setFontSize(5.5);pdf.setTextColor(115,120,115);
-        pdf.text("Projection spatiale basée sur les coordonnées GPS enregistrées dans AURUM.",x+8,y+h-4);
+
+        const dataUrl=canvas.toDataURL("image/jpeg",0.88);
+        pdf.addImage(dataUrl,"JPEG",x+1,y+1,w-2,h-2,undefined,"FAST");
+        pdf.setFillColor(255,255,255);pdf.setDrawColor(210,215,210);pdf.roundedRect(x+4,y+4,39,7,1,1,"FD");
+        pdf.setFont("helvetica","bold");pdf.setFontSize(5.5);pdf.setTextColor(35,45,55);
+        pdf.text(mode==="satellite"?"VUE SATELLITE":"STREET MAP",x+7,y+8.5);
+        pdf.setFont("helvetica","normal");pdf.setFontSize(5);pdf.setTextColor(245,245,245);
+        pdf.text(mode==="satellite"?"Esri World Imagery":"© OpenStreetMap contributors",x+w-5,y+h-4,{align:"right"});
       };
 
       addHeader("Fiche producteur — traçabilité",today);
@@ -1071,7 +1117,8 @@ function ProducerDetailRow({
         }
       } catch { /* QR facultatif */ }
 
-      drawMap(parcelles,"Carte des parcelles du producteur",99,91);
+      await drawMap(parcelles,"Carte des parcelles — Street Map",99,91,"street");
+      await drawMap(parcelles,"Vue satellite des parcelles",196,91,"satellite");
 
       let y=198;
       pdf.setFont("helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(32,48,42);pdf.text("Registre des parcelles",18,y);y+=7;
@@ -1099,7 +1146,8 @@ function ProducerDetailRow({
           ["Rendement estimé",String(p.estimatedYieldTonnes??"—")+" t"],["Conformité",String(p.complianceStatus??"—")]
         ];
         let dy=50;for(const [label,value] of lines){pdf.setFont("helvetica","bold");pdf.text(label,18,dy);pdf.setFont("helvetica","normal");pdf.text(String(value).slice(0,105),55,dy);dy+=6;}
-        drawMap([p],"Carte de la parcelle",dy+5,105);
+        await drawMap([p],"Carte Street Map de la parcelle",dy+5,92,"street");
+        await drawMap([p],"Vue satellite de la parcelle",dy+102,92,"satellite");
         pdf.setFont("helvetica","normal");pdf.setFontSize(6);pdf.setTextColor(130,135,132);pdf.text("AURUM AGRO · Document de traçabilité · Page "+(i+2),18,291);
       }
 
