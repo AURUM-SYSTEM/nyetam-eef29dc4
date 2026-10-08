@@ -33,12 +33,17 @@ import {
   listPendingParcelles,
   updatePendingParcelle,
   deletePendingParcelle,
+  listPendingProducers,
+  updatePendingProducer,
+  deletePendingProducer,
   isLocalParcelleId,
+  isLocalProducerId,
   type QueueItem,
   type PendingParcelle,
+  type PendingProducer,
 } from "@/lib/offline-store";
 import { transcribeAudio, generateDocument, reverseGeocode, suggestImprovements, structureFieldEntry } from "@/lib/aurum.functions";
-import { createParcelle } from "@/lib/agro.functions";
+import { createParcelle, createProducer } from "@/lib/agro.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { getCachedProfile } from "@/hooks/use-auth";
@@ -65,11 +70,84 @@ export function useSyncEngine() {
   const generate = useServerFn(generateDocument);
   const structure = useServerFn(structureFieldEntry);
   const createParc = useServerFn(createParcelle);
+  const createProd = useServerFn(createProducer);
   const queryClient = useQueryClient();
   const running = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+
+    // ── AGRO : producteurs créés hors-ligne ───────────────────────────────
+    // Les producteurs passent AVANT les parcelles : une parcelle peut
+    // référencer l'id local du producteur tant que le réseau est coupé.
+    async function processProducer(p: PendingProducer) {
+      try {
+        await updatePendingProducer(p.id, { status: "syncing" });
+        const res = await createProd({
+          data: {
+            offlineClientId: p.id,
+            fullName: p.fullName,
+            contactPhone: p.contactPhone,
+            contactEmail: p.contactEmail,
+            idDocumentType: p.idDocumentType,
+            idDocumentNumber: p.idDocumentNumber,
+            sex: p.sex,
+            village: p.village,
+            commune: p.commune,
+            department: p.department,
+            region: p.region,
+          },
+        });
+
+        if (!res.success) throw new Error("Création du producteur impossible.");
+
+        // Remplace l'id local dans les parcelles et documents en attente.
+        const allPendingParcelles = await listPendingParcelles();
+        for (const pc of allPendingParcelles) {
+          if (pc.producerId === p.id) {
+            await updatePendingParcelle(pc.id, { producerId: res.producerId });
+          }
+        }
+        const allQueued = await listQueue();
+        for (const doc of allQueued) {
+          if (doc.meta?.parcelleId) {
+            // Le lien producteur est porté par pendingParcelles ; le document
+            // n'a donc rien à remapper ici.
+            continue;
+          }
+        }
+
+        await updatePendingProducer(p.id, {
+          status: "syncing",
+          remoteProducerId: res.producerId,
+          producerCode: res.producerCode,
+        });
+        await deletePendingProducer(p.id);
+      } catch (e: any) {
+        const retryCount = (p.retryCount ?? 0) + 1;
+        const delayMs = Math.min(5_000 * 2 ** (retryCount - 1), 5 * 60_000);
+        await updatePendingProducer(p.id, {
+          status: "error",
+          errorMsg: e?.message ?? "Erreur inconnue",
+          retryCount,
+          nextRetryAt: retryCount >= PARCELLE_SYNC_MAX_RETRIES ? Number.MAX_SAFE_INTEGER : Date.now() + delayMs,
+        });
+      }
+    }
+
+    async function processProducerQueue() {
+      const producers = await listPendingProducers();
+      const now = Date.now();
+      const toSync = producers.filter(
+        (p) =>
+          p.status === "pending" ||
+          (p.status === "error" && (p.nextRetryAt ?? 0) <= now),
+      );
+      for (const p of toSync) {
+        if (cancelled || !navigator.onLine) break;
+        await processProducer(p);
+      }
+    }
 
     // ── AGRO : parcelles créées hors-ligne (recensement_plantations) ────────
     // Rejoue exactement le même appel serveur que le flux en ligne
@@ -597,6 +675,9 @@ export function useSyncEngine() {
       try {
         devLog("🚀 SYNC ENGINE ACTIVE");
 
+        // Producteurs d'abord : les parcelles peuvent dépendre d'un id local.
+        await processProducerQueue();
+
         // AVANT les documents : voir le commentaire au-dessus de
         // processParcelleQueue — un document en attente peut référencer une
         // parcelle qui vient tout juste d'être synchronisée dans cette même
@@ -682,5 +763,5 @@ export function useSyncEngine() {
       unsub();
     };
 
-  }, [transcribe, generate, structure, createParc, queryClient]);
+  }, [transcribe, generate, structure, createParc, createProd, queryClient]);
 }
