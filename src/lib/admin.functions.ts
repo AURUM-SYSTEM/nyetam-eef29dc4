@@ -584,6 +584,9 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
         name: string;
         type: string;
         module_type: string;
+        enabled_modules: string[] | null;
+        enabled_compliance_modules: string[] | null;
+        enabled_features: string[] | null;
         created_at: string;
       }>).map((o) => ({
         id: o.id,
