@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, Trash2, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization } from "@/lib/admin.functions";
+import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { BackofficeShell } from "@/components/BackofficeShell";
@@ -61,6 +61,14 @@ type ModRequest = {
   expiresAt: string;
 };
 
+type OrgAdmin = {
+  id: string;
+  email: string;
+  fullName: string;
+  organizationId: string;
+  organizationName: string;
+};
+
 type OrgSummary = {
   id: string;
   name: string;
@@ -105,6 +113,8 @@ function AdminDashboard() {
   const checkPlatformAdminFn = useServerFn(checkPlatformAdmin);
   const listOrgsFn = useServerFn(listAllOrganizations);
   const deleteOrgFn = useServerFn(deleteOrganization);
+  const listAdminsFn = useServerFn(listOrganizationAdmins);
+  const updateOrgAdminFn = useServerFn(updateOrganizationAdmin);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
   const [newOrgName, setNewOrgName] = useState("");
@@ -116,6 +126,9 @@ function AdminDashboard() {
   const [allOrgs, setAllOrgs] = useState<OrgSummary[]>([]);
   const [loadingOrgs, setLoadingOrgs] = useState(false);
   const [deletingOrgId, setDeletingOrgId] = useState<string | null>(null);
+  const [orgAdmins, setOrgAdmins] = useState<OrgAdmin[]>([]);
+  const [loadingOrgAdmins, setLoadingOrgAdmins] = useState(false);
+  const [updatingAdminId, setUpdatingAdminId] = useState<string | null>(null);
 
   // ── Paramètres de l'organisation ──
   const [orgLoaded, setOrgLoaded] = useState(false);
@@ -204,9 +217,34 @@ function AdminDashboard() {
     try {
       const res = await checkPlatformAdminFn({ data: undefined as any });
       setIsPlatformAdmin(res.isPlatformAdmin);
-      if (res.isPlatformAdmin) void loadAllOrgs();
+      if (res.isPlatformAdmin) { void loadAllOrgs(); void loadOrganizationAdmins(); }
     } catch {
       setIsPlatformAdmin(false);
+    }
+  }
+
+  async function loadOrganizationAdmins() {
+    setLoadingOrgAdmins(true);
+    try {
+      const res = await listAdminsFn({ data: undefined as any });
+      setOrgAdmins(res.admins);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec du chargement des administrateurs");
+    } finally {
+      setLoadingOrgAdmins(false);
+    }
+  }
+
+  async function changeOrganizationAdmin(userId: string, makeAdmin: boolean) {
+    setUpdatingAdminId(userId);
+    try {
+      await updateOrgAdminFn({ data: { userId, makeAdmin } });
+      toast.success(makeAdmin ? "Administrateur ajouté" : "Administrateur retiré");
+      await loadOrganizationAdmins();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la mise à jour");
+    } finally {
+      setUpdatingAdminId(null);
     }
   }
 
@@ -367,12 +405,12 @@ function AdminDashboard() {
   return (
     <div className="px-5 pb-32 pt-8">
       <header className="mb-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Administration</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{isPlatformAdmin ? "Super Administrateur AURUM" : "Administration de l’organisation"}</p>
         <h1 className="mt-2 font-display text-3xl">
-          Gestion des <span className="gold-text">utilisateurs</span>
+          Centre de <span className="gold-text">contrôle AURUM</span>
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Invite des agents et affecte-les à leur module métier.
+          Organisations, administrateurs, utilisateurs, modules et paramètres au même endroit.
         </p>
       </header>
 
@@ -432,6 +470,41 @@ function AdminDashboard() {
             Créer
           </button>
         </form>
+      )}
+
+      {isPlatformAdmin && (
+        <section className="glass-card mb-6 rounded-2xl p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
+            <ShieldCheck className="h-3.5 w-3.5" /> Administrateurs des organisations ({orgAdmins.length})
+          </h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Centre de contrôle du Super Administrateur AURUM : tu peux nommer ou retirer les administrateurs de chaque organisation. Ton propre accès Super Administrateur reste indépendant.
+          </p>
+          {loadingOrgAdmins ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+          ) : orgAdmins.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Aucun administrateur d'organisation.</p>
+          ) : (
+            <div className="space-y-2">
+              {orgAdmins.map(a => (
+                <div key={a.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card/40 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{a.fullName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{a.email} · {a.organizationName}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void changeOrganizationAdmin(a.id, false)}
+                    disabled={updatingAdminId === a.id}
+                    className="shrink-0 rounded-lg border border-destructive/30 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-40"
+                  >
+                    {updatingAdminId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Retirer admin"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       {isPlatformAdmin && (
