@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, ShieldAlert, CloudOff, MapPin, Loader2, Camera, Video, X, VideoOff, AlertTriangle, CheckCircle2, Sprout } from "lucide-react";
+import { ArrowLeft, ShieldAlert, CloudOff, MapPin, Loader2, Camera, Video, X, VideoOff, AlertTriangle, CheckCircle2, Sprout, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import {
   enqueue, savePhoto, saveVideo, saveMissionFormsCache, getMissionFormsCache,
@@ -207,7 +207,7 @@ function useMissionForms(moduleType: ModuleType | undefined) {
 
 function RecordPage() {
   const { type } = useParams({ from: "/_authenticated/record/$type" });
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
   const moduleFromProfile = (profile?.module_type as ModuleType | undefined)
     ?? moduleForOrgType(profile?.organization_type);
   const docType: DocType = (VALID_TYPES.has(type as DocType) ? (type as DocType) : "field_entry");
@@ -1034,9 +1034,23 @@ function RecordPage() {
           haut) — pas ici sur ce clic précis, pour couvrir aussi le bouton/
           geste de retour matériel du téléphone, qui ne déclenche pas ce
           onClick. */}
-      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> {t("common.back")}
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> {t("common.back")}
+        </Link>
+        <button
+          type="button"
+          onClick={async () => {
+            await signOut();
+            void navigate({ to: "/login" });
+          }}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-gold/30 hover:text-foreground"
+          aria-label="Déconnexion"
+        >
+          <LogOut className="h-4 w-4" />
+          Déconnexion
+        </button>
+      </div>
       <header className="mt-6">
         <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
           {t("record.step")}
