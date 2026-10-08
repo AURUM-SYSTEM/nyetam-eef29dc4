@@ -890,7 +890,16 @@ export const createManualCommission = createServerFn({ method: "POST" })
     const isPlatformAdmin = Boolean((await context.supabase.rpc("has_role", {
       _user: context.userId, _role: "platform_admin",
     })).data);
-    if (!isPlatformAdmin) await assertAdminAndGetOrg(context.supabase, context.userId);
+    const callerOrgId = isPlatformAdmin ? null : await assertAdminAndGetOrg(context.supabase, context.userId);
+    if (!isPlatformAdmin && callerOrgId !== data.organizationId) {
+      throw new Error("Vous ne pouvez créer une commission que pour votre organisation.");
+    }
+
+    const { data: producer } = await supabaseAdmin
+      .from("producers").select("id, organization_id").eq("id", data.producerId).single();
+    if (!producer || (producer as any).organization_id !== data.organizationId) {
+      throw new Error("Le producteur n'appartient pas à l'organisation bénéficiaire.");
+    }
 
     const { data: row, error } = await supabaseAdmin
       .from("commercial_commission_ledger")
