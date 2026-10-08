@@ -25,7 +25,10 @@ export const getProducerCardsFeatureStatus = createServerFn({ method: "POST" })
     const orgId = await getCallerOrganizationId(context.userId);
     const { data, error } = await supabaseAdmin.from("organizations").select("enabled_features").eq("id", orgId).single();
     if (error) throw new Error(error.message);
-    return { enabled: (((data as any)?.enabled_features ?? []) as string[]).includes("producer_cards") };
+    const enabled = (((data as any)?.enabled_features ?? []) as string[]).includes("producer_cards");
+    let canCreate = false;
+    try { await assertPermission(context.userId, "producers.cards.create", orgId); canCreate = true; } catch {}
+    return { enabled: enabled && canCreate };
   });
 
 export const getProducerCard = createServerFn({ method: "POST" })
