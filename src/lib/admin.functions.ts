@@ -753,17 +753,34 @@ export const updateOrgSettings = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertAdminAndGetOrg(context.supabase, context.userId);
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId,
+      _role: "platform_admin",
+    });
+    if (roleErr) throw new Error("Vérification du rôle impossible : " + roleErr.message);
 
+    const orgId = await assertAdminAndGetOrg(context.supabase, context.userId);
     const patch: Record<string, unknown> = {};
+
     if (data.name !== undefined) patch.name = data.name.trim();
-    if (data.enabledModules !== undefined) patch.enabled_modules = Array.from(new Set(data.enabledModules));
-    if (data.enabledComplianceModules !== undefined) {
-      patch.enabled_compliance_modules = Array.from(new Set(data.enabledComplianceModules));
-    }
     if (data.modificationRequestDelayHours !== undefined) {
       patch.modification_request_delay_hours = data.modificationRequestDelayHours;
     }
+
+    // L'activation/désactivation des modules et extensions est centralisée :
+    // seul le Super Administrateur AURUM la pilote depuis le centre de contrôle.
+    if (data.enabledModules !== undefined || data.enabledComplianceModules !== undefined) {
+      if (!isPlatformAdmin) {
+        throw new Error("Seul le Super Administrateur AURUM peut activer ou désactiver les modules.");
+      }
+      if (data.enabledModules !== undefined) {
+        patch.enabled_modules = Array.from(new Set(data.enabledModules));
+      }
+      if (data.enabledComplianceModules !== undefined) {
+        patch.enabled_compliance_modules = Array.from(new Set(data.enabledComplianceModules));
+      }
+    }
+
     if (Object.keys(patch).length === 0) return { success: true };
 
     const { error } = await supabaseAdmin.from("organizations").update(patch as any).eq("id", orgId);
