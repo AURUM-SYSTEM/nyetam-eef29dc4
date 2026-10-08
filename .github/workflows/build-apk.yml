@@ -92,7 +92,7 @@ jobs:
             domain, startPath || "/", m.name || "AURUM SYSTEM", m.short_name || "AURUM",
             "com.aurumsystem.app", "1", m.display || "standalone", m.orientation || "default",
             m.theme_color || "#141414", m.background_color || m.theme_color || "#141414",
-            abs(icon), abs(maskable), abs(monochrome), "N", "N",
+            abs(icon), abs(maskable), abs(monochrome), "N", "Y",
             process.env.GITHUB_WORKSPACE + "/android/android-keystore", "aurum"
           ];
           process.stdout.write(lines.join("\n") + "\n");
