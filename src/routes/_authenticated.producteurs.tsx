@@ -161,6 +161,21 @@ function ProducteursPage() {
                     </div>
                   )}
                 </div>
+                {cardsEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => void openProducerCard(p.id)}
+                    disabled={cardLoadingId === p.id}
+                    title="Créer ou ouvrir la carte du producteur"
+                    aria-label={`Créer ou ouvrir la carte de ${p.fullName}`}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gold/40 px-2.5 py-2 text-xs font-medium text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {cardLoadingId === p.id
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <CreditCard className="h-4 w-4" />}
+                    <span className="hidden sm:inline">Carte</span>
+                  </button>
+                )}
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </div>
             </li>
