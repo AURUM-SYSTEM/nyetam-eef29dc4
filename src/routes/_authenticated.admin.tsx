@@ -227,7 +227,7 @@ function AdminDashboard() {
     setLoadingOrgAdmins(true);
     try {
       const res = await listAdminsFn({ data: undefined as any });
-      setOrgAdmins(res.admins);
+      setOrgAdmins(res.users);
     } catch (e: any) {
       toast.error(e?.message ?? "Échec du chargement des administrateurs");
     } finally {
@@ -475,7 +475,7 @@ function AdminDashboard() {
       {isPlatformAdmin && (
         <section className="glass-card mb-6 rounded-2xl p-4">
           <h2 className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
-            <ShieldCheck className="h-3.5 w-3.5" /> Administrateurs des organisations ({orgAdmins.length})
+            <ShieldCheck className="h-3.5 w-3.5" /> Utilisateurs & administrateurs ({orgAdmins.length})
           </h2>
           <p className="mb-4 text-xs text-muted-foreground">
             Centre de contrôle du Super Administrateur AURUM : tu peux nommer ou retirer les administrateurs de chaque organisation. Ton propre accès Super Administrateur reste indépendant.
@@ -490,15 +490,17 @@ function AdminDashboard() {
                 <div key={a.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card/40 p-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{a.fullName}</p>
-                    <p className="truncate text-xs text-muted-foreground">{a.email} · {a.organizationName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{a.email} · {a.organizationName} {a.isAdmin ? "· Administrateur" : ""}</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => void changeOrganizationAdmin(a.id, false)}
+                    onClick={() => void changeOrganizationAdmin(a.id, !a.isAdmin)}
                     disabled={updatingAdminId === a.id}
-                    className="shrink-0 rounded-lg border border-destructive/30 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-40"
+                    className={a.isAdmin
+                      ? "shrink-0 rounded-lg border border-destructive/30 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-40"
+                      : "shrink-0 rounded-lg border border-gold/40 px-2.5 py-1.5 text-xs text-gold hover:bg-gold/10 disabled:opacity-40"}
                   >
-                    {updatingAdminId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Retirer admin"}
+                    {updatingAdminId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : a.isAdmin ? "Retirer admin" : "Nommer admin"}
                   </button>
                 </div>
               ))}
