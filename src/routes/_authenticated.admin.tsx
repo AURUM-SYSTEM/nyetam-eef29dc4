@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, Trash2, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin } from "@/lib/admin.functions";
+import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin, listRoleDefinitions, listPermissionCatalog, createOrganizationRole, updateOrganizationRolePermissions, assignRoleToOrganizationUser } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { BackofficeShell } from "@/components/BackofficeShell";
@@ -70,6 +70,11 @@ type OrgAdmin = {
   isAdmin: boolean;
 };
 
+type RoleDefinition = {
+  id: string; organization_id: string | null; code: string; name: string; description: string; is_system: boolean; permissions: string[];
+};
+type PermissionDef = { permission: string; label: string; module: string; description: string };
+
 type OrgSummary = {
   id: string;
   name: string;
@@ -130,6 +135,20 @@ function AdminDashboard() {
   const [orgAdmins, setOrgAdmins] = useState<OrgAdmin[]>([]);
   const [loadingOrgAdmins, setLoadingOrgAdmins] = useState(false);
   const [updatingAdminId, setUpdatingAdminId] = useState<string | null>(null);
+  const listRolesFn = useServerFn(listRoleDefinitions);
+  const listPermissionsFn = useServerFn(listPermissionCatalog);
+  const createRoleFn = useServerFn(createOrganizationRole);
+  const updateRolePermissionsFn = useServerFn(updateOrganizationRolePermissions);
+  const assignRoleFn = useServerFn(assignRoleToOrganizationUser);
+  const [roles, setRoles] = useState<RoleDefinition[]>([]);
+  const [permissions, setPermissions] = useState<PermissionDef[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [rolePermissionsDraft, setRolePermissionsDraft] = useState<string[]>([]);
+  const [savingRolePermissions, setSavingRolePermissions] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleCode, setNewRoleCode] = useState("");
+  const [creatingRole, setCreatingRole] = useState(false);
 
   // ── Paramètres de l'organisation ──
   const [orgLoaded, setOrgLoaded] = useState(false);
@@ -214,11 +233,76 @@ function AdminDashboard() {
     }
   }
 
+  async function loadRoles() {
+    setLoadingRoles(true);
+    try {
+      const [rr, pp] = await Promise.all([
+        listRolesFn({ data: undefined as any }),
+        listPermissionsFn({ data: undefined as any }),
+      ]);
+      setRoles(rr.roles as RoleDefinition[]);
+      setPermissions(pp.permissions as PermissionDef[]);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec du chargement des rôles");
+    } finally {
+      setLoadingRoles(false);
+    }
+  }
+
+  function startEditRole(role: RoleDefinition) {
+    setEditingRoleId(role.id);
+    setRolePermissionsDraft([...role.permissions]);
+  }
+
+  async function saveRolePermissions() {
+    if (!editingRoleId) return;
+    setSavingRolePermissions(true);
+    try {
+      await updateRolePermissionsFn({ data: { roleId: editingRoleId, permissions: rolePermissionsDraft } });
+      toast.success("Permissions du rôle enregistrées");
+      setEditingRoleId(null);
+      await loadRoles();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'enregistrement");
+    } finally {
+      setSavingRolePermissions(false);
+    }
+  }
+
+  async function createRole() {
+    if (!newRoleName.trim() || !newRoleCode.trim()) {
+      toast.error("Nom et code du rôle requis");
+      return;
+    }
+    setCreatingRole(true);
+    try {
+      await createRoleFn({ data: { name: newRoleName.trim(), code: newRoleCode.trim().toLowerCase(), permissions: [] } });
+      setNewRoleName(""); setNewRoleCode("");
+      toast.success("Rôle créé");
+      await loadRoles();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la création");
+    } finally {
+      setCreatingRole(false);
+    }
+  }
+
+  async function assignUserRole(userId: string, roleCode: string) {
+    try {
+      await assignRoleFn({ data: { userId, roleCode } });
+      toast.success("Rôle affecté");
+      await loadUsers();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'affectation du rôle");
+    }
+  }
+
   async function loadPlatformAdminStatus() {
     try {
       const res = await checkPlatformAdminFn({ data: undefined as any });
       setIsPlatformAdmin(res.isPlatformAdmin);
       if (res.isPlatformAdmin) { void loadAllOrgs(); void loadOrganizationAdmins(); }
+      void loadRoles();
     } catch {
       setIsPlatformAdmin(false);
     }
@@ -422,7 +506,67 @@ function AdminDashboard() {
         >
           <UserPlus className="h-4 w-4" /> Inviter un nouvel agent
         </button>
-        {isPlatformAdmin && (
+        <section className="glass-card mb-6 rounded-2xl p-4">
+        <h2 className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
+          <Lock className="h-3.5 w-3.5" /> Rôles & permissions
+        </h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Un seul endroit pour définir ce que chaque rôle peut faire. Les permissions sont contrôlées côté serveur et peuvent ensuite être appliquées aux utilisateurs.
+        </p>
+        {loadingRoles ? (
+          <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div>
+        ) : (
+          <>
+            <div className="mb-4 grid gap-2 sm:grid-cols-3">
+              {roles.map(role => (
+                <button key={role.id} type="button" onClick={() => startEditRole(role)}
+                  className={`rounded-xl border p-3 text-left ${editingRoleId === role.id ? "border-gold bg-gold/10" : "border-border bg-card/40"}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">{role.name}</span>
+                    {role.is_system && <span className="text-[10px] uppercase text-muted-foreground">Système</span>}
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{role.description || role.code} · {role.permissions.length} permissions</p>
+                </button>
+              ))}
+            </div>
+
+            {editingRoleId && (
+              <div className="mb-4 rounded-xl border border-border p-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm font-medium">Permissions du rôle</span>
+                  <button type="button" onClick={() => setEditingRoleId(null)} className="text-xs text-muted-foreground">Fermer</button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {permissions.map(p => (
+                    <label key={p.permission} className="flex cursor-pointer items-start gap-2 rounded-lg border border-border/60 p-2 text-xs">
+                      <input type="checkbox" checked={rolePermissionsDraft.includes(p.permission)}
+                        onChange={e => setRolePermissionsDraft(prev => e.target.checked ? [...prev, p.permission] : prev.filter(x => x !== p.permission))} />
+                      <span><strong>{p.label}</strong><br/><span className="text-muted-foreground">{p.module}</span></span>
+                    </label>
+                  ))}
+                </div>
+                <button type="button" onClick={() => void saveRolePermissions()} disabled={savingRolePermissions}
+                  className="mt-3 rounded-lg bg-gold px-3 py-2 text-xs font-medium text-black disabled:opacity-50">
+                  {savingRolePermissions ? "Enregistrement…" : "Enregistrer les permissions"}
+                </button>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-dashed border-border p-3">
+              <p className="mb-2 text-xs font-medium">Créer un rôle personnalisé</p>
+              <div className="grid gap-2 sm:grid-cols-[1fr_180px_auto]">
+                <input value={newRoleName} onChange={e => setNewRoleName(e.target.value)} placeholder="Ex. Agent collecte" className="rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                <input value={newRoleCode} onChange={e => setNewRoleCode(e.target.value)} placeholder="agent_collecte" className="rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                <button type="button" onClick={() => void createRole()} disabled={creatingRole} className="rounded-lg border border-gold/40 px-3 py-2 text-xs text-gold disabled:opacity-50">
+                  {creatingRole ? "…" : "Créer"}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+
+      {isPlatformAdmin && (
           <button
             onClick={() => setShowCreateOrg(v => !v)}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold/40 px-4 py-3 text-sm text-gold hover:bg-gold/10"
