@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, Trash2, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin, listRoleDefinitions, listPermissionCatalog, createOrganizationRole, updateOrganizationRolePermissions, assignRoleToOrganizationUser } from "@/lib/admin.functions";
+import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin, updateOrganizationModules, listRoleDefinitions, listPermissionCatalog, createOrganizationRole, updateOrganizationRolePermissions, assignRoleToOrganizationUser } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { BackofficeShell } from "@/components/BackofficeShell";
@@ -82,6 +82,7 @@ type OrgSummary = {
   moduleType: string;
   createdAt: string;
   userCount: number;
+  enabledModules: string[];
 };
 
 type AdminState =
@@ -121,6 +122,7 @@ function AdminDashboard() {
   const deleteOrgFn = useServerFn(deleteOrganization);
   const listAdminsFn = useServerFn(listOrganizationAdmins);
   const updateOrgAdminFn = useServerFn(updateOrganizationAdmin);
+  const updateOrgModulesFn = useServerFn(updateOrganizationModules);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
   const [newOrgName, setNewOrgName] = useState("");
@@ -135,6 +137,7 @@ function AdminDashboard() {
   const [orgAdmins, setOrgAdmins] = useState<OrgAdmin[]>([]);
   const [loadingOrgAdmins, setLoadingOrgAdmins] = useState(false);
   const [updatingAdminId, setUpdatingAdminId] = useState<string | null>(null);
+  const [updatingOrgModulesId, setUpdatingOrgModulesId] = useState<string | null>(null);
   const listRolesFn = useServerFn(listRoleDefinitions);
   const listPermissionsFn = useServerFn(listPermissionCatalog);
   const createRoleFn = useServerFn(createOrganizationRole);
@@ -317,6 +320,25 @@ function AdminDashboard() {
       toast.error(e?.message ?? "Échec du chargement des administrateurs");
     } finally {
       setLoadingOrgAdmins(false);
+    }
+  }
+
+  async function changeOrganizationModules(org: OrgSummary, module: string) {
+    const current = org.enabledModules ?? [org.moduleType];
+    const next = current.includes(module) ? current.filter(m => m !== module) : [...current, module];
+    if (next.length === 0) {
+      toast.error("Au moins un module doit rester activé.");
+      return;
+    }
+    setUpdatingOrgModulesId(org.id);
+    try {
+      const res = await updateOrgModulesFn({ data: { organizationId: org.id, enabledModules: next } });
+      setAllOrgs(prev => prev.map(o => o.id === org.id ? { ...o, enabledModules: res.enabledModules } : o));
+      toast.success("Modules de l'organisation mis à jour");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la mise à jour des modules");
+    } finally {
+      setUpdatingOrgModulesId(null);
     }
   }
 
@@ -671,8 +693,23 @@ function AdminDashboard() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{o.name}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {ORG_TYPE_LABELS[o.type] ?? o.type} · {MODULE_LABELS[o.moduleType] ?? o.moduleType} · {o.userCount} utilisateur(s)
+                      {ORG_TYPE_LABELS[o.type] ?? o.type} · {o.userCount} utilisateur(s)
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {MODULES.map(m => {
+                        const active = o.enabledModules.includes(m);
+                        return (
+                          <button key={m} type="button"
+                            onClick={() => void changeOrganizationModules(o, m)}
+                            disabled={updatingOrgModulesId === o.id}
+                            className={active
+                              ? "rounded-full border border-gold/40 bg-gold/10 px-2 py-1 text-[10px] text-gold"
+                              : "rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted disabled:opacity-40"}>
+                            {MODULE_LABELS[m]}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   <button
                     onClick={() => void handleDeleteOrg(o)}
