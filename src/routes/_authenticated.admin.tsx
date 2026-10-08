@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, Trash2, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin, updateOrganizationModules, listRoleDefinitions, listPermissionCatalog, createOrganizationRole, updateOrganizationRolePermissions, assignRoleToOrganizationUser } from "@/lib/admin.functions";
+import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin, updateOrganizationModules, updateOrganizationFeatures, listRoleDefinitions, listPermissionCatalog, createOrganizationRole, updateOrganizationRolePermissions, assignRoleToOrganizationUser } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { BackofficeShell } from "@/components/BackofficeShell";
@@ -83,6 +83,7 @@ type OrgSummary = {
   createdAt: string;
   userCount: number;
   enabledModules: string[];
+  enabledFeatures: string[];
 };
 
 type AdminState =
@@ -123,6 +124,7 @@ function AdminDashboard() {
   const listAdminsFn = useServerFn(listOrganizationAdmins);
   const updateOrgAdminFn = useServerFn(updateOrganizationAdmin);
   const updateOrgModulesFn = useServerFn(updateOrganizationModules);
+  const updateOrgFeaturesFn = useServerFn(updateOrganizationFeatures);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
   const [newOrgName, setNewOrgName] = useState("");
@@ -138,6 +140,7 @@ function AdminDashboard() {
   const [loadingOrgAdmins, setLoadingOrgAdmins] = useState(false);
   const [updatingAdminId, setUpdatingAdminId] = useState<string | null>(null);
   const [updatingOrgModulesId, setUpdatingOrgModulesId] = useState<string | null>(null);
+  const [updatingOrgFeatureId, setUpdatingOrgFeatureId] = useState<string | null>(null);
   const listRolesFn = useServerFn(listRoleDefinitions);
   const listPermissionsFn = useServerFn(listPermissionCatalog);
   const createRoleFn = useServerFn(createOrganizationRole);
@@ -326,6 +329,19 @@ function AdminDashboard() {
     } finally {
       setUpdatingOrgModulesId(null);
     }
+  }
+
+  async function changeOrganizationFeature(org: OrgSummary, feature: string) {
+    const current = org.enabledFeatures ?? [];
+    const next = current.includes(feature) ? current.filter(f => f !== feature) : [...current, feature];
+    setUpdatingOrgFeatureId(org.id);
+    try {
+      const res = await updateOrgFeaturesFn({ data: { organizationId: org.id, enabledFeatures: next } });
+      setAllOrgs(prev => prev.map(o => o.id === org.id ? { ...o, enabledFeatures: res.enabledFeatures } : o));
+      toast.success("Fonctionnalités de l'organisation mises à jour");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de la mise à jour");
+    } finally { setUpdatingOrgFeatureId(null); }
   }
 
   async function changeOrganizationAdmin(userId: string, makeAdmin: boolean) {
@@ -695,6 +711,16 @@ function AdminDashboard() {
                           </button>
                         );
                       })}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="text-[10px] text-muted-foreground">Fonctionnalités :</span>
+                      <button type="button" onClick={() => void changeOrganizationFeature(o, "producer_cards")}
+                        disabled={updatingOrgFeatureId === o.id}
+                        className={o.enabledFeatures?.includes("producer_cards")
+                          ? "rounded-full border border-gold/40 bg-gold/10 px-2 py-1 text-[10px] text-gold"
+                          : "rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted disabled:opacity-40"}>
+                        Cartes producteurs
+                      </button>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       <span className="text-[10px] text-muted-foreground">Conformité :</span>
