@@ -521,6 +521,25 @@ export const assignRoleToOrganizationUser = createServerFn({ method: "POST" })
     if (roleErr2 || !role) throw new Error("Rôle introuvable.");
     if (!isPlatformAdmin && role.organization_id !== null && role.organization_id !== orgId) throw new Error("Rôle hors organisation.");
 
+    if (!isPlatformAdmin && data.userId === context.userId && role.code !== "admin") {
+      const { count, error: cntErr } = await supabaseAdmin
+        .from("user_roles").select("user_id", { count: "exact", head: true })
+        .eq("organization_id", orgId).eq("role", "admin").neq("user_id", context.userId);
+      if (cntErr) throw new Error(cntErr.message);
+      if ((count ?? 0) === 0) throw new Error("Impossible de retirer votre propre rôle administrateur : nommez d'abord un autre administrateur.");
+    }
+
+    if (!isPlatformAdmin && role.code !== "admin") {
+      const { data: current } = await supabaseAdmin.from("user_roles")
+        .select("role").eq("user_id", data.userId).eq("organization_id", orgId).limit(1).maybeSingle();
+      if (current?.role === "admin") {
+        const { count } = await supabaseAdmin.from("user_roles")
+          .select("user_id", { count: "exact", head: true })
+          .eq("organization_id", orgId).eq("role", "admin");
+        if ((count ?? 0) <= 1) throw new Error("Impossible de retirer le dernier administrateur de l'organisation.");
+      }
+    }
+
     const { error } = await supabaseAdmin.from("user_roles").upsert({
       user_id: data.userId, organization_id: target.organization_id, role: role.code,
     } as any, { onConflict: "user_id,organization_id,role" });
