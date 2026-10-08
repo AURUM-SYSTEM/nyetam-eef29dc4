@@ -306,15 +306,14 @@ export const listOrganizationAdmins = createServerFn({ method: "POST" })
     if (orgErr) throw new Error(orgErr.message);
     const orgNames = new Map((orgs ?? []).map((o: any) => [o.id, o.name]));
     return {
-      admins: (profiles ?? [])
-        .filter((p: any) => adminIds.has(p.id))
-        .map((p: any) => ({
-          id: p.id,
-          email: p.email ?? "",
-          fullName: p.full_name ?? "(sans nom)",
-          organizationId: p.organization_id,
-          organizationName: orgNames.get(p.organization_id) ?? "Organisation",
-        })),
+      users: (profiles ?? []).map((p: any) => ({
+        id: p.id,
+        email: p.email ?? "",
+        fullName: p.full_name ?? "(sans nom)",
+        organizationId: p.organization_id,
+        organizationName: orgNames.get(p.organization_id) ?? "Organisation",
+        isAdmin: adminIds.has(p.id),
+      })),
     };
   });
 
