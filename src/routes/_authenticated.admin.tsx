@@ -181,20 +181,8 @@ function AdminDashboard() {
     }
   }
 
-  function toggleOrgModule(m: string) {
-    setOrgModules(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]));
-  }
-
-  function toggleEudrCompliance() {
-    setOrgComplianceModules(prev => (prev.includes("eudr") ? prev.filter(x => x !== "eudr") : [...prev, "eudr"]));
-  }
-
   async function submitOrgSettings(e: React.FormEvent) {
     e.preventDefault();
-    if (orgModules.length === 0) {
-      toast.error("Au moins un module doit rester activé.");
-      return;
-    }
     if (!orgName.trim()) {
       toast.error("Le nom de l'organisation est requis.");
       return;
@@ -204,8 +192,6 @@ function AdminDashboard() {
       await saveOrg({
         data: {
           name: orgName.trim(),
-          enabledModules: orgModules,
-          enabledComplianceModules: orgComplianceModules,
           modificationRequestDelayHours: Math.max(1, Math.round(orgDelay)),
         },
       });
@@ -871,7 +857,7 @@ function AdminDashboard() {
               />
             </label>
 
-            <button type="submit" disabled={savingOrg || orgModules.length === 0}
+            <button type="submit" disabled={savingOrg}
               className="flex w-full items-center justify-center gap-2 rounded-xl btn-gold px-4 py-2.5 text-sm disabled:opacity-40">
               {savingOrg ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Enregistrer
