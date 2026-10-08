@@ -19,6 +19,15 @@ async function assertProducerCardsEnabled(userId: string): Promise<string> {
   return orgId;
 }
 
+export const getProducerCardsFeatureStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await getCallerOrganizationId(context.userId);
+    const { data, error } = await supabaseAdmin.from("organizations").select("enabled_features").eq("id", orgId).single();
+    if (error) throw new Error(error.message);
+    return { enabled: (((data as any)?.enabled_features ?? []) as string[]).includes("producer_cards") };
+  });
+
 export const getProducerCard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { producerId: string }) =>
