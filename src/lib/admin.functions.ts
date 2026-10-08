@@ -286,7 +286,7 @@ export const listOrganizationAdmins = createServerFn({ method: "POST" })
 
     const { data: profiles, error: profErr } = await supabaseAdmin
       .from("profiles")
-      .select("id, email, full_name, organization_id, organization_name")
+      .select("id, email, full_name, organization_id")
       .not("organization_id", "is", null)
       .order("full_name", { ascending: true });
     if (profErr) throw new Error(profErr.message);
@@ -298,6 +298,13 @@ export const listOrganizationAdmins = createServerFn({ method: "POST" })
     if (rolesErr) throw new Error(rolesErr.message);
 
     const adminIds = new Set((roles ?? []).map((r: any) => r.user_id));
+    const orgIds = Array.from(new Set((profiles ?? []).map((p: any) => p.organization_id).filter(Boolean)));
+    const { data: orgs, error: orgErr } = await supabaseAdmin
+      .from("organizations")
+      .select("id, name")
+      .in("id", orgIds);
+    if (orgErr) throw new Error(orgErr.message);
+    const orgNames = new Map((orgs ?? []).map((o: any) => [o.id, o.name]));
     return {
       admins: (profiles ?? [])
         .filter((p: any) => adminIds.has(p.id))
@@ -306,7 +313,7 @@ export const listOrganizationAdmins = createServerFn({ method: "POST" })
           email: p.email ?? "",
           fullName: p.full_name ?? "(sans nom)",
           organizationId: p.organization_id,
-          organizationName: p.organization_name ?? "Organisation",
+          organizationName: orgNames.get(p.organization_id) ?? "Organisation",
         })),
     };
   });
