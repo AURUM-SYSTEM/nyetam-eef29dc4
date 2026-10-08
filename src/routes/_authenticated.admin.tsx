@@ -818,48 +818,34 @@ function AdminDashboard() {
                 className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
             </label>
 
-            <div>
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-3">
               <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Modules activés</span>
-              <div className="grid grid-cols-2 gap-2">
-                {MODULES.map(m => (
-                  <label
-                    key={m}
-                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                      orgModules.includes(m) ? "border-gold bg-gold/10 text-gold" : "border-border text-muted-foreground"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={orgModules.includes(m)}
-                      onChange={() => toggleOrgModule(m)}
-                      className="accent-[var(--gold)]"
-                    />
-                    {MODULE_LABELS[m]}
-                  </label>
+              <p className="text-xs text-muted-foreground">
+                Les modules sont activés uniquement par le Super Administrateur AURUM. Cette organisation utilise actuellement :
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {orgModules.map(m => (
+                  <span key={m} className="rounded-full border border-gold/40 bg-gold/10 px-2 py-1 text-[10px] text-gold">
+                    {MODULE_LABELS[m] ?? m}
+                  </span>
                 ))}
+                {orgModules.length === 0 && (
+                  <span className="text-xs text-destructive">Aucun module actif — configuration requise par le Super Administrateur.</span>
+                )}
               </div>
-              {orgModules.length === 0 && (
-                <p className="mt-1 text-xs text-destructive">Au moins un module doit rester activé.</p>
-              )}
             </div>
 
-            <div>
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-3">
               <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Extensions de conformité</span>
-              <label
-                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                  orgComplianceModules.includes("eudr") ? "border-gold bg-gold/10 text-gold" : "border-border text-muted-foreground"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={orgComplianceModules.includes("eudr")}
-                  onChange={toggleEudrCompliance}
-                  className="accent-[var(--gold)]"
-                />
-                Conformité EUDR
-              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {orgComplianceModules.length > 0 ? orgComplianceModules.map(m => (
+                  <span key={m} className="rounded-full border border-gold/40 bg-gold/10 px-2 py-1 text-[10px] text-gold">
+                    {m.toUpperCase()}
+                  </span>
+                )) : <span className="text-xs text-muted-foreground">Aucune extension activée.</span>}
+              </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Extension du module Agriculture — n'apparaît que si ce module est activé.
+                Les extensions sont également pilotées depuis le centre de contrôle AURUM.
               </p>
             </div>
 
