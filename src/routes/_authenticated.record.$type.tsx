@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   enqueue, savePhoto, saveVideo, saveMissionFormsCache, getMissionFormsCache,
   saveParcellesCache, getParcellesCache, saveRecordDraft, getRecordDraft, clearRecordDraft,
-  enqueueParcelle, isLocalParcelleId, listPendingParcelles, subscribeQueue,
+  enqueueParcelle, enqueueProducer, isLocalParcelleId, listPendingParcelles, subscribeQueue,
   type QueueMeta, type DocType, type GpsLocation, type ModuleType, type MissionForm, type CachedParcelle,
 } from "@/lib/offline-store";
 import { useOnline } from "@/hooks/use-online";
@@ -393,25 +393,38 @@ function RecordPage() {
       toast.error("Indiquez le nom complet du producteur.");
       return;
     }
-    if (!online) {
-      toast.error("La création d'un nouveau producteur nécessite une connexion. Une fois créé, sa parcelle pourra ensuite être capturée hors-ligne.");
-      return;
-    }
     setCreatingProducer(true);
     try {
-      const res = await createProd({
-        data: {
-          fullName: name,
-          contactPhone: newProducerPhone.trim() || undefined,
-          idDocumentType: newProducerCni.trim() ? "CNI" : undefined,
-          idDocumentNumber: newProducerCni.trim() || undefined,
-          sex: (newProducerSex || undefined) as "male" | "female" | "unknown" | undefined,
-          village: newProducerVillage.trim() || undefined,
-          commune: newProducerCommune.trim() || undefined,
-          department: newProducerDepartment.trim() || undefined,
-          region: newProducerRegion.trim() || undefined,
-        },
-      });
+      const payload = {
+        fullName: name,
+        contactPhone: newProducerPhone.trim() || undefined,
+        idDocumentType: newProducerCni.trim() ? "CNI" : undefined,
+        idDocumentNumber: newProducerCni.trim() || undefined,
+        sex: (newProducerSex || undefined) as "male" | "female" | "unknown" | undefined,
+        village: newProducerVillage.trim() || undefined,
+        commune: newProducerCommune.trim() || undefined,
+        department: newProducerDepartment.trim() || undefined,
+        region: newProducerRegion.trim() || undefined,
+      };
+
+      if (!online) {
+        const pending = await enqueueProducer(payload);
+        setSelectedProducerId(pending.id);
+        setNewProducerCode("EN ATTENTE");
+        setNewProducer(name);
+        setProducerOptions(prev => [...prev, { id: pending.id, name: name + " — hors-ligne" }].sort((a, b) => a.name.localeCompare(b.name)));
+        setNewProducerPhone("");
+        setNewProducerCni("");
+        setNewProducerSex("");
+        setNewProducerVillage("");
+        setNewProducerCommune("");
+        setNewProducerDepartment("");
+        setNewProducerRegion("");
+        toast.success("Producteur enregistré hors-ligne — il sera créé automatiquement au retour du réseau.");
+        return;
+      }
+
+      const res = await createProd({ data: payload });
       if (res.success) {
         setSelectedProducerId(res.producerId);
         setNewProducerCode(res.producerCode);
