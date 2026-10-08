@@ -7,12 +7,13 @@
 // ─────────────────────────────────────────────────────────────────────────
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
-import { LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, X } from "lucide-react";
+import { Coins, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const NAV_ITEMS = [
   { to: "/supervisor", label: "Pilotage", icon: LayoutDashboard },
   { to: "/admin", label: "Administration", icon: ShieldCheck },
+  { to: "/commissions", label: "Commissions", icon: Coins },
   { to: "/settings", label: "Paramètres", icon: Settings },
 ] as const;
 
