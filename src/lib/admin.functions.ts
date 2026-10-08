@@ -563,7 +563,7 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
 
     const { data: orgs, error: orgsErr } = await supabaseAdmin
       .from("organizations")
-      .select("id, name, type, module_type, created_at")
+      .select("id, name, type, module_type, enabled_modules, created_at")
       .order("created_at", { ascending: false });
     if (orgsErr) throw new Error(orgsErr.message);
 
@@ -590,6 +590,7 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
         name: o.name,
         type: o.type,
         moduleType: o.module_type,
+        enabledModules: (o.enabled_modules ?? [o.module_type]) as string[],
         createdAt: o.created_at,
         userCount: userCounts.get(o.id) ?? 0,
       })),
