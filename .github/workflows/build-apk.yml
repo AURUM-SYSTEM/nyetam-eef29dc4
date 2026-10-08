@@ -40,6 +40,24 @@ jobs:
             git push origin HEAD:main
           fi
 
+      - name: Wait for cacao icons to reach the live PWA
+        run: |
+          set -euo pipefail
+          expected="$(sha256sum public/icon-512.png | cut -d' ' -f1)"
+          icon_url="https://tanstack-start-app.aurumsystem76.workers.dev/icon-512.png?v=$expected"
+          for attempt in $(seq 1 60); do
+            actual="$(curl -fsSL -H 'Cache-Control: no-cache' "$icon_url" | sha256sum | cut -d' ' -f1 || true)"
+            if [ "$actual" = "$expected" ]; then
+              echo "Live cacao icon confirmed: $actual"
+              echo "AURUM_ICON_URL=$icon_url" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "Waiting for Cloudflare deployment ($attempt/60)..."
+            sleep 10
+          done
+          echo "Timed out waiting for the new cacao icon on the live PWA."
+          exit 1
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -100,6 +118,7 @@ jobs:
           const m = await (await fetch(manifestUrl)).json();
           const base = new URL(manifestUrl);
           const abs = (v) => v ? new URL(v, base).toString() : "";
+          const liveIcon = process.env.AURUM_ICON_URL || abs(icon);
           const icon = (m.icons || []).find(i => i.purpose === "any" || !i.purpose)?.src || (m.icons || [])[0]?.src;
           const maskable = (m.icons || []).find(i => String(i.purpose || "").split(/\s+/).includes("maskable"))?.src || "";
           const monochrome = (m.icons || []).find(i => String(i.purpose || "").split(/\s+/).includes("monochrome"))?.src || "";
@@ -109,7 +128,7 @@ jobs:
             domain, startPath || "/", m.name || "AURUM SYSTEM", m.short_name || "AURUM",
             "com.aurumsystem.app", "1", m.display || "standalone", m.orientation || "default",
             m.theme_color || "#141414", m.background_color || m.theme_color || "#141414",
-            abs(icon), abs(maskable), abs(monochrome), "N", "Y",
+            liveIcon, liveIcon, "", "N", "Y",
             process.env.GITHUB_WORKSPACE + "/android/android-keystore", "aurum"
           ];
           process.stdout.write(lines.join("\n") + "\n");
