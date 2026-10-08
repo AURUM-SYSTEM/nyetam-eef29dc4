@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────
-// AURUM BACKOFFICE — Coquille de navigation (Superviseur / Admin)
+// AURUM — Espace de gestion
 //
 // Sidebar fixe à gauche sur desktop, menu burger sur mobile. Concerne
 // uniquement les pages backoffice (/supervisor, /admin) — l'app de
@@ -11,7 +11,7 @@ import { LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, X } from "lucide-
 import { useAuth } from "@/hooks/use-auth";
 
 const NAV_ITEMS = [
-  { to: "/supervisor", label: "Tableau de bord", icon: LayoutDashboard },
+  { to: "/supervisor", label: "Pilotage", icon: LayoutDashboard },
   { to: "/admin", label: "Administration", icon: ShieldCheck },
   { to: "/settings", label: "Paramètres", icon: Settings },
 ] as const;
