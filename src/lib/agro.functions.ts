@@ -624,7 +624,7 @@ export const createParcelle = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await getCallerOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "parcels.create");
 
     // Périmètre (polygone) — recalcul de sécurité côté serveur, jamais
     // confiance dans un centre/surface envoyé par le client.
