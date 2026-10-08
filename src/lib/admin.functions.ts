@@ -603,10 +603,11 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
 
 export const updateOrganizationModules = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { organizationId: string; enabledModules: string[] }) =>
+  .inputValidator((d: { organizationId: string; enabledModules: string[]; enabledComplianceModules?: string[] }) =>
     z.object({
       organizationId: z.string().uuid(),
       enabledModules: z.array(z.enum(MODULE_TYPES)).min(1, "Au moins un module doit rester activé."),
+      enabledComplianceModules: z.array(z.enum(COMPLIANCE_MODULES)).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -617,13 +618,21 @@ export const updateOrganizationModules = createServerFn({ method: "POST" })
     if (!isPlatformAdmin) throw new Error("Seul le Super Administrateur AURUM peut modifier les modules d'une organisation.");
 
     const modules = Array.from(new Set(data.enabledModules));
+    const patch: Record<string, unknown> = { enabled_modules: modules };
+    if (data.enabledComplianceModules !== undefined) {
+      patch.enabled_compliance_modules = Array.from(new Set(data.enabledComplianceModules));
+    }
     const { error } = await supabaseAdmin
       .from("organizations")
-      .update({ enabled_modules: modules } as any)
+      .update(patch as any)
       .eq("id", data.organizationId);
     if (error) throw new Error(error.message);
 
-    return { success: true as const, enabledModules: modules };
+    return {
+      success: true as const,
+      enabledModules: modules,
+      enabledComplianceModules: data.enabledComplianceModules ?? [],
+    };
   });
 
 // ============================================================
