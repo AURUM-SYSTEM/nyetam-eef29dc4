@@ -48,21 +48,6 @@ function computeRiskLevel(distanceMeters: number): RiskLevel {
 
 // Superviseur OU admin — pas de RPC (voir plus haut), simple lecture de
 // user_roles par le chemin API REST classique.
-async function assertSupervisorOrAdminAndGetOrg(userId: string): Promise<string> {
-  const orgId = await getCallerOrg(userId);
-  const { data: roles, error } = await supabaseAdmin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("organization_id", orgId);
-  if (error) throw new Error(error.message);
-  const roleSet = new Set(((roles ?? []) as Array<{ role: string }>).map(r => r.role));
-  if (!roleSet.has("admin") && !roleSet.has("supervisor")) {
-    throw new Error("Accès réservé aux superviseurs et administrateurs.");
-  }
-  return orgId;
-}
-
 
 export type OrganizationCommercialAccess = {
   enabled: boolean;
@@ -72,7 +57,7 @@ export type OrganizationCommercialAccess = {
 export const getOrganizationCommercialAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "reports.view");
     const { data, error } = await supabaseAdmin
       .from("organization_data_policies")
       .select("commercial_data_use, agreement_status, allowed_scopes")
@@ -483,7 +468,7 @@ export const updateProducer = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "producers.edit");
 
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("producers")
@@ -863,7 +848,7 @@ export const listDuplicateAlerts = createServerFn({ method: "POST" })
     }).parse(d ?? {}),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "parcels.view");
 
     let query = supabaseAdmin
       .from("duplicate_alerts")
@@ -935,7 +920,7 @@ export const reviewDuplicateAlert = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "parcels.edit");
 
     const { data: alert, error: alertErr } = await supabaseAdmin
       .from("duplicate_alerts")
@@ -963,7 +948,7 @@ export const reviewDuplicateAlert = createServerFn({ method: "POST" })
 export const getAgentQualityScores = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "reports.view");
 
     const { data: alerts, error } = await supabaseAdmin
       .from("duplicate_alerts")
@@ -1025,7 +1010,7 @@ export const getAgentQualityScores = createServerFn({ method: "POST" })
 export const listAuditLog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "reports.view");
 
     const { data: rows, error } = await supabaseAdmin
       .from("audit_log")
@@ -1075,7 +1060,7 @@ export const getDocumentDetails = createServerFn({ method: "POST" })
     z.object({ documentId: z.string().uuid() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "terrain.collect.view");
 
     const { data: doc, error: docErr } = await supabaseAdmin
       .from("documents")
@@ -1173,7 +1158,7 @@ const DATA_ANALYST_DOCS_LIMIT = 1000;
 export const getDataAnalystStats = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "reports.view");
 
     const { data: callerProfile, error: callerErr } = await supabaseAdmin
       .from("profiles")
@@ -1262,7 +1247,7 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
     z.object({ parcelleId: z.string().uuid() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "parcels.view");
 
     const { data: parcelle, error: parcErr } = await supabaseAdmin
       .from("parcelles")
@@ -1364,7 +1349,7 @@ function hasValidBoundary(boundaryPoints: unknown): boolean {
 export const getEudrCompliance = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "parcels.view");
 
     const { data: org } = await supabaseAdmin
       .from("organizations")
@@ -1414,7 +1399,7 @@ export const attestEudrCompliance = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "parcels.edit");
 
     const { data: parcelle, error: parcErr } = await supabaseAdmin
       .from("parcelles")
@@ -1469,7 +1454,7 @@ export const getParcelleMapInfo = createServerFn({ method: "POST" })
     z.object({ parcelleIds: z.array(z.string().uuid()).max(500) }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "parcels.view");
     if (data.parcelleIds.length === 0) return { parcelles: [] as Array<{ id: string; culture: string; producerName: string | null; cooperativeName: string | null }> };
 
     const { data: rows, error } = await supabaseAdmin
