@@ -6,8 +6,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Users, Search, ChevronRight, Phone, Mail } from "lucide-react";
+import { ArrowLeft, Users, Search, ChevronRight, Phone, Mail, CreditCard, Loader2 } from "lucide-react";
 import { listProducers } from "@/lib/agro.functions";
+import { getProducerCardsFeatureStatus, issueProducerCard, markProducerCardPrinted } from "@/lib/producer-card.functions";
 
 export const Route = createFileRoute("/_authenticated/producteurs")({
   component: ProducteursPage,
@@ -30,17 +31,25 @@ type ProducerRow = {
 
 function ProducteursPage() {
   const fetchProducers = useServerFn(listProducers);
+  const fetchCardFeature = useServerFn(getProducerCardsFeatureStatus);
+  const issueCard = useServerFn(issueProducerCard);
+  const markPrinted = useServerFn(markProducerCardPrinted);
   const [rows, setRows] = useState<ProducerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [cardsEnabled, setCardsEnabled] = useState(false);
+  const [cardLoadingId, setCardLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetchProducers({ data: undefined as any });
-        if (!cancelled) setRows(res.producers);
+        const [res, feature] = await Promise.all([
+          fetchProducers({ data: undefined as any }),
+          fetchCardFeature({ data: undefined as any }),
+        ]);
+        if (!cancelled) { setRows(res.producers); setCardsEnabled(feature.enabled); }
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? "Erreur de chargement");
       } finally {
@@ -56,6 +65,22 @@ function ProducteursPage() {
     if (!needle) return rows;
     return rows.filter((r) => `${r.fullName} ${r.cooperativeName ?? ""}`.toLowerCase().includes(needle));
   }, [rows, q]);
+
+  async function openProducerCard(producerId: string) {
+    setCardLoadingId(producerId);
+    try {
+      const res = await issueCard({ data: { producerId } });
+      const token = (res.card as any)?.public_token;
+      const cardId = (res.card as any)?.id;
+      if (!token) throw new Error("Carte générée sans lien public.");
+      if (cardId) void markPrinted({ data: { cardId } });
+      window.open(`/p/${token}`, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      setError(e?.message ?? "Impossible de produire la carte.");
+    } finally {
+      setCardLoadingId(null);
+    }
+  }
 
   return (
     <div className="px-5 pt-8 pb-32">
