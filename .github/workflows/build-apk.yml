@@ -9,7 +9,7 @@ on:
       - '.github/workflows/build-apk.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -23,6 +23,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Generate and integrate AURUM AGRO cacao icons
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert --width=512 --height=512 public/aurum-agro-icon.svg --output=public/icon-512.png
+          rsvg-convert --width=192 --height=192 public/aurum-agro-icon.svg --output=public/icon-192.png
+          file public/icon-192.png public/icon-512.png
+          git config user.name "AURUM SYSTEM Bot"
+          git config user.email "actions@aurumsystem.app"
+          git add public/icon-192.png public/icon-512.png
+          if ! git diff --cached --quiet; then
+            git commit -m "feat(branding): integrate cacao AURUM AGRO icons"
+            git push origin HEAD:main
+          fi
 
       - name: Setup Java
         uses: actions/setup-java@v4
