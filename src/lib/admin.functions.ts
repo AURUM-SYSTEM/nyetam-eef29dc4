@@ -563,7 +563,7 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
 
     const { data: orgs, error: orgsErr } = await supabaseAdmin
       .from("organizations")
-      .select("id, name, type, module_type, enabled_modules, enabled_compliance_modules, created_at")
+      .select("id, name, type, module_type, enabled_modules, enabled_compliance_modules, enabled_features, created_at")
       .order("created_at", { ascending: false });
     if (orgsErr) throw new Error(orgsErr.message);
 
@@ -592,6 +592,7 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
         moduleType: o.module_type,
         enabledModules: (o.enabled_modules ?? [o.module_type]) as string[],
         enabledComplianceModules: (o.enabled_compliance_modules ?? []) as string[],
+        enabledFeatures: (o.enabled_features ?? []) as string[],
         createdAt: o.created_at,
         userCount: userCounts.get(o.id) ?? 0,
       })),
@@ -634,6 +635,33 @@ export const updateOrganizationModules = createServerFn({ method: "POST" })
       enabledModules: modules,
       enabledComplianceModules: data.enabledComplianceModules ?? [],
     };
+  });
+
+// ============================================================
+// Fonctionnalités optionnelles — pilotées uniquement par platform_admin
+// ============================================================
+
+const OPTIONAL_FEATURES = ["producer_cards"] as const;
+
+export const updateOrganizationFeatures = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { organizationId: string; enabledFeatures: string[] }) =>
+    z.object({
+      organizationId: z.string().uuid(),
+      enabledFeatures: z.array(z.enum(OPTIONAL_FEATURES)),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId, _role: "platform_admin",
+    });
+    if (roleErr) throw new Error(roleErr.message);
+    if (!isPlatformAdmin) throw new Error("Seul le Super Administrateur AURUM peut activer les fonctionnalités.");
+    const features = Array.from(new Set(data.enabledFeatures));
+    const { error } = await supabaseAdmin.from("organizations")
+      .update({ enabled_features: features } as any).eq("id", data.organizationId);
+    if (error) throw new Error(error.message);
+    return { success: true as const, enabledFeatures: features };
   });
 
 // ============================================================
