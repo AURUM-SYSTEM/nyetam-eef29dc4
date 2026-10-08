@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { listCooperativeCommissions, createManualCommission, markCommissionPaid } from "@/lib/admin.functions";
 import { useAuth } from "@/hooks/use-auth";
+import { BackofficeShell } from "@/components/BackofficeShell";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/commissions")({
