@@ -276,6 +276,7 @@ export const createProducer = createServerFn({ method: "POST" })
   }) =>
     z.object({
       fullName: z.string().min(1).max(200),
+      offlineClientId: z.string().max(120).optional(),
       cooperativeId: z.string().uuid().optional(),
       contactPhone: z.string().max(40).optional(),
       contactEmail: z.string().email().max(200).optional(),
@@ -290,6 +291,21 @@ export const createProducer = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const orgId = await getCallerOrg(context.userId);
+
+    // Idempotence : une reprise après coupure ne doit jamais créer un second
+    // producteur. La clé est locale à l'organisation et provient de la file
+    // IndexedDB quand le producteur a été saisi hors-ligne.
+    if (data.offlineClientId) {
+      const { data: existing } = await supabaseAdmin
+        .from("producers")
+        .select("id, producer_code")
+        .eq("organization_id", orgId)
+        .eq("offline_client_id", data.offlineClientId)
+        .maybeSingle();
+      if (existing) {
+        return { success: true as const, producerId: (existing as any).id as string, producerCode: (existing as any).producer_code as string };
+      }
+    }
 
     const { data: producer, error } = await supabaseAdmin
       .from("producers")
@@ -307,6 +323,7 @@ export const createProducer = createServerFn({ method: "POST" })
         department: data.department?.trim() || null,
         region: data.region?.trim() || null,
         registered_by: context.userId,
+        offline_client_id: data.offlineClientId ?? null,
       } as any)
       .select("id, producer_code")
       .single();
