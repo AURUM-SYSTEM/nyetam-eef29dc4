@@ -17,6 +17,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { assertPermission } from "@/lib/rbac";
 import { computePolygonCenter, computePolygonAreaHectares } from "@/lib/geo-polygon";
 
 const DUPLICATE_RADIUS_M = 50;
@@ -125,7 +126,7 @@ async function findNearbyParcelle(orgId: string, lat: number, lng: number): Prom
 export const listParcelles = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const orgId = await getCallerOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "parcels.view");
 
     const { data: parcelles, error } = await supabaseAdmin
       .from("parcelles")
@@ -211,7 +212,7 @@ export const listCooperatives = createServerFn({ method: "POST" })
 export const listProducers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const orgId = await getCallerOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "producers.view");
 
     const { data: producers, error } = await supabaseAdmin
       .from("producers")
@@ -290,7 +291,7 @@ export const createProducer = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await getCallerOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "producers.create");
 
     // Idempotence : une reprise après coupure ne doit jamais créer un second
     // producteur. La clé est locale à l'organisation et provient de la file
@@ -357,7 +358,7 @@ export const getProducerDetails = createServerFn({ method: "POST" })
     z.object({ producerId: z.string().uuid() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const orgId = await assertSupervisorOrAdminAndGetOrg(context.userId);
+    const orgId = await assertPermission(context.userId, "producers.view");
 
     const { data: producer, error } = await supabaseAdmin
       .from("producers")
