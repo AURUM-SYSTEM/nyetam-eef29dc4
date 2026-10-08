@@ -1,4 +1,5 @@
 name: Build AURUM Android APK
+# Trigger stable-key GPS/offline APK rebuild
 
 on:
   workflow_dispatch:
