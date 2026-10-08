@@ -270,6 +270,106 @@ export const checkPlatformAdmin = createServerFn({ method: "POST" })
   });
 
 // ============================================================
+// Centre de contrôle AURUM — administrateurs des organisations
+// Réservé au Super Administrateur AURUM (platform_admin).
+// ============================================================
+
+export const listOrganizationAdmins = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId,
+      _role: "platform_admin",
+    });
+    if (roleErr) throw new Error("Vérification du rôle impossible : " + roleErr.message);
+    if (!isPlatformAdmin) throw new Error("Seul le Super Administrateur AURUM peut gérer les administrateurs.");
+
+    const { data: profiles, error: profErr } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email, full_name, organization_id, organization_name")
+      .not("organization_id", "is", null)
+      .order("full_name", { ascending: true });
+    if (profErr) throw new Error(profErr.message);
+
+    const { data: roles, error: rolesErr } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id, organization_id, role")
+      .eq("role", "admin");
+    if (rolesErr) throw new Error(rolesErr.message);
+
+    const adminIds = new Set((roles ?? []).map((r: any) => r.user_id));
+    return {
+      admins: (profiles ?? [])
+        .filter((p: any) => adminIds.has(p.id))
+        .map((p: any) => ({
+          id: p.id,
+          email: p.email ?? "",
+          fullName: p.full_name ?? "(sans nom)",
+          organizationId: p.organization_id,
+          organizationName: p.organization_name ?? "Organisation",
+        })),
+    };
+  });
+
+export const updateOrganizationAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { userId: string; makeAdmin: boolean }) =>
+    z.object({
+      userId: z.string().uuid(),
+      makeAdmin: z.boolean(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId,
+      _role: "platform_admin",
+    });
+    if (roleErr) throw new Error("Vérification du rôle impossible : " + roleErr.message);
+    if (!isPlatformAdmin) throw new Error("Seul le Super Administrateur AURUM peut modifier les administrateurs.");
+
+    if (data.userId === context.userId && !data.makeAdmin) {
+      throw new Error("Votre compte Super Administrateur AURUM ne peut pas être retiré ici.");
+    }
+
+    const { data: target, error: targetErr } = await supabaseAdmin
+      .from("profiles")
+      .select("id, organization_id")
+      .eq("id", data.userId)
+      .single();
+    if (targetErr || !target || !(target as any).organization_id) {
+      throw new Error("Utilisateur ou organisation introuvable.");
+    }
+
+    if (data.makeAdmin) {
+      const { error } = await supabaseAdmin.from("user_roles").upsert({
+        user_id: data.userId,
+        organization_id: (target as any).organization_id,
+        role: "admin",
+      } as any, { onConflict: "user_id,organization_id,role" });
+      if (error) throw new Error(error.message);
+    } else {
+      const { count, error: countErr } = await supabaseAdmin
+        .from("user_roles")
+        .select("user_id", { count: "exact", head: true })
+        .eq("organization_id", (target as any).organization_id)
+        .eq("role", "admin");
+      if (countErr) throw new Error(countErr.message);
+      if ((count ?? 0) <= 1) {
+        throw new Error("Impossible de retirer le dernier administrateur de l'organisation.");
+      }
+      const { error } = await supabaseAdmin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", data.userId)
+        .eq("organization_id", (target as any).organization_id)
+        .eq("role", "admin");
+      if (error) throw new Error(error.message);
+    }
+
+    return { success: true as const };
+  });
+
+// ============================================================
 // Liste de toutes les organisations (réservé platform_admin)
 // ============================================================
 
