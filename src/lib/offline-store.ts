@@ -46,7 +46,7 @@
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "aurum-offline";
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 export type DocType =
   | "rapport"
@@ -164,6 +164,7 @@ type RecordDraftRecord = RecordDraft & { id: "current" };
 // d'un document en file, sélection de parcelle...) pour distinguer un id
 // local temporaire d'un vrai uuid Supabase sans avoir à interroger l'IndexedDB.
 export const LOCAL_PARCELLE_ID_PREFIX = "local-parcelle-";
+export const LOCAL_PRODUCER_ID_PREFIX = "local-producer-";
 
 export function isLocalParcelleId(id: string | null | undefined): boolean {
   return !!id && id.startsWith(LOCAL_PARCELLE_ID_PREFIX);
@@ -289,6 +290,10 @@ function getDB() {
         if (!db.objectStoreNames.contains("recordDraft")) {
           db.createObjectStore("recordDraft", { keyPath: "id" });
         }
+        if (!db.objectStoreNames.contains("pendingProducers")) {
+          const s = db.createObjectStore("pendingProducers", { keyPath: "id" });
+          s.createIndex("status", "status");
+        }
         if (!db.objectStoreNames.contains("pendingParcelles")) {
           const s = db.createObjectStore("pendingParcelles", { keyPath: "id" });
           s.createIndex("status", "status");
@@ -395,6 +400,45 @@ export async function getRecordDraft(): Promise<RecordDraft | undefined> {
 export async function clearRecordDraft() {
   const db = await getDB();
   await db.delete("recordDraft", "current");
+}
+
+export async function enqueueProducer(
+  data: Omit<PendingProducer, "id" | "status" | "createdAt" | "updatedAt">,
+): Promise<PendingProducer> {
+  const db = await getDB();
+  const now = Date.now();
+  const rec: PendingProducer = {
+    id: LOCAL_PRODUCER_ID_PREFIX + rid(),
+    status: "pending",
+    createdAt: now,
+    updatedAt: now,
+    ...data,
+  };
+  await db.put("pendingProducers", rec);
+  notify();
+  return rec;
+}
+
+export async function updatePendingProducer(id: string, patch: Partial<PendingProducer>) {
+  const db = await getDB();
+  const cur = await db.get("pendingProducers", id);
+  if (!cur) return;
+  const next = { ...cur, ...patch, updatedAt: Date.now() };
+  await db.put("pendingProducers", next);
+  notify();
+  return next as PendingProducer;
+}
+
+export async function deletePendingProducer(id: string) {
+  const db = await getDB();
+  await db.delete("pendingProducers", id);
+  notify();
+}
+
+export async function listPendingProducers(): Promise<PendingProducer[]> {
+  const db = await getDB();
+  const all = (await db.getAll("pendingProducers")) as PendingProducer[];
+  return all.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function enqueueParcelle(
