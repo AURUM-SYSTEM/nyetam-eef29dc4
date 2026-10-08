@@ -376,6 +376,159 @@ export const updateOrganizationAdmin = createServerFn({ method: "POST" })
   });
 
 // ============================================================
+// RÔLES & PERMISSIONS — centre de contrôle
+// ============================================================
+
+export const listRoleDefinitions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId, _role: "platform_admin",
+    });
+    if (roleErr) throw new Error(roleErr.message);
+
+    let orgId: string | null = null;
+    if (!isPlatformAdmin) orgId = await assertAdminAndGetOrg(context.supabase, context.userId);
+
+    let query = supabaseAdmin.from("role_definitions")
+      .select("id, organization_id, code, name, description, is_system")
+      .order("is_system", { ascending: false }).order("name", { ascending: true });
+    if (orgId) query = query.or(`organization_id.is.null,organization_id.eq.${orgId}`);
+    const { data: roles, error } = await query;
+    if (error) throw new Error(error.message);
+
+    const ids = (roles ?? []).map((r: any) => r.id);
+    const { data: permissions, error: pErr } = ids.length
+      ? await supabaseAdmin.from("role_permissions").select("role_id, permission").in("role_id", ids)
+      : { data: [], error: null };
+    if (pErr) throw new Error(pErr.message);
+
+    const byRole = new Map<string, string[]>();
+    for (const p of (permissions ?? []) as any[]) {
+      byRole.set(p.role_id, [...(byRole.get(p.role_id) ?? []), p.permission]);
+    }
+    return { roles: (roles ?? []).map((r: any) => ({ ...r, permissions: byRole.get(r.id) ?? [] })) };
+  });
+
+export const listPermissionCatalog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId, _role: "platform_admin",
+    });
+    if (roleErr) throw new Error(roleErr.message);
+    if (!isPlatformAdmin) await assertAdminAndGetOrg(context.supabase, context.userId);
+    const { data, error } = await supabaseAdmin.from("permission_catalog")
+      .select("permission, label, module, description")
+      .order("module").order("label");
+    if (error) throw new Error(error.message);
+    return { permissions: data ?? [] };
+  });
+
+export const createOrganizationRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { name: string; code: string; description?: string; permissions: string[] }) =>
+    z.object({
+      name: z.string().min(2).max(100),
+      code: z.string().regex(/^[a-z0-9_-]{2,60}$/),
+      description: z.string().max(500).optional(),
+      permissions: z.array(z.string()).max(100),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId, _role: "platform_admin",
+    });
+    if (roleErr) throw new Error(roleErr.message);
+    const orgId = isPlatformAdmin ? null : await assertAdminAndGetOrg(context.supabase, context.userId);
+    if (orgId === null && !isPlatformAdmin) throw new Error("Accès refusé.");
+
+    const { data: role, error } = await supabaseAdmin.from("role_definitions").insert({
+      organization_id: orgId,
+      code: data.code,
+      name: data.name,
+      description: data.description ?? "",
+      is_system: false,
+    }).select("id, organization_id, code, name, description, is_system").single();
+    if (error) throw new Error(error.message);
+
+    if (data.permissions.length) {
+      const { data: allowed } = await supabaseAdmin.from("permission_catalog")
+        .select("permission").in("permission", data.permissions);
+      const allowedSet = new Set((allowed ?? []).map((p: any) => p.permission));
+      const rows = data.permissions.filter(p => allowedSet.has(p)).map(permission => ({ role_id: role.id, permission }));
+      if (rows.length) {
+        const { error: pErr } = await supabaseAdmin.from("role_permissions").insert(rows);
+        if (pErr) throw new Error(pErr.message);
+      }
+    }
+    return { success: true as const, role };
+  });
+
+export const updateOrganizationRolePermissions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { roleId: string; permissions: string[] }) =>
+    z.object({ roleId: z.string().uuid(), permissions: z.array(z.string()).max(100) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId, _role: "platform_admin",
+    });
+    if (roleErr) throw new Error(roleErr.message);
+    const orgId = isPlatformAdmin ? null : await assertAdminAndGetOrg(context.supabase, context.userId);
+
+    const { data: role, error } = await supabaseAdmin.from("role_definitions")
+      .select("id, organization_id, is_system").eq("id", data.roleId).single();
+    if (error || !role) throw new Error("Rôle introuvable.");
+    if (role.is_system && !isPlatformAdmin) throw new Error("Seul le Super Administrateur peut modifier un rôle système.");
+    if (!isPlatformAdmin && role.organization_id !== orgId) throw new Error("Ce rôle appartient à une autre organisation.");
+
+    const { data: allowed } = await supabaseAdmin.from("permission_catalog")
+      .select("permission").in("permission", data.permissions);
+    const allowedSet = new Set((allowed ?? []).map((p: any) => p.permission));
+    const safePermissions = data.permissions.filter(p => allowedSet.has(p));
+
+    const { error: delErr } = await supabaseAdmin.from("role_permissions").delete().eq("role_id", data.roleId);
+    if (delErr) throw new Error(delErr.message);
+    if (safePermissions.length) {
+      const { error: insErr } = await supabaseAdmin.from("role_permissions")
+        .insert(safePermissions.map(permission => ({ role_id: data.roleId, permission })));
+      if (insErr) throw new Error(insErr.message);
+    }
+    return { success: true as const };
+  });
+
+export const assignRoleToOrganizationUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { userId: string; roleCode: string }) =>
+    z.object({ userId: z.string().uuid(), roleCode: z.string().min(2).max(60) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId, _role: "platform_admin",
+    });
+    if (roleErr) throw new Error(roleErr.message);
+    const orgId = isPlatformAdmin ? null : await assertAdminAndGetOrg(context.supabase, context.userId);
+
+    const { data: target } = await supabaseAdmin.from("profiles").select("id, organization_id").eq("id", data.userId).single();
+    if (!target) throw new Error("Utilisateur introuvable.");
+    if (!isPlatformAdmin && target.organization_id !== orgId) throw new Error("Utilisateur hors de votre organisation.");
+
+    const roleQuery = supabaseAdmin.from("role_definitions").select("id, organization_id, code").eq("code", data.roleCode);
+    const { data: role, error: roleErr2 } = isPlatformAdmin
+      ? await roleQuery.is("organization_id", null).single()
+      : await roleQuery.or(`organization_id.is.null,organization_id.eq.${orgId}`).order("organization_id", { ascending: true, nullsFirst: true }).limit(1).maybeSingle();
+    if (roleErr2 || !role) throw new Error("Rôle introuvable.");
+    if (!isPlatformAdmin && role.organization_id !== null && role.organization_id !== orgId) throw new Error("Rôle hors organisation.");
+
+    const { error } = await supabaseAdmin.from("user_roles").upsert({
+      user_id: data.userId, organization_id: target.organization_id, role: role.code,
+    } as any, { onConflict: "user_id,organization_id,role" });
+    if (error) throw new Error(error.message);
+    return { success: true as const };
+  });
+
+// ============================================================
 // Liste de toutes les organisations (réservé platform_admin)
 // ============================================================
 
