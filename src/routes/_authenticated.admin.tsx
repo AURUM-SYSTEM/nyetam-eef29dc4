@@ -710,6 +710,17 @@ function AdminDashboard() {
                         );
                       })}
                     </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="text-[10px] text-muted-foreground">Conformité :</span>
+                      <button type="button"
+                        onClick={() => void toggleOrganizationCompliance(o, "eudr")}
+                        disabled={updatingOrgModulesId === o.id}
+                        className={o.enabledComplianceModules?.includes("eudr")
+                          ? "rounded-full border border-gold/40 bg-gold/10 px-2 py-1 text-[10px] text-gold"
+                          : "rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted disabled:opacity-40"}>
+                        EUDR
+                      </button>
+                    </div>
                   </div>
                   <button
                     onClick={() => void handleDeleteOrg(o)}
