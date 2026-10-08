@@ -67,6 +67,7 @@ type OrgAdmin = {
   fullName: string;
   organizationId: string;
   organizationName: string;
+  isAdmin: boolean;
 };
 
 type OrgSummary = {
