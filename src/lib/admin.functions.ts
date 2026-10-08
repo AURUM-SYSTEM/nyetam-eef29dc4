@@ -828,3 +828,118 @@ export const updateAgentAssignment = createServerFn({ method: "POST" })
 
     return { success: true };
   });
+
+
+// ============================================================
+// COMMISSIONS — transparence coopérative et saisie manuelle
+// Le prix payé par l'acheteur reste interne à AURUM.
+// La commission due à la coopérative est explicitement visible.
+// ============================================================
+
+async function getCallerOrgId(context: any): Promise<string> {
+  const { data, error } = await supabaseAdmin
+    .from("profiles").select("organization_id").eq("id", context.userId).single();
+  if (error || !(data as any)?.organization_id) throw new Error("Aucune organisation associée à ce compte.");
+  return (data as any).organization_id as string;
+}
+
+export const listCooperativeCommissions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await getCallerOrgId(context);
+
+    const { data, error } = await supabaseAdmin
+      .from("commercial_commission_ledger")
+      .select("id, producer_id, data_access_event_id, commission_amount, currency, status, accrued_at, paid_at, payout_reference, payment_note, manual_entry")
+      .eq("organization_id", orgId)
+      .order("accrued_at", { ascending: false });
+    if (error) throw new Error(error.message);
+
+    const producerIds = Array.from(new Set((data ?? []).map((r: any) => r.producer_id).filter(Boolean)));
+    const { data: producers } = producerIds.length
+      ? await supabaseAdmin.from("producers").select("id, full_name").in("id", producerIds)
+      : { data: [] };
+    const names = new Map((producers ?? []).map((p: any) => [p.id, p.full_name]));
+
+    return {
+      commissions: (data ?? []).map((r: any) => ({
+        ...r,
+        producerName: names.get(r.producer_id) ?? "Producteur",
+      })),
+    };
+  });
+
+export const createManualCommission = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    organizationId: string;
+    producerId: string;
+    amount: number;
+    currency?: string;
+    dataAccessEventId?: string;
+    note?: string;
+  }) => z.object({
+    organizationId: z.string().uuid(),
+    producerId: z.string().uuid(),
+    amount: z.number().nonnegative(),
+    currency: z.string().length(3).default("XAF"),
+    dataAccessEventId: z.string().uuid().optional(),
+    note: z.string().max(1000).optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const isPlatformAdmin = Boolean((await context.supabase.rpc("has_role", {
+      _user: context.userId, _role: "platform_admin",
+    })).data);
+    if (!isPlatformAdmin) await assertAdminAndGetOrg(context.supabase, context.userId);
+
+    const { data: row, error } = await supabaseAdmin
+      .from("commercial_commission_ledger")
+      .insert({
+        organization_id: data.organizationId,
+        producer_id: data.producerId,
+        data_access_event_id: data.dataAccessEventId ?? null,
+        commission_amount: data.amount,
+        currency: data.currency,
+        status: "accrued",
+        manual_entry: true,
+        created_by: context.userId,
+        payment_note: data.note ?? null,
+      } as any)
+      .select("id, commission_amount, currency, status, accrued_at")
+      .single();
+    if (error) throw new Error(error.message);
+    return { success: true as const, commission: row };
+  });
+
+export const markCommissionPaid = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { commissionId: string; payoutReference?: string; paymentNote?: string }) =>
+    z.object({
+      commissionId: z.string().uuid(),
+      payoutReference: z.string().max(200).optional(),
+      paymentNote: z.string().max(1000).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertAdminAndGetOrg(context.supabase, context.userId);
+    const { data: row, error: findErr } = await supabaseAdmin
+      .from("commercial_commission_ledger")
+      .select("id, organization_id, status")
+      .eq("id", data.commissionId).single();
+    if (findErr || !row) throw new Error("Commission introuvable.");
+    if ((row as any).organization_id !== orgId) throw new Error("Commission hors de votre organisation.");
+    if ((row as any).status === "cancelled") throw new Error("Une commission annulée ne peut pas être versée.");
+
+    const { error } = await supabaseAdmin
+      .from("commercial_commission_ledger")
+      .update({
+        status: "paid",
+        paid_at: new Date().toISOString(),
+        payout_reference: data.payoutReference ?? null,
+        payment_note: data.paymentNote ?? null,
+        updated_at: new Date().toISOString(),
+      } as any)
+      .eq("id", data.commissionId);
+    if (error) throw new Error(error.message);
+    return { success: true as const };
+  });
