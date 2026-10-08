@@ -644,7 +644,7 @@ export const updateOrganizationModules = createServerFn({ method: "POST" })
 // Fonctionnalités optionnelles — pilotées uniquement par platform_admin
 // ============================================================
 
-const OPTIONAL_FEATURES = ["producer_cards"] as const;
+const OPTIONAL_FEATURES = ["reports", "commissions", "producer_cards"] as const;
 
 export const updateOrganizationFeatures = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
