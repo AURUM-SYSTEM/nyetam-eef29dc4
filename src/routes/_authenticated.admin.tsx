@@ -450,7 +450,7 @@ function AdminDashboard() {
   async function changeRole(userId: string, role: string) {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, roles: [role] } : u));
     try {
-      await updateAssignment({ data: { userId, role } });
+      await assignRoleFn({ data: { userId, roleCode: role } });
       toast.success("Rôle mis à jour");
     } catch (e: any) {
       toast.error(e?.message ?? "Échec de la mise à jour");
@@ -713,7 +713,7 @@ function AdminDashboard() {
               <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Rôle</span>
               <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
                 className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
-                {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+                {roles.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
               </select>
             </label>
           </div>
