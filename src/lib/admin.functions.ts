@@ -597,6 +597,35 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
   });
 
 // ============================================================
+// Modules d'une organisation — réservé au Super Administrateur AURUM
+// ============================================================
+
+export const updateOrganizationModules = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { organizationId: string; enabledModules: string[] }) =>
+    z.object({
+      organizationId: z.string().uuid(),
+      enabledModules: z.array(z.enum(MODULE_TYPES)).min(1, "Au moins un module doit rester activé."),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: isPlatformAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
+      _user: context.userId, _role: "platform_admin",
+    });
+    if (roleErr) throw new Error(roleErr.message);
+    if (!isPlatformAdmin) throw new Error("Seul le Super Administrateur AURUM peut modifier les modules d'une organisation.");
+
+    const modules = Array.from(new Set(data.enabledModules));
+    const { error } = await supabaseAdmin
+      .from("organizations")
+      .update({ enabled_modules: modules } as any)
+      .eq("id", data.organizationId);
+    if (error) throw new Error(error.message);
+
+    return { success: true as const, enabledModules: modules };
+  });
+
+// ============================================================
 // Supprimer une organisation (réservé platform_admin)
 //
 // Le comportement réel de ON DELETE CASCADE sur les clés étrangères
