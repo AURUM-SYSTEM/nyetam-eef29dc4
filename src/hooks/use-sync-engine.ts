@@ -37,7 +37,6 @@ import {
   updatePendingProducer,
   deletePendingProducer,
   isLocalParcelleId,
-  isLocalProducerId,
   type QueueItem,
   type PendingParcelle,
   type PendingProducer,
@@ -108,15 +107,6 @@ export function useSyncEngine() {
             await updatePendingParcelle(pc.id, { producerId: res.producerId });
           }
         }
-        const allQueued = await listQueue();
-        for (const doc of allQueued) {
-          if (doc.meta?.parcelleId) {
-            // Le lien producteur est porté par pendingParcelles ; le document
-            // n'a donc rien à remapper ici.
-            continue;
-          }
-        }
-
         await updatePendingProducer(p.id, {
           status: "syncing",
           remoteProducerId: res.producerId,
