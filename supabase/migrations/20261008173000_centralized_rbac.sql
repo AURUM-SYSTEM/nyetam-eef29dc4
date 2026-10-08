@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS public.role_definitions (
   UNIQUE (organization_id, code)
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS role_definitions_system_code_uidx ON public.role_definitions(code) WHERE organization_id IS NULL;
+
 CREATE TABLE IF NOT EXISTS public.role_permissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   role_id UUID NOT NULL REFERENCES public.role_definitions(id) ON DELETE CASCADE,
@@ -32,7 +34,7 @@ VALUES
   (NULL, 'agent', 'Agent', 'Accès opérationnel de terrain.', true),
   (NULL, 'supervisor', 'Superviseur', 'Contrôle et suivi opérationnel.', true),
   (NULL, 'admin', 'Administrateur', 'Administration de l’organisation.', true)
-ON CONFLICT (organization_id, code) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Catalogue stable de permissions utilisé par l'interface et les contrôles serveur.
 CREATE TABLE IF NOT EXISTS public.permission_catalog (
