@@ -9,7 +9,7 @@ export const Route = createFileRoute("/p/$token")({
   head: () => ({
     meta: [
       { title: "Carte producteur — AURUM" },
-      { name: "description", content: "Profil public vérifié d'un producteur enregistré dans AURUM." },
+      { name: "description", content: "Carte producteur AURUM imprimable avec QR code de vérification." },
     ],
   }),
 });
@@ -40,51 +40,84 @@ function PublicProducerCardPage() {
 
   const p = data.producer;
   const publicUrl = typeof window !== "undefined" ? window.location.href : "";
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(publicUrl)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=4&data=${encodeURIComponent(publicUrl)}`;
+  const initials = String(p.fullName ?? "P").trim().split(/\\s+/).slice(0, 2).map((part: string) => part[0] ?? "").join("").toUpperCase();
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8">
-      <style>{`@media print { body { background: white !important; } .no-print { display:none !important; } .producer-card { box-shadow:none !important; border:1px solid #ddd !important; } }`}</style>
-      <div className="no-print mx-auto mb-5 max-w-md text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Profil public AURUM</p>
-        <p className="mt-1 text-xs text-muted-foreground">Scannez le QR pour vérifier l'identité publique de la carte.</p>
+    <main className="producer-card-page min-h-screen bg-background px-4 py-8">
+      <style>{`
+        .producer-id-card { width: min(100%, 540px); aspect-ratio: 85.6 / 54; overflow: hidden; position: relative; color: #17382c; background: #fff; border: 1px solid #d8e5dc; border-radius: 16px; box-shadow: 0 18px 45px rgba(0,0,0,.12); }
+        .producer-id-header { height: 21%; background: #123f30; color: white; display:flex; align-items:center; justify-content:space-between; padding: 0 5%; }
+        .producer-id-body { height: 79%; display:grid; grid-template-columns: 1fr auto; gap: 3%; align-items:center; padding: 3% 5%; }
+        .producer-id-label { font-size: clamp(6px, 1.55vw, 9px); text-transform:uppercase; letter-spacing:.12em; color:#63766d; }
+        .producer-id-value { font-size: clamp(8px, 2.1vw, 12px); line-height:1.25; overflow-wrap:anywhere; color:#17382c; }
+        .producer-id-name { font-size: clamp(13px, 3.8vw, 22px); line-height:1.1; font-weight:800; overflow-wrap:anywhere; }
+        .producer-id-code { display:inline-block; border:1px solid #c8dfd0; background:#eff8f1; border-radius:4px; padding:3px 6px; font-size:clamp(7px,1.7vw,10px); font-weight:700; }
+        .producer-id-qr { width:clamp(60px, 20vw, 112px); aspect-ratio:1; object-fit:contain; }
+        @media print {
+          @page { size: 85.6mm 54mm; margin: 0; }
+          html, body { width:85.6mm !important; height:54mm !important; margin:0 !important; padding:0 !important; background:#fff !important; }
+          body * { visibility:hidden !important; }
+          .producer-id-card, .producer-id-card * { visibility:visible !important; }
+          .producer-card-page { width:85.6mm !important; height:54mm !important; min-height:0 !important; padding:0 !important; margin:0 !important; background:#fff !important; }
+          .producer-id-card { width:85.6mm !important; height:54mm !important; aspect-ratio:auto !important; border:0.3mm solid #d8e5dc !important; border-radius:2mm !important; box-shadow:none !important; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+          .no-print { display:none !important; }
+          .producer-id-label { font-size:6pt !important; }
+          .producer-id-value { font-size:7.5pt !important; }
+          .producer-id-name { font-size:14pt !important; }
+          .producer-id-code { font-size:7pt !important; }
+          .producer-id-qr { width:21mm !important; height:21mm !important; }
+        }
+      `}</style>
+
+      <div className="no-print mx-auto mb-5 max-w-xl text-center">
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">AURUM AGRO · Carte producteur</p>
+        <p className="mt-2 text-sm text-muted-foreground">Format carte d'identité (85,6 × 54 mm). Le QR code ouvre le profil public de vérification.</p>
       </div>
 
-      <section className="producer-card mx-auto max-w-md rounded-3xl border border-gold/30 bg-card p-6 shadow-xl">
-        <div className="flex items-start justify-between gap-4">
+      <section className="producer-id-card mx-auto">
+        <header className="producer-id-header">
           <div>
-            <p className="font-display text-2xl gold-text">AURUM</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Carte producteur</p>
+            <p style={{ fontSize: "clamp(13px, 3vw, 20px)", fontWeight: 900, letterSpacing: ".12em", lineHeight: 1 }}>AURUM</p>
+            <p style={{ fontSize: "clamp(6px, 1.4vw, 8px)", letterSpacing: ".16em", marginTop: 3 }}>AGRO · IDENTITÉ PRODUCTEUR</p>
           </div>
-          <ShieldCheck className="h-7 w-7 text-gold" />
-        </div>
-
-        <div className="mt-7">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Producteur</p>
-          <h1 className="mt-1 font-display text-3xl">{p.fullName}</h1>
-          <p className="mt-2 inline-flex rounded-full border border-gold/30 bg-gold/10 px-2.5 py-1 text-xs text-gold">{p.producerCode}</p>
-        </div>
-
-        <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
-          <div><p className="text-[10px] uppercase tracking-widest text-muted-foreground">Coopérative</p><p className="mt-1">{p.cooperativeName ?? "Non renseignée"}</p></div>
-          <div><p className="text-[10px] uppercase tracking-widest text-muted-foreground">Localisation</p><p className="mt-1">{[p.village, p.commune].filter(Boolean).join(", ") || "Non renseignée"}</p></div>
-        </div>
-
-        <div className="mt-7 flex items-center gap-5 border-t border-border pt-5">
-          <div className="rounded-xl border border-border bg-white p-2">
-            <img src={qrUrl} alt="QR code de vérification AURUM" className="h-28 w-28" />
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "clamp(6px, 1.5vw, 9px)" }}>
+            <ShieldCheck style={{ width: "clamp(14px, 3vw, 20px)", height: "auto" }} />
+            <span>PROFIL VÉRIFIABLE</span>
           </div>
-          <div className="min-w-0">
-            <QrCode className="h-5 w-5 text-gold" />
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Cette carte permet d'accéder au profil public AURUM. Les données professionnelles avancées restent protégées.</p>
+        </header>
+
+        <div className="producer-id-body">
+          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "clamp(4px, 1.3vw, 8px)" }}>
+            <div>
+              <p className="producer-id-label">Nom du producteur</p>
+              <h1 className="producer-id-name mt-1">{p.fullName || "Nom non renseigné"}</h1>
+            </div>
+            <div>
+              <p className="producer-id-label">Identifiant producteur</p>
+              <p className="producer-id-code mt-1">{p.producerCode}</p>
+            </div>
+            <div>
+              <p className="producer-id-label">Coopérative</p>
+              <p className="producer-id-value mt-1 font-semibold">{p.cooperativeName ?? "Non renseignée"}</p>
+            </div>
+            <div>
+              <p className="producer-id-label">Village / Commune</p>
+              <p className="producer-id-value mt-1">{[p.village, p.commune].filter(Boolean).join(" / ") || "Non renseigné"}</p>
+            </div>
+            <p style={{ fontSize: "clamp(5px, 1.25vw, 7px)", color: "#63766d" }}>Carte de référencement AURUM AGRO · Ne remplace pas une pièce officielle d'identité.</p>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <img src={qrUrl} alt="QR code de vérification AURUM" className="producer-id-qr" />
+            <span style={{ fontSize: "clamp(5px, 1.25vw, 7px)", color: "#63766d", textAlign: "center" }}><QrCode style={{ display: "inline", width: 10, height: 10, verticalAlign: "middle" }} /> VÉRIFIER</span>
           </div>
         </div>
-
-        <p className="mt-5 text-center text-[10px] uppercase tracking-widest text-muted-foreground">Identité publique vérifiable · AURUM SYSTEM</p>
       </section>
 
-      <div className="no-print mx-auto mt-5 flex max-w-md justify-center">
-        <button onClick={() => window.print()} className="rounded-xl btn-gold px-5 py-2.5 text-sm">Imprimer la carte</button>
+      <div className="no-print mx-auto mt-5 flex max-w-xl flex-col items-center gap-2">
+        <button onClick={() => window.print()} className="rounded-xl btn-gold px-6 py-3 text-sm font-semibold">Imprimer la carte au format identité</button>
+        <p className="text-center text-xs text-muted-foreground">Dans la fenêtre d'impression, choisissez « Taille réelle » ou 100 % si l'option est disponible.</p>
       </div>
     </main>
   );
