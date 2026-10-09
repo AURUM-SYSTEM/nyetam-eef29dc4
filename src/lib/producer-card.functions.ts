@@ -19,6 +19,19 @@ async function assertProducerCardsEnabled(userId: string): Promise<string> {
   return orgId;
 }
 
+async function canManageProducerCards(userId: string, organizationId: string, supabase: any): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc("has_role", { _user: userId, _role: "platform_admin" });
+    if (!error && data === true) return true;
+  } catch {}
+  try {
+    await assertPermission(userId, "producers.cards.create", organizationId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const getProducerCardsFeatureStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -26,8 +39,7 @@ export const getProducerCardsFeatureStatus = createServerFn({ method: "POST" })
     const { data, error } = await supabaseAdmin.from("organizations").select("enabled_features").eq("id", orgId).single();
     if (error) throw new Error(error.message);
     const enabled = (((data as any)?.enabled_features ?? []) as string[]).includes("producer_cards");
-    let canCreate = false;
-    try { await assertPermission(context.userId, "producers.cards.create", orgId); canCreate = true; } catch {}
+    const canCreate = await canManageProducerCards(context.userId, orgId, context.supabase);
     return { enabled: enabled && canCreate };
   });
 
@@ -58,7 +70,9 @@ export const issueProducerCard = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const orgId = await assertProducerCardsEnabled(context.userId);
-    await assertPermission(context.userId, "producers.cards.create", orgId);
+    if (!(await canManageProducerCards(context.userId, orgId, context.supabase))) {
+      throw new Error("Accès refusé : votre compte ne peut pas créer de cartes producteurs.");
+    }
 
     const { data: producer, error: producerError } = await supabaseAdmin
       .from("producers")
@@ -101,7 +115,9 @@ export const markProducerCardPrinted = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const orgId = await assertProducerCardsEnabled(context.userId);
-    await assertPermission(context.userId, "producers.cards.print", orgId);
+    if (!(await canManageProducerCards(context.userId, orgId, context.supabase))) {
+      throw new Error("Accès refusé : votre compte ne peut pas imprimer de cartes producteurs.");
+    }
     const { error } = await supabaseAdmin
       .from("producer_cards")
       .update({ printed_at: new Date().toISOString() })
