@@ -60,7 +60,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
-import { issueProducerCard } from "@/lib/producer-card.functions";
+import { issueProducerCard, uploadProducerCardPhoto } from "@/lib/producer-card.functions";
 import { askAgriAssistant, generateOrientations, listAdvisorReports, markAdvisorReportTreated } from "@/lib/insights.functions";
 import {
   listParcelles,
@@ -905,9 +905,11 @@ function ProducerDetailRow({
   const fetchDetails = useServerFn(getProducerDetails);
   const saveProducer = useServerFn(updateProducer);
   const createProducerCard = useServerFn(issueProducerCard);
+  const uploadCardPhoto = useServerFn(uploadProducerCardPhoto);
 
   const [loading, setLoading] = useState(true);
   const [cardBusy, setCardBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parcelles, setParcelles] = useState<Array<{
     id: string;
@@ -1162,6 +1164,38 @@ function ProducerDetailRow({
     }
   }
 
+  async function handleProducerPhotoUpload(file: File | undefined) {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Choisis une image JPG, PNG ou WebP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La photo doit peser 5 Mo maximum.");
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const imageBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = String(reader.result ?? "");
+          const comma = result.indexOf(",");
+          if (comma < 0) reject(new Error("Lecture de l'image impossible."));
+          else resolve(result.slice(comma + 1));
+        };
+        reader.onerror = () => reject(new Error("Lecture de l'image impossible."));
+        reader.readAsDataURL(file);
+      });
+      await uploadCardPhoto({ data: { producerId, imageBase64, contentType: file.type as "image/jpeg" | "image/png" | "image/webp" } });
+      toast.success("Photo enregistrée. Elle apparaîtra sur le recto de la carte.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Impossible d'enregistrer la photo.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
   async function handleCreateProducerCard() {
     setCardBusy(true);
     try {
@@ -1320,6 +1354,20 @@ function ProducerDetailRow({
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <label className="inline-flex cursor-pointer items-center rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary/50">
+                {photoBusy ? "Envoi photo…" : "Ajouter / remplacer la photo"}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  disabled={photoBusy || loading}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    void handleProducerPhotoUpload(file);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
               <button type="button" onClick={() => void handleCreateProducerCard()} disabled={cardBusy || loading || !producerCode}
                 title="Créer ou ouvrir la carte publique du producteur"
                 className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-700 disabled:opacity-40">
