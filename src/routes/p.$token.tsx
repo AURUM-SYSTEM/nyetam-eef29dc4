@@ -54,25 +54,30 @@ function PublicProducerCardPage() {
         .producer-id-name { font-size: clamp(13px, 3.8vw, 22px); line-height:1.1; font-weight:800; overflow-wrap:anywhere; }
         .producer-id-code { display:inline-block; border:1px solid #c8dfd0; background:#eff8f1; border-radius:4px; padding:3px 6px; font-size:clamp(7px,1.7vw,10px); font-weight:700; }
         .producer-id-qr { width:clamp(60px, 20vw, 112px); aspect-ratio:1; object-fit:contain; }
+        .producer-id-photo { width:clamp(66px, 19vw, 98px); height:clamp(78px, 23vw, 116px); object-fit:cover; border:2px solid #d7e7dc; border-radius:7px; background:#f0f5f1; }
+        .producer-id-back { background:linear-gradient(145deg,#ffffff 0%,#f1f7f2 100%); }
+        .producer-id-back-content { height:79%; display:flex; flex-direction:column; justify-content:space-between; padding:4% 5%; }
         @media print {
           @page { size: 85.6mm 54mm; margin: 0; }
           html, body { width:85.6mm !important; height:54mm !important; margin:0 !important; padding:0 !important; background:#fff !important; }
           body * { visibility:hidden !important; }
           .producer-id-card, .producer-id-card * { visibility:visible !important; }
           .producer-card-page { width:85.6mm !important; height:54mm !important; min-height:0 !important; padding:0 !important; margin:0 !important; background:#fff !important; }
-          .producer-id-card { width:85.6mm !important; height:54mm !important; aspect-ratio:auto !important; border:0.3mm solid #d8e5dc !important; border-radius:2mm !important; box-shadow:none !important; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+          .producer-id-card { width:85.6mm !important; height:54mm !important; aspect-ratio:auto !important; page-break-after:always; break-after:page; border:0.3mm solid #d8e5dc !important; border-radius:2mm !important; box-shadow:none !important; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
           .no-print { display:none !important; }
           .producer-id-label { font-size:6pt !important; }
           .producer-id-value { font-size:7.5pt !important; }
           .producer-id-name { font-size:14pt !important; }
           .producer-id-code { font-size:7pt !important; }
           .producer-id-qr { width:21mm !important; height:21mm !important; }
+          .producer-id-photo { width:18mm !important; height:22mm !important; border-radius:1mm !important; }
+          .producer-id-back-content { height:79% !important; }
         }
       `}</style>
 
       <div className="no-print mx-auto mb-5 max-w-xl text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">AURUM AGRO · Carte producteur</p>
-        <p className="mt-2 text-sm text-muted-foreground">Format carte d'identité (85,6 × 54 mm). Le QR code ouvre le profil public de vérification.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Carte recto-verso · 85,6 × 54 mm. Imprime les deux pages en recto-verso, retournement sur bord court.</p>
       </div>
 
       <section className="producer-id-card mx-auto">
@@ -88,7 +93,9 @@ function PublicProducerCardPage() {
         </header>
 
         <div className="producer-id-body">
-          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "clamp(4px, 1.3vw, 8px)" }}>
+          <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "clamp(5px, 1.4vw, 10px)" }}>
+            {p.photoUrl ? <img className="producer-id-photo" src={p.photoUrl} alt="Photo du producteur" /> : <div className="producer-id-photo" style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: "8px", textAlign: "center", padding: "2px" }}>PHOTO</div>}
+            <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "clamp(4px, 1.3vw, 8px)" }}>
             <div>
               <p className="producer-id-label">Nom du producteur</p>
               <h1 className="producer-id-name mt-1">{p.fullName || "Nom non renseigné"}</h1>
@@ -106,11 +113,37 @@ function PublicProducerCardPage() {
               <p className="producer-id-value mt-1">{[p.village, p.commune].filter(Boolean).join(" / ") || "Non renseigné"}</p>
             </div>
             <p style={{ fontSize: "clamp(5px, 1.25vw, 7px)", color: "#63766d" }}>Carte de référencement AURUM AGRO · Ne remplace pas une pièce officielle d'identité.</p>
+            </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
             <img src={qrUrl} alt="QR code de vérification AURUM" className="producer-id-qr" />
             <span style={{ fontSize: "clamp(5px, 1.25vw, 7px)", color: "#63766d", textAlign: "center" }}><QrCode style={{ display: "inline", width: 10, height: 10, verticalAlign: "middle" }} /> VÉRIFIER</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="producer-id-card producer-id-back mx-auto" aria-label="Verso de la carte producteur">
+        <header className="producer-id-header">
+          <div>
+            <p style={{ fontSize: "clamp(13px, 3vw, 20px)", fontWeight: 900, letterSpacing: ".12em", lineHeight: 1 }}>AURUM</p>
+            <p style={{ fontSize: "clamp(6px, 1.4vw, 8px)", letterSpacing: ".16em", marginTop: 3 }}>AGRO · TRAÇABILITÉ RESPONSABLE</p>
+          </div>
+          <span style={{ fontSize: "clamp(6px, 1.5vw, 9px)", letterSpacing: ".12em" }}>VERSO</span>
+        </header>
+        <div className="producer-id-back-content">
+          <div>
+            <p className="producer-id-label">Profil producteur</p>
+            <p className="producer-id-name" style={{ fontSize: "clamp(11px, 3vw, 18px)", marginTop: 3 }}>{p.fullName || "Producteur AURUM AGRO"}</p>
+            <p className="producer-id-value" style={{ marginTop: 5 }}>Code : {p.producerCode}</p>
+            <p className="producer-id-value" style={{ marginTop: 3 }}>Zone : {[p.village, p.commune, p.department, p.region].filter(Boolean).join(" · ") || "Non renseignée"}</p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: "clamp(7px, 1.8vw, 10px)", fontWeight: 800, color: "#17432f" }}>Une identité agricole, une traçabilité plus claire.</p>
+              <p style={{ fontSize: "clamp(5px, 1.25vw, 7px)", color: "#63766d", marginTop: 4 }}>Cette carte référence le producteur dans AURUM AGRO. Elle ne constitue pas une pièce officielle d'identité.</p>
+            </div>
+            <img src={qrUrl} alt="QR code de vérification" className="producer-id-qr" />
           </div>
         </div>
       </section>
