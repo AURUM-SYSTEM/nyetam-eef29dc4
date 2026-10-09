@@ -24,6 +24,7 @@ import {
   Download,
   CheckCircle2,
   ChevronDown,
+  CreditCard,
   Folder,
   History,
   Loader2,
@@ -59,6 +60,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { ModuleType } from "@/lib/offline-store";
 import { requestModification } from "@/lib/moderation.functions";
+import { issueProducerCard } from "@/lib/producer-card.functions";
 import { askAgriAssistant, generateOrientations, listAdvisorReports, markAdvisorReportTreated } from "@/lib/insights.functions";
 import {
   listParcelles,
@@ -902,8 +904,10 @@ function ProducerDetailRow({
 }) {
   const fetchDetails = useServerFn(getProducerDetails);
   const saveProducer = useServerFn(updateProducer);
+  const createProducerCard = useServerFn(issueProducerCard);
 
   const [loading, setLoading] = useState(true);
+  const [cardBusy, setCardBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parcelles, setParcelles] = useState<Array<{
     id: string;
@@ -1158,6 +1162,21 @@ function ProducerDetailRow({
     }
   }
 
+  async function handleCreateProducerCard() {
+    setCardBusy(true);
+    try {
+      const result = await createProducerCard({ data: { producerId } });
+      const token = (result.card as any)?.public_token;
+      if (!token) throw new Error("La carte a été créée mais son lien public est absent.");
+      window.open(`/p/${token}`, "_blank", "noopener,noreferrer");
+      toast.success("Carte producteur ouverte dans un nouvel onglet. Vous pouvez l’imprimer depuis cette page.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Impossible de créer la carte producteur.");
+    } finally {
+      setCardBusy(false);
+    }
+  }
+
   async function handleSave() {
     if (!fullName.trim()) {
       toast.error("Le nom complet est obligatoire.");
@@ -1301,6 +1320,12 @@ function ProducerDetailRow({
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void handleCreateProducerCard()} disabled={cardBusy || loading || !producerCode}
+                title="Créer ou ouvrir la carte publique du producteur"
+                className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-700 disabled:opacity-40">
+                <CreditCard className="mr-1 inline h-3.5 w-3.5" />
+                {cardBusy ? "Création…" : "Créer la carte producteur"}
+              </button>
               <button type="button" onClick={() => void exportProducerPdf()} disabled={saving || !producerCode}
                 className="rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-xs text-gold disabled:opacity-40">
                 <Download className="mr-1 inline h-3.5 w-3.5" />
