@@ -143,7 +143,7 @@ export const getPublicProducerCard = createServerFn({ method: "POST" })
 
     const { data: producer, error: producerError } = await supabaseAdmin
       .from("producers")
-      .select("producer_code, full_name, village, commune, department, region, cooperative_id")
+      .select("producer_code, full_name, village, commune, department, region, cooperative_id, photo_url")
       .eq("id", (card as any).producer_id)
       .eq("organization_id", (card as any).organization_id)
       .single();
@@ -179,6 +179,7 @@ export const getPublicProducerCard = createServerFn({ method: "POST" })
     return {
       producer: {
         producerCode: (producer as any).producer_code,
+        photoUrl: (producer as any).photo_url ?? null,
         fullName: (producer as any).full_name,
         cooperativeName,
         village: (producer as any).village ?? null,
@@ -188,4 +189,39 @@ export const getPublicProducerCard = createServerFn({ method: "POST" })
       },
       issuedAt: (card as any).issued_at,
     };
+  });
+
+
+export const uploadProducerCardPhoto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { producerId: string; imageBase64: string; contentType: string }) =>
+    z.object({
+      producerId: z.string().uuid(),
+      imageBase64: z.string().min(100).max(7_000_000),
+      contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const orgId = await assertProducerCardsEnabled(context.userId);
+    if (!(await canManageProducerCards(context.userId, orgId, context.supabase))) {
+      throw new Error("Accès refusé : seul un superviseur autorisé peut ajouter la photo.");
+    }
+    const { data: producer, error: producerError } = await supabaseAdmin
+      .from("producers").select("id, organization_id")
+      .eq("id", data.producerId).eq("organization_id", orgId).single();
+    if (producerError || !producer) throw new Error("Producteur introuvable dans votre organisation.");
+
+    const ext = data.contentType === "image/png" ? "png" : data.contentType === "image/webp" ? "webp" : "jpg";
+    const path = orgId + "/" + data.producerId + "." + ext;
+    const bytes = Uint8Array.from(atob(data.imageBase64), ch => ch.charCodeAt(0));
+    const { error: uploadError } = await supabaseAdmin.storage.from("producer-photos").upload(path, bytes, {
+      contentType: data.contentType, upsert: true, cacheControl: "3600",
+    });
+    if (uploadError) throw new Error("Téléversement de la photo impossible : " + uploadError.message);
+    const { data: publicData } = supabaseAdmin.storage.from("producer-photos").getPublicUrl(path);
+    const photoUrl = publicData.publicUrl + "?v=" + Date.now();
+    const { error: updateError } = await supabaseAdmin.from("producers")
+      .update({ photo_url: photoUrl } as any).eq("id", data.producerId).eq("organization_id", orgId);
+    if (updateError) throw new Error("Photo envoyée, mais enregistrement impossible : " + updateError.message);
+    return { photoUrl };
   });
