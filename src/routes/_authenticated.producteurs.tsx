@@ -39,6 +39,7 @@ function ProducteursPage() {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [cardsEnabled, setCardsEnabled] = useState(false);
+  const [cardFeatureMessage, setCardFeatureMessage] = useState("Vérification de la fonctionnalité Cartes producteurs…");
   const [cardLoadingId, setCardLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,9 +50,18 @@ function ProducteursPage() {
           fetchProducers({ data: undefined as any }),
           fetchCardFeature({ data: undefined as any }),
         ]);
-        if (!cancelled) { setRows(res.producers); setCardsEnabled(feature.enabled); }
+        if (!cancelled) {
+          setRows(res.producers);
+          setCardsEnabled(feature.enabled);
+          setCardFeatureMessage(feature.enabled
+            ? "Les cartes producteurs sont activées."
+            : "Les cartes producteurs ne sont pas activées pour cette organisation ou votre compte ne dispose pas des droits nécessaires. Vérifiez Administration → Cartes producteurs.");
+        }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Erreur de chargement");
+        if (!cancelled) {
+          setError(e?.message ?? "Erreur de chargement");
+          setCardFeatureMessage("Impossible de vérifier l’accès aux cartes producteurs. Rechargez la page ou vérifiez la configuration.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -110,6 +120,16 @@ function ProducteursPage() {
         </div>
       </div>
 
+      <div className={`mt-4 rounded-xl border p-3 text-sm ${cardsEnabled ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700" : "border-amber-500/30 bg-amber-500/5 text-amber-700"}`} role="status">
+        <div className="flex items-start gap-2">
+          <CreditCard className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">Cartes producteurs</p>
+            <p className="mt-1 text-xs">{cardFeatureMessage}</p>
+          </div>
+        </div>
+      </div>
+
       <section className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-lg">Résultats</h2>
@@ -161,21 +181,19 @@ function ProducteursPage() {
                     </div>
                   )}
                 </div>
-                {cardsEnabled && (
-                  <button
-                    type="button"
-                    onClick={() => void openProducerCard(p.id)}
-                    disabled={cardLoadingId === p.id}
-                    title="Créer ou ouvrir la carte du producteur"
-                    aria-label={`Créer ou ouvrir la carte de ${p.fullName}`}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gold/40 px-2.5 py-2 text-xs font-medium text-gold transition-colors hover:bg-gold/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {cardLoadingId === p.id
-                      ? <Loader2 className="h-4 w-4 animate-spin" />
-                      : <CreditCard className="h-4 w-4" />}
-                    <span className="hidden sm:inline">Carte</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => cardsEnabled && void openProducerCard(p.id)}
+                  disabled={!cardsEnabled || cardLoadingId === p.id}
+                  title={cardsEnabled ? "Créer ou ouvrir la carte du producteur" : "Fonctionnalité non activée ou droits insuffisants"}
+                  aria-label={cardsEnabled ? `Créer ou ouvrir la carte de ${p.fullName}` : "Cartes producteurs désactivées"}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${cardsEnabled ? "border-gold/40 text-gold hover:bg-gold/10" : "border-border text-muted-foreground"}`}
+                >
+                  {cardLoadingId === p.id
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <CreditCard className="h-4 w-4" />}
+                  <span className="hidden sm:inline">{cardsEnabled ? "Carte" : "Cartes off"}</span>
+                </button>
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </div>
             </li>
