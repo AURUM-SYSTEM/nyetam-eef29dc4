@@ -2795,62 +2795,81 @@ function SupervisorDashboardContent() {
   }
 
   return (
-    <div className="px-5 pb-32 pt-8">
-      <div className="mb-6 flex items-center justify-end gap-2">
-        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] uppercase tracking-widest text-emerald-400">
-          Données réelles
-        </span>
+    <div className="mx-auto max-w-[1680px] px-4 pb-12 pt-5 sm:px-6 lg:px-8">
+      <header className="mb-6 flex flex-col gap-4 border-b border-border/70 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800/80 dark:text-emerald-300">AURUM AGRO · SUPERVISION</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Pilotage des opérations</h1>
+          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
+            Une vue claire des activités terrain, des données collectées et de leur synchronisation.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 self-start rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground sm:self-auto">
+          <span className="h-2 w-2 rounded-full bg-emerald-600" />
+          Espace de supervision
+        </div>
+      </header>
+
+      <section aria-label="Indicateurs clés" className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <MetricCard icon={Activity} label="Total des activités" value={total} />
+        <MetricCard icon={Users} label="Agents observés" value={activeAgents} />
+        <MetricCard icon={Radio} label="Activités aujourd’hui" value={todayCount} />
+        <MetricCard icon={CheckCircle2} label="Dossiers prêts" value={`${syncRate}%`} />
+      </section>
+
+      <div className="mb-5 grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,1fr)]">
+        <section className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-4 sm:px-5">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Répartition géographique</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Localisations disponibles dans les collectes</p>
+            </div>
+            <span className="rounded-lg bg-secondary/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{docs.filter((d) => typeof d.location_data?.lat === "number" && typeof d.location_data?.lng === "number").length} points GPS</span>
+          </div>
+          <div className="p-3 sm:p-4">
+            <SupervisorMap docs={docs} />
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 border-t border-border/60 pt-3">
+              {moduleOptions.map((m) => (
+                <div key={m} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="h-2.5 w-2.5 rounded-full ring-2 ring-background" style={{ backgroundColor: moduleColor(m) }} />
+                  {moduleLabel(m)}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm sm:p-5">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold tracking-tight">Activité sur 14 jours</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Nombre d’activités enregistrées par jour</p>
+          </div>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={byDay} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="day" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={12} />
+                <YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={false} tickLine={false} width={32} />
+                <RechartsTooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }} />
+                <Bar dataKey="count" name="Activités" fill="#176344" radius={[5, 5, 0, 0]} maxBarSize={24} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-3 text-xs text-muted-foreground">
+            <span>{total} activité{total !== 1 ? "s" : ""} au total</span>
+            <span>{todayCount} aujourd’hui</span>
+          </div>
+        </section>
       </div>
 
-      <SupervisorFolder title="Vue d’ensemble" description="Indicateurs, carte et activité récente" open={openFolder === "overview"} onToggle={() => setOpenFolder("overview")}>
-              <header className="mb-8">
-                <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Supervision</p>
-                <h1 className="mt-2 font-display text-3xl leading-tight sm:text-4xl">
-                  Tableau de bord <span className="gold-text">Superviseur</span>
-                </h1>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Vue d'ensemble des activités terrain de ton organisation, en temps réel.
-                </p>
-              </header>
-        
-              <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <MetricCard icon={Activity} label="Total activités" value={total} />
-                <MetricCard icon={Users} label="Agents actifs" value={activeAgents} />
-                <MetricCard icon={Radio} label="Aujourd'hui" value={todayCount} />
-                <MetricCard icon={CheckCircle2} label="Taux de synchro" value={`${syncRate}%`} />
-              </section>
-        
-              <section className="glass-card mb-6 rounded-2xl p-5">
-                <h2 className="mb-3 font-display text-lg">Répartition géographique</h2>
-                <SupervisorMap docs={docs} />
-                <div className="mt-3 flex flex-wrap gap-3">
-                  {moduleOptions.map((m) => (
-                    <div key={m} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: moduleColor(m) }} />
-                      {moduleLabel(m)}
-                    </div>
-                  ))}
-                </div>
-              </section>
-        
-              <section className="glass-card mb-6 rounded-2xl p-5">
-                <h2 className="mb-3 font-display text-lg">Activité — 14 derniers jours</h2>
-                <div className="h-56 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={byDay}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                      <XAxis dataKey="day" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} axisLine={false} tickLine={false} width={24} />
-                      <RechartsTooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                      <Bar dataKey="count" fill="var(--gold)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </section>
-        
-              </SupervisorFolder>
+      <div className="mb-3 flex items-center gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Espaces de travail</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Accédez aux données, au suivi terrain et aux outils de conformité.</p>
+        </div>
+      </div>
 
-      <SupervisorFolder title="Terrain & journal" description="Journal d’activité, parcelles et producteurs" icon={Folder} open={openFolder === "terrain"} onToggle={() => setOpenFolder("terrain")}>
+      <SupervisorFolder title="Terrain & journal" description="Journal d’activité, parcelles et producteurs" icon={Folder} open={openFolder === "terrain"} onToggle={() => setOpenFolder(openFolder === "terrain" ? "overview" : "terrain")}>
               {/* Journal d'activité — pas réservé au module agro : documents couvre
                   tous les modules, et audit_log filtre déjà par organisation. */}
               <AuditLogSection />
@@ -3036,30 +3055,33 @@ function SupervisorDashboardContent() {
 
 function SupervisorFolder({ title, description, icon: Icon = Folder, open, onToggle, children }: { title: string; description: string; icon?: typeof Folder; open: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
-    <section className="mb-4 overflow-hidden rounded-2xl border border-border bg-card/30 shadow-sm">
-      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-secondary/40 sm:px-5">
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${open ? "border-gold/30 bg-gold/10 text-gold" : "border-border bg-secondary/40 text-muted-foreground"}`}>
+    <section className="mb-3 overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition-shadow hover:shadow-md">
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-h-[76px] w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-secondary/30 sm:gap-4 sm:px-5">
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${open ? "bg-emerald-800 text-white" : "bg-secondary text-foreground"}`}>
           <Icon className="h-5 w-5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-display text-base sm:text-lg">{title}</span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+          <span className="block text-sm font-semibold tracking-tight sm:text-base">{title}</span>
+          <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
         </span>
-        <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180 text-gold" : ""}`} />
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180 text-emerald-700 dark:text-emerald-300" : "text-muted-foreground"}`} />
       </button>
-      {open && <div className="border-t border-border p-3 sm:p-5">{children}</div>}
+      {open && <div className="border-t border-border/70 bg-background/40 p-3 sm:p-5">{children}</div>}
     </section>
   );
 }
 
 function MetricCard({ icon: Icon, label, value }: { icon: typeof Activity; label: string; value: string | number }) {
   return (
-    <div className="glass-card rounded-xl p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        <span className="text-[10px] uppercase tracking-wider">{label}</span>
+    <div className="group min-w-0 rounded-2xl border border-border/80 bg-card p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-700/30 hover:shadow-md sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-800/[0.08] text-emerald-800 dark:text-emerald-300">
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="mt-1 h-2 w-2 rounded-full bg-emerald-600/70" aria-hidden="true" />
       </div>
-      <div className="mt-2 font-display text-2xl">{value}</div>
+      <p className="mt-4 text-xs font-medium leading-5 text-muted-foreground sm:text-sm">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{value}</p>
     </div>
   );
 }
