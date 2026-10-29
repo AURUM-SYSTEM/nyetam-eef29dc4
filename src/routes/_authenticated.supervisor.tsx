@@ -2804,12 +2804,9 @@ function SupervisorDashboardContent() {
             Une vue claire des activités terrain, des données collectées et de leur synchronisation.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2 self-start rounded-full border border-emerald-700/20 bg-emerald-700/[0.06] px-3 py-2 text-xs font-medium text-emerald-800 dark:text-emerald-300 sm:self-auto">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-30" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" />
-          </span>
-          Données chargées
+        <div className="flex shrink-0 items-center gap-2 self-start rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground sm:self-auto">
+          <span className="h-2 w-2 rounded-full bg-emerald-600" />
+          Espace de supervision
         </div>
       </header>
 
@@ -2817,7 +2814,7 @@ function SupervisorDashboardContent() {
         <MetricCard icon={Activity} label="Total des activités" value={total} />
         <MetricCard icon={Users} label="Agents observés" value={activeAgents} />
         <MetricCard icon={Radio} label="Activités aujourd’hui" value={todayCount} />
-        <MetricCard icon={CheckCircle2} label="Documents synchronisés" value={`${syncRate}%`} />
+        <MetricCard icon={CheckCircle2} label="Dossiers prêts" value={`${syncRate}%`} />
       </section>
 
       <div className="mb-5 grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,1fr)]">
