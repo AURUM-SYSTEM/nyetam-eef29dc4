@@ -1,17 +1,15 @@
 // ─────────────────────────────────────────────────────────────────────────
 // AURUM — Espace de gestion
-//
-// Sidebar fixe à gauche sur desktop, menu burger sur mobile. Concerne
-// uniquement les pages backoffice (/supervisor, /admin) — l'app de
-// collecte terrain (agents, mobile) garde sa propre navigation.
+// Sidebar premium sur ordinateur, navigation compacte sur mobile.
+// La collecte terrain conserve sa propre navigation.
 // ─────────────────────────────────────────────────────────────────────────
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
-import { Coins, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, X } from "lucide-react";
+import { Coins, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, X, Sprout } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const NAV_ITEMS = [
-  { to: "/supervisor", label: "Pilotage", icon: LayoutDashboard },
+  { to: "/supervisor", label: "Tableau de bord", icon: LayoutDashboard },
   { to: "/admin", label: "Administration", icon: ShieldCheck },
   { to: "/commissions", label: "Commissions", icon: Coins },
   { to: "/settings", label: "Paramètres", icon: Settings },
@@ -19,7 +17,7 @@ const NAV_ITEMS = [
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
-    <nav className="flex flex-col gap-1">
+    <nav aria-label="Navigation principale" className="flex flex-col gap-1.5">
       {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
         const active = pathname === to;
         return (
@@ -29,11 +27,11 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
             onClick={onNavigate}
             className={
               active
-                ? "flex items-center gap-2.5 rounded-lg bg-gold/10 px-3 py-2.5 text-sm font-medium text-gold"
-                : "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+                ? "relative flex items-center gap-3 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm font-semibold text-white shadow-sm before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-r-full before:bg-[#d7b45b]"
+                : "flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white"
             }
           >
-            <Icon className="h-4 w-4 shrink-0" />
+            <Icon className={`h-[18px] w-[18px] shrink-0 ${active ? "text-[#e2c675]" : ""}`} />
             {label}
           </Link>
         );
@@ -49,62 +47,74 @@ export function BackofficeShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   async function handleSignOut() {
-    await signOut(); // appelle supabase.auth.signOut() et vide le cache profil
+    await signOut();
     void navigate({ to: "/login" });
   }
 
   const signOutButton = (
     <button
       onClick={() => void handleSignOut()}
-      className="flex w-full items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:border-gold/30 hover:text-foreground"
+      className="flex w-full items-center gap-3 rounded-xl border border-white/15 px-3 py-3 text-sm text-white/70 transition-colors hover:border-white/30 hover:bg-white/[0.06] hover:text-white"
     >
-      <LogOut className="h-4 w-4 shrink-0" />
+      <LogOut className="h-[18px] w-[18px] shrink-0" />
       Déconnexion
     </button>
   );
 
   return (
-    <div className="min-h-screen">
-      {/* ── Sidebar desktop ─────────────────────────────────────────── */}
-      <aside className="glass-card fixed inset-y-0 left-0 z-40 hidden w-60 flex-col rounded-none border-y-0 border-l-0 lg:flex">
-        <div className="px-5 pb-4 pt-8">
-          <p className="font-display text-xl">
-            <span className="gold-text">AURUM</span>
-          </p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Backoffice</p>
+    <div className="min-h-screen bg-background">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] flex-col border-r border-white/10 bg-[#082f24] text-white shadow-xl lg:flex">
+        <div className="border-b border-white/10 px-6 pb-6 pt-7">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#d7b45b]/30 bg-[#d7b45b]/10 text-[#e2c675]">
+              <Sprout className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="font-display text-[22px] leading-none tracking-wide text-[#e2c675]">AURUM</p>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-white/75">AGRO</p>
+            </div>
+          </div>
+          <p className="mt-5 text-[10px] font-medium uppercase tracking-[0.2em] text-white/45">Espace professionnel</p>
         </div>
-        <div className="flex-1 overflow-y-auto px-3">
+        <div className="flex-1 overflow-y-auto px-3 py-5">
+          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">Navigation</p>
           <NavLinks pathname={pathname} />
         </div>
-        <div className="px-3 pb-6 pt-3">{signOutButton}</div>
+        <div className="border-t border-white/10 px-3 py-4">
+          <p className="mb-3 px-3 text-[10px] leading-4 text-white/40">Plateforme de gestion et de traçabilité agricole</p>
+          {signOutButton}
+        </div>
       </aside>
 
-      {/* ── Barre mobile + menu burger ──────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur lg:hidden">
-        <div className="flex items-center justify-between px-4 py-3">
-          <p className="font-display text-lg">
-            <span className="gold-text">AURUM</span>{" "}
-            <span className="text-xs uppercase tracking-widest text-muted-foreground">Backoffice</span>
-          </p>
+      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/95 shadow-sm backdrop-blur lg:hidden">
+        <div className="flex min-h-[64px] items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#082f24] text-[#e2c675]">
+              <Sprout className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-display text-lg leading-none"><span className="gold-text">AURUM</span> <span className="text-foreground">AGRO</span></p>
+              <p className="mt-1 text-[9px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Espace de supervision</p>
+            </div>
+          </div>
           <button
             onClick={() => setMobileOpen((v) => !v)}
             aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
             aria-expanded={mobileOpen}
-            className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-foreground transition-colors hover:bg-secondary"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
         {mobileOpen && (
-          <div className="space-y-3 border-t border-border px-3 pb-4 pt-3">
+          <div className="space-y-3 border-t border-white/10 bg-[#082f24] px-3 pb-4 pt-3">
             <NavLinks pathname={pathname} onNavigate={() => setMobileOpen(false)} />
             {signOutButton}
           </div>
         )}
       </header>
 
-      {/* ── Contenu ─────────────────────────────────────────────────── */}
-      <main className="lg:pl-60">{children}</main>
+      <main className="min-h-screen lg:pl-[252px]">{children}</main>
     </div>
   );
 }
