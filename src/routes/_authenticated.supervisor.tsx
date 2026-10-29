@@ -2873,7 +2873,6 @@ function SupervisorDashboardContent() {
       </div>
 
       <SupervisorFolder title="Terrain & journal" description="Journal d’activité, parcelles et producteurs" icon={Folder} open={openFolder === "terrain"} onToggle={() => setOpenFolder(openFolder === "terrain" ? "overview" : "terrain")}>
- description="Journal d’activité, parcelles et producteurs" icon={Folder} open={openFolder === "terrain"} onToggle={() => setOpenFolder("terrain")}>
               {/* Journal d'activité — pas réservé au module agro : documents couvre
                   tous les modules, et audit_log filtre déjà par organisation. */}
               <AuditLogSection />
