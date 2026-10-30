@@ -2692,6 +2692,18 @@ function SupervisorDashboardContent() {
   const [exportingActivities, setExportingActivities] = useState(false);
   const [openFolder, setOpenFolder] = useState<"overview" | "terrain" | "data" | "traceability" | "assistant" | "activities">("overview");
 
+  useEffect(() => {
+    const syncWorkspaceFromHash = () => {
+      const section = window.location.hash.replace("#", "");
+      if (section === "terrain" || section === "data" || section === "traceability" || section === "assistant" || section === "activities") {
+        setOpenFolder(section);
+      }
+    };
+    syncWorkspaceFromHash();
+    window.addEventListener("hashchange", syncWorkspaceFromHash);
+    return () => window.removeEventListener("hashchange", syncWorkspaceFromHash);
+  }, []);
+
   const agentOptions = useMemo(
     () => Array.from(new Set(Object.values(profilesById))).sort(),
     [profilesById],
@@ -2818,7 +2830,7 @@ function SupervisorDashboardContent() {
       </section>
 
       <div className="mb-5 grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,1fr)]">
-        <section className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
+        <section id="geography" className="scroll-mt-24 overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-4 sm:px-5">
             <div>
               <h2 className="text-base font-semibold tracking-tight">Répartition géographique</h2>
@@ -2869,7 +2881,7 @@ function SupervisorDashboardContent() {
         </div>
       </div>
 
-      <SupervisorFolder title="Terrain & journal" description="Journal d’activité, parcelles et producteurs" icon={Folder} open={openFolder === "terrain"} onToggle={() => setOpenFolder(openFolder === "terrain" ? "overview" : "terrain")}>
+      <div id="terrain" className="scroll-mt-24"><SupervisorFolder title="Terrain & journal" description="Journal d’activité, parcelles et producteurs" icon={Folder} open={openFolder === "terrain"} onToggle={() => setOpenFolder(openFolder === "terrain" ? "overview" : "terrain")}>
               {/* Journal d'activité — pas réservé au module agro : documents couvre
                   tous les modules, et audit_log filtre déjà par organisation. */}
               <AuditLogSection />
@@ -2882,9 +2894,9 @@ function SupervisorDashboardContent() {
                 </div>
               )}
         
-              </SupervisorFolder>
+              </SupervisorFolder></div>
 
-      <SupervisorFolder title="Données" description="Restitution, qualité et analyse des données" icon={Folder} open={openFolder === "data"} onToggle={() => setOpenFolder("data")}>
+      <div id="data" className="scroll-mt-24"><SupervisorFolder title="Données" description="Restitution, qualité et analyse des données" icon={Folder} open={openFolder === "data"} onToggle={() => setOpenFolder("data")}>
               {/* AGRO — restitution prête pour le pilote UNAPROCAM */}
               {profile?.module_type === "agro" && <DataRestitutionSection />}
         
@@ -2894,18 +2906,18 @@ function SupervisorDashboardContent() {
               {/* AGRO — Data Analyst (complétude, validation, volumes) */}
               {profile?.module_type === "agro" && <DataAnalystSection />}
         
-              </SupervisorFolder>
+              </SupervisorFolder></div>
 
-      <SupervisorFolder title="Traçabilité & conformité" description="EUDR et fonctions de partenariat activés" icon={Folder} open={openFolder === "traceability"} onToggle={() => setOpenFolder("traceability")}>
+      <div id="traceability" className="scroll-mt-24"><SupervisorFolder title="Traçabilité & conformité" description="EUDR et fonctions de partenariat activés" icon={Folder} open={openFolder === "traceability"} onToggle={() => setOpenFolder("traceability")}>
               {/* AGRO — module de valorisation, visible uniquement si AURUM l'a activé */}
               {profile?.module_type === "agro" && <CommercialDataModuleSection />}
         
               {/* AGRO — Conformité EUDR (extension optionnelle, n'affiche rien si désactivée) */}
               {profile?.module_type === "agro" && <EudrComplianceSection />}
         
-              </SupervisorFolder>
+              </SupervisorFolder></div>
 
-      <SupervisorFolder title="Assistant agricole" description="Assistant et recommandations pour l’agriculture" icon={Sprout} open={openFolder === "assistant"} onToggle={() => setOpenFolder("assistant")}>
+      <div id="assistant" className="scroll-mt-24"><SupervisorFolder title="Assistant agricole" description="Assistant et recommandations pour l’agriculture" icon={Sprout} open={openFolder === "assistant"} onToggle={() => setOpenFolder("assistant")}>
               {/* AGRO — Assistant Agro (questions libres) et Agro Advisor (synthèse) — deux blocs distincts */}
               {profile?.module_type === "agro" && (
                 <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 [&>section]:mb-0">
@@ -2914,9 +2926,9 @@ function SupervisorDashboardContent() {
                 </div>
               )}
         
-              </SupervisorFolder>
+              </SupervisorFolder></div>
 
-      <SupervisorFolder title="Activités" description="Alertes et opérations récentes" icon={Activity} open={openFolder === "activities"} onToggle={() => setOpenFolder("activities")}>
+      <div id="activities" className="scroll-mt-24"><SupervisorFolder title="Activités" description="Alertes et opérations récentes" icon={Activity} open={openFolder === "activities"} onToggle={() => setOpenFolder("activities")}>
               {alerts.length > 0 && (
                 <section className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5">
                   <h2 className="mb-3 flex items-center gap-2 font-display text-lg text-amber-300">
@@ -3048,7 +3060,7 @@ function SupervisorDashboardContent() {
                   </p>
                 )}
               </section>
-      </SupervisorFolder>
+      </SupervisorFolder></div>
     </div>
   );
 }

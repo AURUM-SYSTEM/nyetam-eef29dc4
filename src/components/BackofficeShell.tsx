@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
-import { Coins, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, X, Sprout } from "lucide-react";
+import { Activity, Coins, ClipboardList, Database, LayoutDashboard, LogOut, MapPin, Menu, Settings, ShieldCheck, Sprout, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 const NAV_ITEMS = [
@@ -15,27 +15,41 @@ const NAV_ITEMS = [
   { to: "/settings", label: "Paramètres", icon: Settings },
 ] as const;
 
+const WORKSPACE_ITEMS = [
+  { id: "geography", label: "Répartition géographique", icon: MapPin },
+  { id: "terrain", label: "Terrain & journal", icon: ClipboardList },
+  { id: "data", label: "Données", icon: Database },
+  { id: "traceability", label: "Traçabilité & conformité", icon: ShieldCheck },
+  { id: "assistant", label: "Assistant agricole", icon: Sprout },
+  { id: "activities", label: "Activités", icon: Activity },
+] as const;
+
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+  const linkClass = (active: boolean) => active
+    ? "relative flex min-h-[68px] items-center gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 text-base font-semibold text-white shadow-sm before:absolute before:inset-y-3 before:left-0 before:w-1.5 before:rounded-r-full before:bg-[#d7b45b]"
+    : "flex min-h-[68px] items-center gap-4 rounded-2xl px-4 py-4 text-base font-medium text-white/75 transition-colors hover:bg-white/[0.07] hover:text-white";
   return (
-    <nav aria-label="Navigation principale" className="flex flex-col gap-2.5">
+    <nav aria-label="Navigation principale" className="flex flex-col gap-2">
       {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
         const active = pathname === to;
         return (
-          <Link
-            key={to}
-            to={to}
-            onClick={onNavigate}
-            className={
-              active
-                ? "relative flex min-h-[68px] items-center gap-4 rounded-2xl border border-white/10 bg-white/10 px-5 py-4 text-lg font-semibold text-white shadow-sm before:absolute before:inset-y-3 before:left-0 before:w-1.5 before:rounded-r-full before:bg-[#d7b45b]"
-                : "flex min-h-[68px] items-center gap-4 rounded-2xl px-5 py-4 text-lg font-medium text-white/75 transition-colors hover:bg-white/[0.07] hover:text-white"
-            }
-          >
+          <Link key={to} to={to} onClick={onNavigate} className={linkClass(active)}>
             <Icon className={`h-6 w-6 shrink-0 ${active ? "text-[#e2c675]" : ""}`} />
-            {label}
+            <span>{label}</span>
           </Link>
         );
       })}
+      <div className="mb-1 mt-5 border-t border-white/10 pt-5">
+        <p className="mb-3 px-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e2c675]">Espaces de travail</p>
+        <div className="flex flex-col gap-2">
+          {WORKSPACE_ITEMS.map(({ id, label, icon: Icon }) => (
+            <a key={id} href={`/supervisor#${id}`} onClick={onNavigate} className={linkClass(false)}>
+              <Icon className="h-6 w-6 shrink-0 text-[#e2c675]" />
+              <span className="leading-tight">{label}</span>
+            </a>
+          ))}
+        </div>
+      </div>
     </nav>
   );
 }
@@ -63,7 +77,7 @@ export function BackofficeShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] flex-col border-r border-white/10 bg-[#082f24] text-white shadow-xl lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[292px] flex-col border-r border-white/10 bg-[#082f24] text-white shadow-xl lg:flex">
         <div className="border-b border-white/10 px-6 pb-6 pt-7">
           <div className="flex items-center gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#d7b45b]/30 bg-[#d7b45b]/10 text-[#e2c675]">
@@ -114,7 +128,7 @@ export function BackofficeShell({ children }: { children: React.ReactNode }) {
         )}
       </header>
 
-      <main className="min-h-screen lg:pl-[252px]">{children}</main>
+      <main className="min-h-screen lg:pl-[292px]">{children}</main>
     </div>
   );
 }
