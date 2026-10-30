@@ -131,7 +131,10 @@ export async function captureGps(
         if (err.code === err.PERMISSION_DENIED) {
           debugError("[GPS DEBUG] permission de géolocalisation refusée — abandon immédiat");
           clearTimeout(t);
-          finish(latest, "permission-denied");
+          const acceptable = latest && latest.accuracy != null && latest.accuracy <= maxAccuracyM
+            ? latest
+            : null;
+          finish(acceptable, "permission-denied");
         }
         // POSITION_UNAVAILABLE / TIMEOUT : transitoire, on laisse
         // watchPosition continuer d'essayer jusqu'au timeout global.
