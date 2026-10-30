@@ -73,7 +73,7 @@ class BoundaryRenderErrorBoundary extends Component<{ children: ReactNode }, { e
   }
 }
 
-function PerimeterMapPreview({ points }: { points: Array<{ lat: number; lng: number }> }) {
+function PerimeterMapPreview({ points, closed = false }: { points: Array<{ lat: number; lng: number; accuracy?: number }>; closed?: boolean }) {
   const [leafletMod, setLeafletMod] = useState<typeof import("@/components/LeafletMaps") | null>(null);
 
   useEffect(() => {
@@ -86,7 +86,7 @@ function PerimeterMapPreview({ points }: { points: Array<{ lat: number; lng: num
   if (!leafletMod) {
     return <div className="h-40 w-full rounded-lg border border-border bg-secondary/40" />;
   }
-  return <leafletMod.PerimeterLeafletMap points={points} />;
+  return <leafletMod.PerimeterLeafletMap points={points} closed={closed} />;
 }
 
 function pickVideoMimeType(): string {
@@ -1394,7 +1394,7 @@ function RecordPage() {
                           {formatSurfaceHa(computePolygonAreaHectares(boundaryPoints))} ha
                           {" "}(≈ {Math.round(computePolygonAreaHectares(boundaryPoints) * 10000)} m²)
                         </p>
-                        <PerimeterMapPreview points={boundaryPoints} />
+                        <PerimeterMapPreview points={boundaryPoints} closed />
                         <button type="button" onClick={handleResetBoundary}
                           className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
                           Reprendre le périmètre
@@ -1444,7 +1444,7 @@ function RecordPage() {
                             </p>
                           ) : null;
                         })()}
-                        <PerimeterMapPreview points={boundaryPoints} />
+                        <PerimeterMapPreview points={boundaryPoints} closed={false} />
                       </div>
                     )}
                     </BoundaryRenderErrorBoundary>
