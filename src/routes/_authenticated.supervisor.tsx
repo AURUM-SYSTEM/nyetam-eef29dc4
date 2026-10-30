@@ -2813,12 +2813,12 @@ function SupervisorDashboardContent() {
 
   return (
     <div className="mx-auto max-w-[1680px] px-4 pb-12 pt-5 sm:px-6 lg:px-8">
-      <header className="mb-6 flex flex-col gap-4 border-b border-border/70 pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <header className="mb-5 flex flex-col gap-3 border-b border-border/70 pb-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:pb-5">
         <div className="min-w-0">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800/80 dark:text-emerald-300">AURUM AGRO · SUPERVISION</p>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Pilotage des opérations</h1>
-          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
-            Une vue claire des activités terrain, des données collectées et de leur synchronisation.
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-800/80 dark:text-emerald-300">AURUM AGRO · SUPERVISION</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-3xl">{({ overview: "Tableau de bord", geography: "Répartition géographique", terrain: "Terrain & journal", data: "Données", traceability: "Traçabilité & conformité", assistant: "Assistant agricole", activities: "Activités" } as const)[selectedWorkspace]}</h1>
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">
+            {selectedWorkspace === "overview" ? "Vue d’ensemble des opérations et des indicateurs de supervision." : ({ geography: "Visualisez les localisations GPS disponibles dans les collectes.", terrain: "Consultez le journal, les parcelles et les producteurs.", data: "Suivez la restitution, la qualité et l’analyse des données.", traceability: "Consultez les outils de traçabilité et de conformité.", assistant: "Accédez à l’assistant et aux recommandations agricoles.", activities: "Retrouvez les alertes et les opérations récentes." } as const)[selectedWorkspace]}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground sm:self-auto">
@@ -2827,15 +2827,15 @@ function SupervisorDashboardContent() {
         </div>
       </header>
 
-      <section aria-label="Indicateurs clés" className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      {selectedWorkspace === "overview" && <section aria-label="Indicateurs clés" className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricCard icon={Activity} label="Total des activités" value={total} />
         <MetricCard icon={Users} label="Agents observés" value={activeAgents} />
         <MetricCard icon={Radio} label="Activités aujourd’hui" value={todayCount} />
         <MetricCard icon={CheckCircle2} label="Dossiers prêts" value={`${syncRate}%`} />
-      </section>
+      </section>}
 
       {selectedWorkspace === "geography" && (
-      <div className="mb-5 grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,1fr)]">
+        <div className="mb-5">
         <section id="geography" className="scroll-mt-24 overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-4 sm:px-5">
             <div>
@@ -2856,9 +2856,12 @@ function SupervisorDashboardContent() {
             </div>
           </div>
         </section>
+        </div>
+      )}
 
-        <section className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm sm:p-5">
-          <div className="mb-4">
+      {selectedWorkspace === "overview" && (
+        <section className="mb-5 rounded-2xl border border-border/80 bg-card p-4 shadow-sm sm:p-5">
+<div className="mb-4">
             <h2 className="text-base font-semibold tracking-tight">Activité sur 14 jours</h2>
             <p className="mt-1 text-xs text-muted-foreground">Nombre d’activités enregistrées par jour</p>
           </div>
@@ -2878,9 +2881,7 @@ function SupervisorDashboardContent() {
             <span>{todayCount} aujourd’hui</span>
           </div>
         </section>
-      </div>
       )}
-
 
 
       {selectedWorkspace === "terrain" && (

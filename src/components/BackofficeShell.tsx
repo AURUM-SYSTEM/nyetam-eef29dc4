@@ -4,7 +4,7 @@
 // La collecte terrain conserve sa propre navigation.
 // ─────────────────────────────────────────────────────────────────────────
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity, Coins, ClipboardList, Database, LayoutDashboard, LogOut, MapPin, Menu, Settings, ShieldCheck, Sprout, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -24,10 +24,10 @@ const WORKSPACE_ITEMS = [
   { id: "activities", label: "Activités", icon: Activity },
 ] as const;
 
-function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+function NavLinks({ pathname, hash, onNavigate }: { pathname: string; hash: string; onNavigate?: () => void }) {
   const linkClass = (active: boolean) => active
-    ? "relative flex min-h-[68px] items-center gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 text-base font-semibold text-white shadow-sm before:absolute before:inset-y-3 before:left-0 before:w-1.5 before:rounded-r-full before:bg-[#d7b45b]"
-    : "flex min-h-[68px] items-center gap-4 rounded-2xl px-4 py-4 text-base font-medium text-white/75 transition-colors hover:bg-white/[0.07] hover:text-white";
+    ? "relative flex min-h-[60px] items-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-[15px] font-semibold text-white shadow-sm before:absolute before:inset-y-3 before:left-0 before:w-1.5 before:rounded-r-full before:bg-[#d7b45b]"
+    : "flex min-h-[60px] items-center gap-3 rounded-2xl px-4 py-3 text-[15px] font-medium text-white/75 transition-colors hover:bg-white/[0.07] hover:text-white";
   return (
     <nav aria-label="Navigation principale" className="flex flex-col gap-2">
       {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
@@ -42,12 +42,15 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
       <div className="mb-1 mt-5 border-t border-white/10 pt-5">
         <p className="mb-3 px-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#e2c675]">Espaces de travail</p>
         <div className="flex flex-col gap-2">
-          {WORKSPACE_ITEMS.map(({ id, label, icon: Icon }) => (
-            <a key={id} href={`/supervisor#${id}`} onClick={onNavigate} className={linkClass(false)}>
-              <Icon className="h-6 w-6 shrink-0 text-[#e2c675]" />
-              <span className="leading-tight">{label}</span>
-            </a>
-          ))}
+          {WORKSPACE_ITEMS.map(({ id, label, icon: Icon }) => {
+            const active = pathname === "/supervisor" && hash === `#${id}`;
+            return (
+              <a key={id} href={`/supervisor#${id}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={linkClass(active)}>
+                <Icon className={`h-6 w-6 shrink-0 ${active ? "text-[#e2c675]" : "text-white/65"}`} />
+                <span className="leading-tight">{label}</span>
+              </a>
+            );
+          })}
         </div>
       </div>
     </nav>
@@ -58,7 +61,14 @@ export function BackofficeShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [hash, setHash] = useState(typeof window === "undefined" ? "" : window.location.hash);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const updateHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", updateHash);
+    return () => window.removeEventListener("hashchange", updateHash);
+  }, []);
 
   async function handleSignOut() {
     await signOut();
@@ -92,7 +102,7 @@ export function BackofficeShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-5">
           <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">Navigation</p>
-          <NavLinks pathname={pathname} />
+          <NavLinks pathname={pathname} hash={hash} />
         </div>
         <div className="border-t border-white/10 px-3 py-4">
           <p className="mb-3 px-3 text-[10px] leading-4 text-white/40">Plateforme de gestion et de traçabilité agricole</p>
@@ -121,8 +131,8 @@ export function BackofficeShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         {mobileOpen && (
-          <div className="space-y-4 border-t border-white/10 bg-[#082f24] px-4 pb-5 pt-4">
-            <NavLinks pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+          <div className="max-h-[calc(100dvh-64px)] space-y-4 overflow-y-auto border-t border-white/10 bg-[#082f24] px-4 pb-5 pt-4">
+            <NavLinks pathname={pathname} hash={hash} onNavigate={() => setMobileOpen(false)} />
             {signOutButton}
           </div>
         )}
