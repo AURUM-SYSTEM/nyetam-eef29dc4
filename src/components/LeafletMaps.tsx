@@ -9,7 +9,7 @@
 //      pas sûr à évaluer côté serveur ; le chargement dynamique dans un
 //      useEffect garantit qu'il ne s'exécute jamais pendant le rendu SSR.
 import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polygon, LayersControl, LayerGroup, useMap, Tooltip } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polygon, Polyline, LayersControl, LayerGroup, useMap, Tooltip } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./leaflet-theme.css";
@@ -173,18 +173,20 @@ export function ParcelleLeafletMap({
     <MapContainer
       center={points[0]}
       zoom={16}
-      scrollWheelZoom={false}
-      zoomControl={false}
-      dragging={hasPolygon}
-      className="aurum-leaflet h-36 w-36 shrink-0 rounded-lg border border-border"
+      scrollWheelZoom
+      className="aurum-leaflet h-[280px] w-full rounded-xl border border-border"
     >
       <BaseLayers />
       <FitBounds points={points} />
-      {hasPolygon ? (
-        <Polygon positions={points} pathOptions={{ color: "#C9A84C", fillColor: "#C9A84C", fillOpacity: 0.25, weight: 2 }} />
-      ) : (
-        <Marker position={points[0]} icon={coloredDivIcon("#C9A84C")} />
+      {hasPolygon && (
+        <Polygon positions={points} pathOptions={{ color: "#087F5B", fillColor: "#087F5B", fillOpacity: 0.22, weight: 3 }} />
       )}
+      {hasPolygon && <Polyline positions={[...points, points[0]]} pathOptions={{ color: "#087F5B", weight: 3 }} />}
+      {points.map((point, index) => (
+        <Marker key={index} position={point} icon={numberedPointIcon(index, index === 0)}>
+          <Popup><strong>{index === 0 ? "Départ du tracé" : `Sommet ${index + 1}`}</strong><div>{point[0].toFixed(6)}, {point[1].toFixed(6)}</div></Popup>
+        </Marker>
+      ))}
     </MapContainer>
   );
 }
@@ -194,25 +196,58 @@ export function ParcelleLeafletMap({
 // temps réel les points déjà capturés (polygone dès 3 points).
 // ============================================================
 
-export function PerimeterLeafletMap({ points }: { points: Array<{ lat: number; lng: number }> }) {
+function numberedPointIcon(index: number, isFirst: boolean): L.DivIcon {
+  return L.divIcon({
+    className: "aurum-boundary-point",
+    html: `<span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:${isFirst ? "#087F5B" : "#C9A84C"};color:#101010;border:2px solid white;font-size:11px;font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.45)">${index + 1}</span>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  });
+}
+
+export function PerimeterLeafletMap({
+  points,
+  closed = false,
+}: {
+  points: Array<{ lat: number; lng: number; accuracy?: number }>;
+  closed?: boolean;
+}) {
   const positions: Array<[number, number]> = points.map((p) => [p.lat, p.lng]);
   if (positions.length === 0) return null;
+  const polygonPositions = closed && positions.length >= 3
+    ? [...positions, positions[0]]
+    : positions;
 
   return (
-    <MapContainer
-      center={positions[positions.length - 1]}
-      zoom={17}
-      scrollWheelZoom={false}
-      zoomControl={false}
-      className="aurum-leaflet h-40 w-full rounded-lg border border-border"
-    >
-      <TileLayer attribution={ATTRIBUTION} url={TILE_URL} />
-      <FitBounds points={positions} />
-      {positions.length >= 3 ? (
-        <Polygon positions={positions} pathOptions={{ color: "#C9A84C", fillColor: "#C9A84C", fillOpacity: 0.2, weight: 2 }} />
-      ) : (
-        positions.map((p, i) => <Marker key={i} position={p} icon={coloredDivIcon("#C9A84C")} />)
-      )}
-    </MapContainer>
+    <div className="space-y-1.5">
+      <MapContainer
+        center={positions[positions.length - 1]}
+        zoom={17}
+        scrollWheelZoom
+        className="aurum-leaflet h-[260px] w-full rounded-xl border border-border"
+      >
+        <BaseLayers />
+        <FitBounds points={positions} />
+        {positions.length >= 2 && (
+          <Polyline positions={polygonPositions} pathOptions={{ color: "#C9A84C", weight: 4, opacity: 0.95, dashArray: closed ? undefined : "8 7" }} />
+        )}
+        {closed && positions.length >= 3 && (
+          <Polygon positions={positions} pathOptions={{ color: "#C9A84C", fillColor: "#C9A84C", fillOpacity: 0.2, weight: 2 }} />
+        )}
+        {points.map((point, index) => (
+          <Marker key={index} position={[point.lat, point.lng]} icon={numberedPointIcon(index, index === 0)}>
+            <Popup>
+              <strong>{index === 0 ? "Point de départ" : `Sommet ${index + 1}`}</strong>
+              {point.accuracy != null && <div>Précision : ±{Math.round(point.accuracy)} m</div>}
+              <div>{point.lat.toFixed(6)}, {point.lng.toFixed(6)}</div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>{points.length} sommet{points.length > 1 ? "s" : ""} enregistré{points.length > 1 ? "s" : ""}</span>
+        <span>{closed ? "Contour fermé" : "Contour en cours — pointillés"}</span>
+      </div>
+    </div>
   );
 }
