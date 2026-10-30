@@ -2692,6 +2692,18 @@ function SupervisorDashboardContent() {
   const [exportingActivities, setExportingActivities] = useState(false);
   const [openFolder, setOpenFolder] = useState<"overview" | "terrain" | "data" | "traceability" | "assistant" | "activities">("overview");
 
+  useEffect(() => {
+    const syncWorkspaceFromHash = () => {
+      const section = window.location.hash.replace("#", "");
+      if (section === "terrain" || section === "data" || section === "traceability" || section === "assistant" || section === "activities") {
+        setOpenFolder(section);
+      }
+    };
+    syncWorkspaceFromHash();
+    window.addEventListener("hashchange", syncWorkspaceFromHash);
+    return () => window.removeEventListener("hashchange", syncWorkspaceFromHash);
+  }, []);
+
   const agentOptions = useMemo(
     () => Array.from(new Set(Object.values(profilesById))).sort(),
     [profilesById],
