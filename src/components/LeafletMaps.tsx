@@ -9,7 +9,7 @@
 //      pas sûr à évaluer côté serveur ; le chargement dynamique dans un
 //      useEffect garantit qu'il ne s'exécute jamais pendant le rendu SSR.
 import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polygon, LayersControl, LayerGroup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polygon, LayersControl, LayerGroup, useMap, Tooltip } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./leaflet-theme.css";
