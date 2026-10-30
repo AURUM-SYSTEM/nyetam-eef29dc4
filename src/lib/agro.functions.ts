@@ -1451,17 +1451,17 @@ export const attestEudrCompliance = createServerFn({ method: "POST" })
 export const getParcelleMapInfo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { parcelleIds: string[] }) =>
-    z.object({ parcelleIds: z.array(z.string().uuid()).max(500) }).parse(d),
+    z.object({ parcelleIds: z.array(z.string().uuid()).max(500).default([]) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const orgId = await assertPermission(context.userId, "parcels.view");
-    if (data.parcelleIds.length === 0) return { parcelles: [] as Array<{ id: string; culture: string; producerName: string | null; cooperativeName: string | null; boundaryPoints: Array<{ lat: number; lng: number }> | null; surfaceHa: number | null }> };
-
-    const { data: rows, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("parcelles")
       .select("id, culture, cooperative_id, producer_id, boundary_points, surface_ha_calculated, surface_ha")
-      .in("id", data.parcelleIds)
-      .eq("organization_id", orgId);
+      .eq("organization_id", orgId)
+      .limit(500);
+    if (data.parcelleIds.length > 0) query = query.in("id", data.parcelleIds);
+    const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
     const parcelles = (rows ?? []) as Array<{ id: string; culture: string; cooperative_id: string | null; producer_id: string | null; boundary_points: Array<{ lat: number; lng: number }> | null; surface_ha: number | null; surface_ha_calculated: number | null }>;
 
