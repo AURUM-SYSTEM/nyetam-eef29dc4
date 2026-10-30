@@ -17,7 +17,7 @@ const NAV_ITEMS = [
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
-    <nav aria-label="Navigation principale" className="flex flex-col gap-1.5">
+    <nav aria-label="Navigation principale" className="flex flex-col gap-2.5">
       {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
         const active = pathname === to;
         return (
@@ -27,11 +27,11 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
             onClick={onNavigate}
             className={
               active
-                ? "relative flex items-center gap-3 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm font-semibold text-white shadow-sm before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-r-full before:bg-[#d7b45b]"
-                : "flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white"
+                ? "relative flex min-h-[68px] items-center gap-4 rounded-2xl border border-white/10 bg-white/10 px-5 py-4 text-lg font-semibold text-white shadow-sm before:absolute before:inset-y-3 before:left-0 before:w-1.5 before:rounded-r-full before:bg-[#d7b45b]"
+                : "flex min-h-[68px] items-center gap-4 rounded-2xl px-5 py-4 text-lg font-medium text-white/75 transition-colors hover:bg-white/[0.07] hover:text-white"
             }
           >
-            <Icon className={`h-[18px] w-[18px] shrink-0 ${active ? "text-[#e2c675]" : ""}`} />
+            <Icon className={`h-6 w-6 shrink-0 ${active ? "text-[#e2c675]" : ""}`} />
             {label}
           </Link>
         );
@@ -54,7 +54,7 @@ export function BackofficeShell({ children }: { children: React.ReactNode }) {
   const signOutButton = (
     <button
       onClick={() => void handleSignOut()}
-      className="flex w-full items-center gap-3 rounded-xl border border-white/15 px-3 py-3 text-sm text-white/70 transition-colors hover:border-white/30 hover:bg-white/[0.06] hover:text-white"
+      className="flex min-h-[68px] w-full items-center gap-4 rounded-2xl border border-white/15 px-5 py-4 text-lg text-white/80 transition-colors hover:border-white/30 hover:bg-white/[0.06] hover:text-white"
     >
       <LogOut className="h-[18px] w-[18px] shrink-0" />
       Déconnexion
@@ -107,7 +107,7 @@ export function BackofficeShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         {mobileOpen && (
-          <div className="space-y-3 border-t border-white/10 bg-[#082f24] px-3 pb-4 pt-3">
+          <div className="space-y-4 border-t border-white/10 bg-[#082f24] px-4 pb-5 pt-4">
             <NavLinks pathname={pathname} onNavigate={() => setMobileOpen(false)} />
             {signOutButton}
           </div>
