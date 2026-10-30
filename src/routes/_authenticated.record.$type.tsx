@@ -284,6 +284,20 @@ function RecordPage() {
   const activeMission = missionForms.find(m => m.mission_key === missionKey);
   const missionFields = activeMission?.fields ?? [];
 
+  // Le recensement possède déjà un bloc Parcelle structuré pour les espèces,
+  // les variétés et l'année de plantation : ne pas les redemander ici.
+  const visibleMissionFields = missionKey === "recensement_plantations"
+    ? missionFields.filter(field => {
+        const descriptor = (field.key + " " + field.label).toLowerCase();
+        return !(
+          descriptor.includes("espece") || descriptor.includes("espèce") || descriptor.includes("species") ||
+          descriptor.includes("variete") || descriptor.includes("variété") || descriptor.includes("variety") ||
+          ((descriptor.includes("plantation") || descriptor.includes("mise en culture")) &&
+            (descriptor.includes("age") || descriptor.includes("âge") || descriptor.includes("mois") || descriptor.includes("annee") || descriptor.includes("année") || descriptor.includes("year")))
+        );
+      })
+    : missionFields;
+
   const [secureOk, setSecureOk] = useState(true);
   const [manualText, setManualText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1535,13 +1549,16 @@ function RecordPage() {
       )}
 
       {/* Champs de la mission active — générés dynamiquement depuis `mission_forms` */}
-      {!missionFormsLoading && missionFields.length > 0 && (
+      {!missionFormsLoading && visibleMissionFields.length > 0 && (
         <section className="mt-4 glass-card rounded-2xl p-4">
           <h2 className="mb-3 text-xs uppercase tracking-widest text-gold-soft">
-            Informations spécifiques
+            Informations complémentaires
           </h2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Ces champs complètent les informations de la parcelle sans répéter les espèces, variétés ou l'année de plantation déjà renseignées.
+          </p>
           <div className="grid grid-cols-2 gap-3">
-            {missionFields.map(f => (
+            {visibleMissionFields.map(f => (
               <label key={f.key} className={f.type === "text" && f.key.length > 12 ? "col-span-2 block" : "block"}>
                 <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">
                   {f.label}{f.unit ? ` (${f.unit})` : ""}{f.required ? " *" : ""}
