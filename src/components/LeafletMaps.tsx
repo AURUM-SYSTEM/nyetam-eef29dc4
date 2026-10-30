@@ -106,6 +106,17 @@ export type SupervisorParcelShape = {
   boundaryPoints: Array<{ lat: number; lng: number }>;
 };
 
+// Couleur déterministe : une même parcelle conserve sa couleur après
+// actualisation, changement de zoom ou réorganisation de la liste.
+export function getParcelColor(parcelId: string): string {
+  let hash = 0;
+  for (let i = 0; i < parcelId.length; i++) {
+    hash = (hash * 31 + parcelId.charCodeAt(i)) >>> 0;
+  }
+  const hue = hash % 360;
+  return `hsl(${hue} 72% 42%)`;
+}
+
 export function SupervisorLeafletMap({ markers, parcels = [] }: { markers: SupervisorMapMarker[]; parcels?: SupervisorParcelShape[] }) {
   const polygonPoints = parcels.flatMap((p) => p.boundaryPoints
     .filter((v) => Number.isFinite(v.lat) && Number.isFinite(v.lng) && Math.abs(v.lat) <= 90 && Math.abs(v.lng) <= 180)
@@ -124,12 +135,14 @@ export function SupervisorLeafletMap({ markers, parcels = [] }: { markers: Super
     >
       <BaseLayers />
       <FitBounds points={points} />
-      {parcels.map((p, index) => {
-        const hue = (index * 47 + 142) % 300;
-        const color = ["#087F5B", "#D97706", "#2563EB", "#9333EA", "#BE123C", "#0F766E"][index % 6];
-        const positions = p.boundaryPoints.map((v) => [v.lat, v.lng] as [number, number]);
+      {parcels.map((p) => {
+        const color = getParcelColor(p.id);
+        const positions = p.boundaryPoints
+          .filter((v) => Number.isFinite(v.lat) && Number.isFinite(v.lng) && Math.abs(v.lat) <= 90 && Math.abs(v.lng) <= 180)
+          .map((v) => [v.lat, v.lng] as [number, number]);
+        if (positions.length < 3) return null;
         return (
-          <Polygon key={p.id} positions={positions} pathOptions={{ color, fillColor: color, fillOpacity: 0.38, weight: 4, opacity: 1, lineJoin: "round" }}>
+          <Polygon key={p.id} positions={positions} pathOptions={{ color, fillColor: color, fillOpacity: 0.34, weight: 3, opacity: 1, lineJoin: "round" }}>
             <Tooltip permanent direction="center" className="aurum-parcel-label">
               <strong>{p.code}</strong>
             </Tooltip>
