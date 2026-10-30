@@ -37,19 +37,16 @@ function distanceBetweenFixesMeters(
 // successives pendant la fenêtre de temps impartie, pour donner sa chance
 // à une meilleure précision plutôt que d'accepter la toute première réponse.
 //
-// Deux bugs ont déjà été commis ici par le passé et sont documentés pour ne
-// pas être réintroduits :
+// Règles importantes :
 //   1. NE JAMAIS abandonner sur une erreur transitoire (POSITION_UNAVAILABLE
 //      / TIMEOUT internes) — watchPosition() continue de chercher un signal
 //      en arrière-plan après une erreur ; seule une erreur PERMISSION_DENIED
 //      (définitive) doit interrompre la capture avant le timeout global.
-//   2. NE JAMAIS retenir la position ayant la MEILLEURE précision vue sur
-//      toute la fenêtre plutôt que la plus RÉCENTE — sinon, si l'agent se
-//      déplace pendant que la capture attend encore une meilleure
-//      précision, la valeur renvoyée reflète une position dépassée, pas sa
-//      position actuelle. La précision ne sert qu'à décider si on peut
-//      arrêter d'attendre plus tôt (`GOOD_ENOUGH_ACCURACY_M`), jamais à
-//      choisir quelle lecture garder.
+//   2. NE JAMAIS retenir une ancienne position uniquement parce qu'elle avait
+//      une meilleure précision. La valeur renvoyée reste toujours la plus
+//      récente. Pour arrêter tôt, on exige deux fixes consécutifs précis et
+//      proches l'un de l'autre : cela confirme une position momentanément
+//      stable sans figer l'agent sur un point GPS historique.
 export async function captureGps(
   // 20s : un premier fix GPS (surtout en intérieur, ou après un moment sans
   // utiliser le GPS) peut légitimement prendre plus de 10s à s'établir.
