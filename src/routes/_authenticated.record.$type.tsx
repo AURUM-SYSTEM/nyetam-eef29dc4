@@ -630,12 +630,8 @@ function RecordPage() {
       });
       debugLog("[GPS DEBUG] handleAddBoundaryPoint got result from captureGps", p);
       if (!p) {
-        debugError("[GPS DEBUG] captureGps returned no acceptable fix", { lastAccuracy: boundaryGpsAccuracy });
-        toast.error(
-          boundaryGpsAccuracy != null
-            ? `Précision insuffisante (±${Math.round(boundaryGpsAccuracy)} m). Aucun point ajouté. Réessayez dans un endroit dégagé ou avec un meilleur récepteur GPS.`
-            : "Aucun signal GPS exploitable après 60 secondes. Aucun point ajouté. Vérifiez la localisation précise du téléphone.",
-        );
+        debugError("[GPS DEBUG] captureGps returned no acceptable fix");
+        toast.error("Précision GPS insuffisante après 60 secondes. Aucun point ajouté. Réessayez dans un endroit dégagé et vérifiez la localisation précise du téléphone.");
         return;
       }
       // BUG CORRIGÉ ICI : ce contrôle calculait bien minDist mais ne faisait
