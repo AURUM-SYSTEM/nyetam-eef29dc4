@@ -1475,11 +1475,41 @@ export const getParcelleMapInfo = createServerFn({ method: "POST" })
     const coopNameById = new Map(((coops ?? []) as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]));
     const producerNameById = new Map(((producers ?? []) as Array<{ id: string; full_name: string }>).map((p) => [p.id, p.full_name]));
 
+    const normalizeBoundary = (value: unknown): Array<{ lat: number; lng: number }> | null => {
+      let raw: any = value;
+      if (typeof raw === "string") {
+        try { raw = JSON.parse(raw); } catch { return null; }
+      }
+      // Accepte { points: [...] } et GeoJSON Polygon/MultiPolygon.
+      if (raw && !Array.isArray(raw) && Array.isArray(raw.points)) raw = raw.points;
+      if (raw?.type === "Feature") raw = raw.geometry;
+      if (raw?.type === "Polygon") raw = raw.coordinates?.[0];
+      if (raw?.type === "MultiPolygon") raw = raw.coordinates?.[0]?.[0];
+      if (raw && !Array.isArray(raw) && Array.isArray(raw.coordinates)) raw = raw.coordinates[0];
+      if (!Array.isArray(raw)) return null;
+      const points = raw.map((point: any) => {
+        if (Array.isArray(point) && point.length >= 2) {
+          // Les tableaux de coordonnées GeoJSON sont toujours [longitude, latitude].
+          return { lat: Number(point[1]), lng: Number(point[0]) };
+        }
+        return {
+          lat: Number(point?.lat ?? point?.latitude),
+          lng: Number(point?.lng ?? point?.longitude ?? point?.lon),
+        };
+      }).filter((point: any) =>
+        Number.isFinite(point.lat) && Number.isFinite(point.lng) &&
+        Math.abs(point.lat) <= 90 && Math.abs(point.lng) <= 180
+      );
+      // Retire le dernier point si le polygone est déjà fermé.
+      if (points.length > 3 && points[0].lat === points[points.length - 1].lat && points[0].lng === points[points.length - 1].lng) points.pop();
+      return points.length >= 3 ? points : null;
+    };
+
     return {
       parcelles: parcelles.map((p) => ({
         id: p.id,
         culture: p.culture,
-        boundaryPoints: Array.isArray(p.boundary_points) && p.boundary_points.length >= 3 ? p.boundary_points : null,
+        boundaryPoints: normalizeBoundary(p.boundary_points),
         surfaceHa: p.surface_ha_calculated ?? p.surface_ha ?? null,
         cooperativeName: p.cooperative_id ? (coopNameById.get(p.cooperative_id) ?? null) : null,
         producerName: p.producer_id ? (producerNameById.get(p.producer_id) ?? null) : null,

@@ -64,10 +64,12 @@ function FitBounds({ points }: { points: Array<[number, number]> }) {
   useEffect(() => {
     if (points.length === 0) return;
     if (points.length === 1) {
-      map.setView(points[0], Math.max(map.getZoom(), 14));
+      map.setView(points[0], 16);
       return;
     }
-    map.fitBounds(points, { padding: [30, 30] });
+    // Cadre serré sur les parcelles : les activités GPS éloignées ne doivent
+    // plus dézoomer toute la carte à l'échelle d'une région.
+    map.fitBounds(points, { padding: [48, 48], maxZoom: 17 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, JSON.stringify(points)]);
   return null;
@@ -105,13 +107,18 @@ export type SupervisorParcelShape = {
 };
 
 export function SupervisorLeafletMap({ markers, parcels = [] }: { markers: SupervisorMapMarker[]; parcels?: SupervisorParcelShape[] }) {
-  const polygonPoints = parcels.flatMap((p) => p.boundaryPoints.map((v) => [v.lat, v.lng] as [number, number]));
-  const points = useMemo(() => [...markers.map((m) => [m.lat, m.lng] as [number, number]), ...polygonPoints], [markers, parcels]);
+  const polygonPoints = parcels.flatMap((p) => p.boundaryPoints
+    .filter((v) => Number.isFinite(v.lat) && Number.isFinite(v.lng) && Math.abs(v.lat) <= 90 && Math.abs(v.lng) <= 180)
+    .map((v) => [v.lat, v.lng] as [number, number]));
+  const markerPoints = markers.map((m) => [m.lat, m.lng] as [number, number]);
+  // Dès qu'un périmètre existe, le zoom se cale sur les contours, pas sur
+  // d'anciennes activités qui peuvent se trouver à des dizaines de kilomètres.
+  const points = useMemo(() => polygonPoints.length > 0 ? polygonPoints : markerPoints, [markers, parcels]);
 
   return (
     <MapContainer
       center={points[0] ?? FALLBACK_CENTER}
-      zoom={points.length > 0 ? 8 : 5}
+      zoom={points.length > 0 ? 15 : 5}
       scrollWheelZoom={false}
       className="aurum-leaflet h-[65vh] min-h-[420px] w-full rounded-xl border border-border print:h-[180mm] print:min-h-0 print:rounded-none print:border-0"
     >
@@ -119,11 +126,13 @@ export function SupervisorLeafletMap({ markers, parcels = [] }: { markers: Super
       <FitBounds points={points} />
       {parcels.map((p, index) => {
         const hue = (index * 47 + 142) % 300;
-        const color = "hsl(" + hue + " 58% 38%)";
+        const color = ["#087F5B", "#D97706", "#2563EB", "#9333EA", "#BE123C", "#0F766E"][index % 6];
         const positions = p.boundaryPoints.map((v) => [v.lat, v.lng] as [number, number]);
         return (
-          <Polygon key={p.id} positions={positions} pathOptions={{ color, fillColor: color, fillOpacity: 0.24, weight: 2.5 }}>
-            <Tooltip sticky><strong>{p.code}</strong>{p.surfaceHa != null && " · " + p.surfaceHa.toFixed(2) + " ha"}</Tooltip>
+          <Polygon key={p.id} positions={positions} pathOptions={{ color, fillColor: color, fillOpacity: 0.38, weight: 4, opacity: 1, lineJoin: "round" }}>
+            <Tooltip permanent direction="center" className="aurum-parcel-label">
+              <strong>{p.code}</strong>
+            </Tooltip>
             <Popup><strong>{p.code}</strong><div>Culture : {p.culture}</div>{p.producerName && <div>Producteur : {p.producerName}</div>}{p.cooperativeName && <div>Coopérative : {p.cooperativeName}</div>}{p.surfaceHa != null && <div>Superficie : {p.surfaceHa.toFixed(2)} ha</div>}</Popup>
           </Polygon>
         );
