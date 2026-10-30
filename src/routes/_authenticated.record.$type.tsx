@@ -1381,69 +1381,89 @@ function RecordPage() {
                     <p className="mt-1 text-[10px] text-muted-foreground">Après création, le producteur est sélectionné automatiquement et la parcelle lui sera liée.</p>
                   </div>
 
-                  <div className="rounded-xl border border-border bg-card/30 p-3">
-                    <span className="mb-2 block text-[10px] uppercase tracking-widest text-muted-foreground">
-                      Périmètre (optionnel) — complète ou remplace le point GPS unique
-                    </span>
+                  <div className="rounded-xl border border-emerald-800/20 bg-card/50 p-3 sm:p-4">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div>
+                        <span className="block text-xs font-semibold uppercase tracking-wider text-foreground">
+                          Tracé GPS de la parcelle
+                        </span>
+                        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                          Faites le tour de la parcelle à pied. Ajoutez un point à chaque angle ou changement de direction important.
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-semibold tabular-nums">
+                        {boundaryPoints.length} pt{boundaryPoints.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
                     <BoundaryRenderErrorBoundary>
                     {boundaryClosed ? (
-                      <div className="space-y-2">
-                        <p className="flex items-center gap-2 text-sm text-emerald-400">
-                          <CheckCircle2 className="h-4 w-4 shrink-0" />
-                          Périmètre fermé — {boundaryPoints.length} points, surface estimée :{" "}
-                          {formatSurfaceHa(computePolygonAreaHectares(boundaryPoints))} ha
-                          {" "}(≈ {Math.round(computePolygonAreaHectares(boundaryPoints) * 10000)} m²)
-                        </p>
+                      <div className="space-y-3">
+                        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+                          <p className="flex items-center gap-2 text-sm font-semibold text-emerald-500">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            Tracé enregistré et fermé
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {boundaryPoints.length} sommets · {formatSurfaceHa(computePolygonAreaHectares(boundaryPoints))} ha
+                            (environ {Math.round(computePolygonAreaHectares(boundaryPoints) * 10000)} m²)
+                          </p>
+                        </div>
                         <PerimeterMapPreview points={boundaryPoints} closed />
                         <button type="button" onClick={handleResetBoundary}
-                          className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
-                          Reprendre le périmètre
+                          className="min-h-11 w-full rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+                          Reprendre le tracé
                         </button>
                       </div>
                     ) : (
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <button
                             type="button"
                             onClick={() => void handleAddBoundaryPoint()}
                             disabled={capturingBoundaryPoint}
-                            className="flex items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-emerald-700/40 bg-emerald-800/10 px-3 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-emerald-800/20 disabled:opacity-50"
                           >
-                            {capturingBoundaryPoint ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
-                            {capturingBoundaryPoint ? "Recherche GPS précise… (jusqu'à 60s)" : "Ajouter un point"}
+                            {capturingBoundaryPoint ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />}
+                            {capturingBoundaryPoint ? "Acquisition GPS…" : boundaryPoints.length === 0 ? "Capturer le départ" : "Capturer le sommet suivant"}
                           </button>
                           <button
                             type="button"
                             onClick={handleFinishBoundary}
-                            disabled={boundaryPoints.length < 3}
-                            className="rounded-lg btn-gold px-3 py-2 text-sm disabled:opacity-40"
+                            disabled={boundaryPoints.length < 3 || capturingBoundaryPoint}
+                            className="min-h-12 w-full rounded-lg btn-gold px-3 py-3 text-sm font-semibold disabled:opacity-40"
                           >
-                            Terminer le périmètre
+                            <CheckCircle2 className="mr-1.5 inline h-4 w-4" />
+                            Fermer le polygone
                           </button>
-                          <span className="text-xs text-muted-foreground">
-                            {boundaryPoints.length} point{boundaryPoints.length !== 1 ? "s" : ""} capturé{boundaryPoints.length !== 1 ? "s" : ""}
-                            {(() => {
-                              const last = boundaryPoints[boundaryPoints.length - 1];
-                              return last?.accuracy != null ? ` (précision ±${Math.round(last.accuracy)}m)` : "";
-                            })()}
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background/70 px-3 py-2">
+                          <span className="text-xs font-medium text-foreground">
+                            {boundaryPoints.length < 3
+                              ? `${3 - boundaryPoints.length} point${3 - boundaryPoints.length > 1 ? "s" : ""} minimum avant fermeture`
+                              : "Minimum atteint — vous pouvez fermer le polygone"}
                           </span>
+                          {boundaryPoints.length > 0 && (() => {
+                            const last = boundaryPoints[boundaryPoints.length - 1];
+                            return last?.accuracy != null ? (
+                              <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${last.accuracy <= 10 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" : last.accuracy <= 20 ? "bg-amber-500/15 text-amber-600 dark:text-amber-300" : "bg-red-500/15 text-red-600 dark:text-red-300"}`}>
+                                GPS ±{Math.round(last.accuracy)} m
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
                         {capturingBoundaryPoint && (
-                          <p className="text-[11px] text-gold">
-                            {boundaryGpsAccuracy == null
-                              ? "Acquisition GPS en cours… restez immobile quelques instants."
-                              : `Précision actuelle : ±${Math.round(boundaryGpsAccuracy)} m — objectif : 20 m ou mieux.`}
-                          </p>
-                        )}
-                        {(() => {
-                          const last = boundaryPoints[boundaryPoints.length - 1];
-                          return last?.accuracy != null && last.accuracy > 20 ? (
-                            <p className="flex items-center gap-1.5 text-[11px] text-amber-400">
-                              <AlertTriangle className="h-3 w-3 shrink-0" />
-                              Précision faible — essayez un endroit plus dégagé, loin des bâtiments et arbres.
+                          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3" role="status" aria-live="polite">
+                            <p className="flex items-center gap-2 text-xs font-medium text-amber-600 dark:text-amber-300">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {boundaryGpsAccuracy == null
+                                ? "Recherche d'une position GPS fiable. Restez immobile et attendez quelques instants."
+                                : `Précision en cours : ±${Math.round(boundaryGpsAccuracy)} m · objectif : 20 m ou mieux.`}
                             </p>
-                          ) : null;
-                        })()}
+                          </div>
+                        )}
+                        <p className="text-[11px] leading-5 text-muted-foreground">
+                          Conseil : avancez jusqu'au prochain angle, arrêtez-vous, puis capturez le sommet. Ne marchez pas pendant l'acquisition.
+                        </p>
                         <PerimeterMapPreview points={boundaryPoints} closed={false} />
                       </div>
                     )}
