@@ -226,7 +226,7 @@ function useSupervisorData() {
 function SupervisorMap({ docs }: { docs: DocRow[] }) {
   const fetchParcelleInfo = useServerFn(getParcelleMapInfo);
   const [leafletMod, setLeafletMod] = useState<typeof import("@/components/LeafletMaps") | null>(null);
-  const [parcelleInfoById, setParcelleInfoById] = useState<Record<string, { culture: string; producerName: string | null; cooperativeName: string | null }>>({});
+  const [parcelleInfoById, setParcelleInfoById] = useState<Record<string, { culture: string; producerName: string | null; cooperativeName: string | null; boundaryPoints: Array<{ lat: number; lng: number }> | null; surfaceHa: number | null }>>({});
 
   const points = useMemo(
     () => docs
@@ -245,13 +245,12 @@ function SupervisorMap({ docs }: { docs: DocRow[] }) {
 
   useEffect(() => {
     const ids = Array.from(new Set(points.map((p) => p.parcelle_id).filter((x): x is string => !!x)));
-    if (ids.length === 0) return;
     let cancelled = false;
     (async () => {
       try {
         const res = await fetchParcelleInfo({ data: { parcelleIds: ids } });
         if (cancelled) return;
-        const map: Record<string, { culture: string; producerName: string | null; cooperativeName: string | null }> = {};
+        const map: Record<string, { culture: string; producerName: string | null; cooperativeName: string | null; boundaryPoints: Array<{ lat: number; lng: number }> | null; surfaceHa: number | null }> = {};
         for (const p of res.parcelles) map[p.id] = p;
         setParcelleInfoById(map);
       } catch {
@@ -262,7 +261,7 @@ function SupervisorMap({ docs }: { docs: DocRow[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docs]);
 
-  if (points.length === 0) {
+  if (points.length === 0 && Object.keys(parcelleInfoById).length === 0) {
     return (
       <div className="flex h-64 w-full items-center justify-center rounded-xl border border-border bg-secondary/40 text-sm text-muted-foreground">
         Aucune coordonnée GPS disponible pour le moment.
@@ -290,10 +289,32 @@ function SupervisorMap({ docs }: { docs: DocRow[] }) {
       culture: info?.culture ?? null,
       producerName: info?.producerName ?? null,
       cooperativeName: info?.cooperativeName ?? null,
+      parcelId: p.parcelle_id,
     };
   });
+  const parcels = Object.entries(parcelleInfoById).flatMap(([id, info]) => info.boundaryPoints && info.boundaryPoints.length >= 3 ? [{
+    id,
+    code: "PAR-" + id.slice(0, 6).toUpperCase(),
+    culture: info.culture,
+    producerName: info.producerName,
+    cooperativeName: info.cooperativeName,
+    surfaceHa: info.surfaceHa,
+    boundaryPoints: info.boundaryPoints,
+  }] : []);
 
-  return <leafletMod.SupervisorLeafletMap markers={markers} />;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-2"><i className="h-3 w-3 rounded-sm border border-emerald-700 bg-emerald-600/30" /> Parcelles délimitées ({parcels.length})</span>
+          <span className="inline-flex items-center gap-2"><i className="h-3 w-3 rounded-full bg-amber-500" /> Points GPS seuls ({markers.filter(m => !parcels.some(p => p.id === m.parcelId)).length})</span>
+        </div>
+        <button type="button" onClick={() => window.print()} className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-muted">Imprimer la carte / PDF</button>
+      </div>
+      <leafletMod.SupervisorLeafletMap markers={markers} parcels={parcels} />
+      <p className="text-xs text-muted-foreground print:hidden">Les contours sont affichés uniquement lorsque le relevé GPS contient au moins trois points de périmètre.</p>
+    </div>
+  );
 }
 
 // ── Formulaire compact de demande de modification ────────────────────────
