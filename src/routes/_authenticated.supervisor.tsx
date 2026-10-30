@@ -718,14 +718,18 @@ function ParcelleTimelineRow({ parcelleId, onClose }: { parcelleId: string; onCl
         ) : (
           <div className="space-y-3 py-2">
             {parcelle && (
-              <div className="flex items-start gap-3">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">{parcelle.culture}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {parcelle.surfaceHaCalculated != null
+                      ? `Surface calculée : ${parcelle.surfaceHaCalculated.toFixed(2)} ha`
+                      : parcelle.surfaceHa != null ? `Surface déclarée : ${parcelle.surfaceHa} ha` : "Surface non renseignée"}
+                  </p>
+                </div>
                 <ParcelleMap lat={parcelle.lat} lng={parcelle.lng} boundaryPoints={parcelle.boundaryPoints} />
                 <p className="text-xs text-muted-foreground">
-                  {parcelle.culture}
-                  {parcelle.surfaceHa != null ? ` · ${parcelle.surfaceHa} ha` : ""}
-                  {parcelle.surfaceHaCalculated != null ? ` (calculée : ${parcelle.surfaceHaCalculated} ha)` : ""}
-                  {" · Producteur : "}{parcelle.producerName ?? "—"}
-                  {" · Coopérative : "}{parcelle.cooperativeName ?? "—"}
+                  Producteur : {parcelle.producerName ?? "—"} · Coopérative : {parcelle.cooperativeName ?? "—"}
                 </p>
               </div>
             )}
