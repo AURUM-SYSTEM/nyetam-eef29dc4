@@ -450,6 +450,7 @@ function RecordPage() {
   const [boundaryPoints, setBoundaryPoints] = useState<Array<{ lat: number; lng: number; accuracy?: number }>>([]);
   const [boundaryClosed, setBoundaryClosed] = useState(false);
   const [capturingBoundaryPoint, setCapturingBoundaryPoint] = useState(false);
+  const [boundaryGpsAccuracy, setBoundaryGpsAccuracy] = useState<number | null>(null);
 
   // Changement de mission → repartir d'un état parcelle neutre, avec le
   // mode fixé par la mission (jamais un choix libre de l'agent).
@@ -617,16 +618,24 @@ function RecordPage() {
   async function handleAddBoundaryPoint() {
     debugLog("[GPS DEBUG] handleAddBoundaryPoint called", { currentPointCount: boundaryPoints.length });
     setCapturingBoundaryPoint(true);
+    setBoundaryGpsAccuracy(null);
     try {
-      // maximumAgeMs=0 : force une lecture GPS fraîche à chaque point — le
-      // cache par défaut de captureGps() (5 min) renverrait sinon la même
-      // position pour plusieurs points tapés à la suite sans déplacement
-      // réel, produisant un périmètre dégénéré (surface calculée à 0).
-      const p = await captureGps(undefined, 0);
+      // Pour un sommet de parcelle : lecture fraîche, jusqu'à 60 secondes,
+      // et rejet strict de toute position dont l'incertitude dépasse 20 m.
+      // La précision est remontée en direct pour guider l'agent pendant
+      // l'acquisition. Une position réseau grossière n'est jamais enregistrée.
+      const p = await captureGps(60_000, 0, {
+        maxAccuracyM: 20,
+        onUpdate: location => setBoundaryGpsAccuracy(location.accuracy ?? null),
+      });
       debugLog("[GPS DEBUG] handleAddBoundaryPoint got result from captureGps", p);
       if (!p) {
-        debugError("[GPS DEBUG] captureGps returned null — aucun point ajouté");
-        toast.error("Position GPS indisponible");
+        debugError("[GPS DEBUG] captureGps returned no acceptable fix", { lastAccuracy: boundaryGpsAccuracy });
+        toast.error(
+          boundaryGpsAccuracy != null
+            ? `Précision insuffisante (±${Math.round(boundaryGpsAccuracy)} m). Aucun point ajouté. Réessayez dans un endroit dégagé ou avec un meilleur récepteur GPS.`
+            : "Aucun signal GPS exploitable après 60 secondes. Aucun point ajouté. Vérifiez la localisation précise du téléphone.",
+        );
         return;
       }
       // BUG CORRIGÉ ICI : ce contrôle calculait bien minDist mais ne faisait
@@ -1405,7 +1414,7 @@ function RecordPage() {
                             className="flex items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
                           >
                             {capturingBoundaryPoint ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 text-gold" />}
-                            {capturingBoundaryPoint ? "Recherche du signal… (jusqu'à 20s)" : "Ajouter un point"}
+                            {capturingBoundaryPoint ? "Recherche GPS précise… (jusqu'à 60s)" : "Ajouter un point"}
                           </button>
                           <button
                             type="button"
@@ -1423,6 +1432,13 @@ function RecordPage() {
                             })()}
                           </span>
                         </div>
+                        {capturingBoundaryPoint && (
+                          <p className="text-[11px] text-gold">
+                            {boundaryGpsAccuracy == null
+                              ? "Acquisition GPS en cours… restez immobile quelques instants."
+                              : `Précision actuelle : ±${Math.round(boundaryGpsAccuracy)} m — objectif : 20 m ou mieux.`}
+                          </p>
+                        )}
                         {(() => {
                           const last = boundaryPoints[boundaryPoints.length - 1];
                           return last?.accuracy != null && last.accuracy > 20 ? (
