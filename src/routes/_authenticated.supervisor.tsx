@@ -248,7 +248,7 @@ function SupervisorMap({ docs }: { docs: DocRow[] }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetchParcelleInfo({ data: { parcelleIds: ids } });
+        const res = await fetchParcelleInfo({ data: { parcelleIds: [] } });
         if (cancelled) return;
         const map: Record<string, { culture: string; producerName: string | null; cooperativeName: string | null; boundaryPoints: Array<{ lat: number; lng: number }> | null; surfaceHa: number | null }> = {};
         for (const p of res.parcelles) map[p.id] = p;
