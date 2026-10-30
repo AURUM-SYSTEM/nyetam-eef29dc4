@@ -91,29 +91,46 @@ export type SupervisorMapMarker = {
   culture?: string | null;
   producerName?: string | null;
   cooperativeName?: string | null;
+  parcelId?: string | null;
 };
 
-export function SupervisorLeafletMap({ markers }: { markers: SupervisorMapMarker[] }) {
-  const points = useMemo(() => markers.map((m) => [m.lat, m.lng] as [number, number]), [markers]);
+export type SupervisorParcelShape = {
+  id: string;
+  code: string;
+  culture: string;
+  producerName: string | null;
+  cooperativeName: string | null;
+  surfaceHa: number | null;
+  boundaryPoints: Array<{ lat: number; lng: number }>;
+};
+
+export function SupervisorLeafletMap({ markers, parcels = [] }: { markers: SupervisorMapMarker[]; parcels?: SupervisorParcelShape[] }) {
+  const polygonPoints = parcels.flatMap((p) => p.boundaryPoints.map((v) => [v.lat, v.lng] as [number, number]));
+  const points = useMemo(() => [...markers.map((m) => [m.lat, m.lng] as [number, number]), ...polygonPoints], [markers, parcels]);
 
   return (
     <MapContainer
       center={points[0] ?? FALLBACK_CENTER}
       zoom={points.length > 0 ? 8 : 5}
       scrollWheelZoom={false}
-      className="aurum-leaflet h-64 w-full rounded-xl border border-border"
+      className="aurum-leaflet h-[65vh] min-h-[420px] w-full rounded-xl border border-border print:h-[180mm] print:min-h-0 print:rounded-none print:border-0"
     >
       <BaseLayers />
       <FitBounds points={points} />
-      {markers.map((m) => (
+      {parcels.map((p, index) => {
+        const hue = (index * 47 + 142) % 300;
+        const color = "hsl(" + hue + " 58% 38%)";
+        const positions = p.boundaryPoints.map((v) => [v.lat, v.lng] as [number, number]);
+        return (
+          <Polygon key={p.id} positions={positions} pathOptions={{ color, fillColor: color, fillOpacity: 0.24, weight: 2.5 }}>
+            <Tooltip sticky><strong>{p.code}</strong>{p.surfaceHa != null && " · " + p.surfaceHa.toFixed(2) + " ha"}</Tooltip>
+            <Popup><strong>{p.code}</strong><div>Culture : {p.culture}</div>{p.producerName && <div>Producteur : {p.producerName}</div>}{p.cooperativeName && <div>Coopérative : {p.cooperativeName}</div>}{p.surfaceHa != null && <div>Superficie : {p.surfaceHa.toFixed(2)} ha</div>}</Popup>
+          </Polygon>
+        );
+      })}
+      {markers.filter((m) => !parcels.some((p) => p.id === m.parcelId)).map((m) => (
         <Marker key={m.id} position={[m.lat, m.lng]} icon={coloredDivIcon(m.moduleColor)}>
-          <Popup>
-            <strong>{m.moduleLabel}</strong>
-            {m.culture && <div>Culture : {m.culture}</div>}
-            {m.producerName && <div>Producteur : {m.producerName}</div>}
-            {m.cooperativeName && <div>Coopérative : {m.cooperativeName}</div>}
-            {m.city && <div>{m.city}</div>}
-          </Popup>
+          <Popup><strong>{m.moduleLabel}</strong>{m.culture && <div>Culture : {m.culture}</div>}{m.producerName && <div>Producteur : {m.producerName}</div>}{m.cooperativeName && <div>Coopérative : {m.cooperativeName}</div>}{m.city && <div>{m.city}</div>}</Popup>
         </Marker>
       ))}
     </MapContainer>
