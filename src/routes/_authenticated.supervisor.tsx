@@ -2881,7 +2881,6 @@ function SupervisorDashboardContent() {
             <span>{todayCount} aujourd’hui</span>
           </div>
         </section>
-        </section>
       )}
 
 
