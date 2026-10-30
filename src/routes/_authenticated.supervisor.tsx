@@ -245,7 +245,6 @@ function SupervisorMap({ docs }: { docs: DocRow[] }) {
 
   useEffect(() => {
     const ids = Array.from(new Set(points.map((p) => p.parcelle_id).filter((x): x is string => !!x)));
-    if (ids.length === 0) return;
     let cancelled = false;
     (async () => {
       try {
@@ -262,7 +261,7 @@ function SupervisorMap({ docs }: { docs: DocRow[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docs]);
 
-  if (points.length === 0) {
+  if (points.length === 0 && Object.keys(parcelleInfoById).length === 0) {
     return (
       <div className="flex h-64 w-full items-center justify-center rounded-xl border border-border bg-secondary/40 text-sm text-muted-foreground">
         Aucune coordonnée GPS disponible pour le moment.
