@@ -312,7 +312,21 @@ function SupervisorMap({ docs }: { docs: DocRow[] }) {
         <button type="button" onClick={() => window.print()} className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-muted">Imprimer la carte / PDF</button>
       </div>
       <leafletMod.SupervisorLeafletMap markers={markers} parcels={parcels} />
-      <p className="text-xs text-muted-foreground print:hidden">Les contours sont affichés uniquement lorsque le relevé GPS contient au moins trois points de périmètre.</p>
+      {parcels.length > 0 && (
+        <div className="rounded-xl border border-border/70 bg-background/70 p-3 print:hidden">
+          <p className="mb-2 text-xs font-semibold text-foreground">Légende des parcelles — couleurs stables</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {parcels.slice(0, 18).map((parcel) => (
+              <span key={parcel.id} className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                <i className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: leafletMod.getParcelColor(parcel.id) }} />
+                {parcel.code}
+              </span>
+            ))}
+            {parcels.length > 18 && <span className="text-xs text-muted-foreground">+ {parcels.length - 18} autres parcelles</span>}
+          </div>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground print:hidden">Chaque contour correspond aux coordonnées GPS enregistrées. Sélectionnez une parcelle pour consulter ses informations. Le fond satellite nécessite une connexion Internet.</p>
     </div>
   );
 }
