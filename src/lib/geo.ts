@@ -48,16 +48,14 @@ function distanceBetweenFixesMeters(
 //      proches l'un de l'autre : cela confirme une position momentanément
 //      stable sans figer l'agent sur un point GPS historique.
 export async function captureGps(
-  // 20s : un premier fix GPS (surtout en intérieur, ou après un moment sans
-  // utiliser le GPS) peut légitimement prendre plus de 10s à s'établir.
+  // 20s par défaut pour les captures ponctuelles. Le tracé de parcelle
+  // demande une fenêtre plus longue (60s) afin de laisser le récepteur GNSS
+  // établir un fix exploitable.
   timeoutMs = 20_000,
-  // 5 minutes par défaut : une position récente en cache convient pour une
-  // capture ponctuelle (position de l'agent). À forcer à 0 pour les points
-  // d'un périmètre (handleAddBoundaryPoint) — sinon le navigateur peut
-  // renvoyer la MÊME position en cache pour plusieurs points tapés à la
-  // suite sans déplacement significatif, produisant un polygone dégénéré
-  // (points quasi identiques) dont l'aire calcule correctement... à zéro.
+  // 5 minutes par défaut pour une position ponctuelle. Toujours 0 pour
+  // chaque sommet d'un périmètre afin d'exiger une lecture fraîche.
   maximumAgeMs = 5 * 60_000,
+  options: { maxAccuracyM?: number; onUpdate?: (location: CapturedLocation) => void } = {},
 ): Promise<CapturedLocation | null> {
   if (typeof navigator === "undefined" || !navigator.geolocation) return null;
   return new Promise((resolve) => {
@@ -66,6 +64,7 @@ export async function captureGps(
     let previousGoodFix: CapturedLocation | null = null;
     let stableFixCount = 0;
     let watchId: number | null = null;
+    const maxAccuracyM = options.maxAccuracyM ?? Number.POSITIVE_INFINITY;
 
     const finish = (v: CapturedLocation | null, reason: string) => {
       if (settled) return;
@@ -76,7 +75,14 @@ export async function captureGps(
     };
 
     debugLog("[GPS DEBUG] captureGps starting watchPosition", { timeoutMs, maximumAgeMs });
-    const t = setTimeout(() => finish(latest, "outer-timeout"), timeoutMs);
+    const t = setTimeout(() => {
+      // En mode qualité contrôlée, une position réseau grossière ne doit
+      // jamais être renvoyée comme un sommet de parcelle.
+      const acceptable = latest && latest.accuracy != null && latest.accuracy <= maxAccuracyM
+        ? latest
+        : null;
+      finish(acceptable, acceptable ? "timeout-acceptable-fix" : "timeout-no-acceptable-fix");
+    }, timeoutMs);
 
     watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -88,8 +94,10 @@ export async function captureGps(
         };
         debugLog("[GPS DEBUG] watchPosition success callback", candidate);
         latest = candidate; // toujours la plus récente, jamais la "meilleure historique"
+        options.onUpdate?.(candidate);
 
-        if (candidate.accuracy != null && candidate.accuracy <= GOOD_ENOUGH_ACCURACY_M) {
+        const stabilityThreshold = Math.min(GOOD_ENOUGH_ACCURACY_M, maxAccuracyM);
+        if (candidate.accuracy != null && candidate.accuracy <= stabilityThreshold) {
           const distanceFromPreviousMeters = previousGoodFix
             ? distanceBetweenFixesMeters(previousGoodFix, candidate)
             : null;
