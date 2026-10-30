@@ -10,9 +10,25 @@ export type CapturedLocation = {
   capturedAt: number;
 };
 
-// En dessous de cette précision (mètres), on arrête d'attendre — inutile de
-// consommer tout le budget de temps si un bon signal arrive vite.
+// Une bonne précision isolée ne suffit pas : le fix doit être confirmé
+// par une seconde lecture proche, afin de limiter les captures instables
+// lorsque l'agent s'arrête à un sommet du périmètre.
 const GOOD_ENOUGH_ACCURACY_M = 15;
+const REQUIRED_STABLE_FIXES = 2;
+const MAX_STABLE_DISTANCE_M = 8;
+
+function distanceBetweenFixesMeters(
+  a: Pick<CapturedLocation, "lat" | "lng">,
+  b: Pick<CapturedLocation, "lat" | "lng">,
+): number {
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
 
 // watchPosition() plutôt que getCurrentPosition() : sur mobile, un premier
 // fix GPS s'affine progressivement sur plusieurs secondes (la toute
@@ -50,6 +66,8 @@ export async function captureGps(
   return new Promise((resolve) => {
     let settled = false;
     let latest: CapturedLocation | null = null;
+    let previousGoodFix: CapturedLocation | null = null;
+    let stableFixCount = 0;
     let watchId: number | null = null;
 
     const finish = (v: CapturedLocation | null, reason: string) => {
@@ -73,9 +91,32 @@ export async function captureGps(
         };
         debugLog("[GPS DEBUG] watchPosition success callback", candidate);
         latest = candidate; // toujours la plus récente, jamais la "meilleure historique"
+
         if (candidate.accuracy != null && candidate.accuracy <= GOOD_ENOUGH_ACCURACY_M) {
-          clearTimeout(t);
-          finish(candidate, "good-enough-accuracy");
+          const distanceFromPreviousMeters = previousGoodFix
+            ? distanceBetweenFixesMeters(previousGoodFix, candidate)
+            : null;
+          const isStable = distanceFromPreviousMeters != null &&
+            distanceFromPreviousMeters <= MAX_STABLE_DISTANCE_M;
+          stableFixCount = isStable ? stableFixCount + 1 : 1;
+          previousGoodFix = candidate;
+
+          debugLog("[GPS DEBUG] good GPS fix stability", {
+            stableFixCount,
+            requiredStableFixes: REQUIRED_STABLE_FIXES,
+            distanceFromPreviousMeters,
+          });
+
+          if (stableFixCount >= REQUIRED_STABLE_FIXES) {
+            clearTimeout(t);
+            finish(candidate, "stable-good-accuracy");
+          }
+        } else {
+          // Une lecture imprécise casse la séquence : deux bons fixes
+          // consécutifs sont nécessaires, pas deux bons fixes éloignés
+          // dans le temps par une lecture de mauvaise qualité.
+          previousGoodFix = null;
+          stableFixCount = 0;
         }
       },
       (err) => {
