@@ -17,6 +17,7 @@ const MODULE_TYPES = ["agro", "health", "ngo", "generic"] as const;
 // rester cohérent avec le style du reste de ce fichier).
 const ORG_TYPES = ["agriculture", "health", "ngo", "generic"] as const;
 const APP_ROLES = ["agent", "supervisor", "admin"] as const;
+const ORGANIZATION_KINDS = ["independent", "cooperative", "union"] as const;
 // Modules de conformité — extensions optionnelles d'un module métier (EUDR
 // est une extension d'agro), jamais un module à part entière.
 const COMPLIANCE_MODULES = ["eudr"] as const;
@@ -155,6 +156,7 @@ export const createOrganizationWithAdmin = createServerFn({ method: "POST" })
     moduleType: string;
     adminEmail: string;
     adminFullName: string;
+    organizationKind?: string;
   }) =>
     z.object({
       orgName: z.string().min(1).max(200),
@@ -162,6 +164,7 @@ export const createOrganizationWithAdmin = createServerFn({ method: "POST" })
       moduleType: z.enum(MODULE_TYPES),
       adminEmail: z.string().email(),
       adminFullName: z.string().min(1).max(200),
+      organizationKind: z.enum(ORGANIZATION_KINDS).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -184,6 +187,7 @@ export const createOrganizationWithAdmin = createServerFn({ method: "POST" })
         type: data.orgType,
         module_type: data.moduleType,
         enabled_modules: [data.moduleType],
+        organization_kind: data.organizationKind ?? "independent",
       } as any)
       .select("id")
       .single();
