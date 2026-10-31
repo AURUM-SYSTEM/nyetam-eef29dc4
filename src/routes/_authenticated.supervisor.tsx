@@ -15,6 +15,7 @@
 // ne touche à aucune policy RLS existante (uniquement des ajouts).
 // ─────────────────────────────────────────────────────────────────────────
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { jsPDF } from "jspdf";
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -1016,7 +1017,7 @@ function ProducerDetailRow({
   async function exportProducerPdf() {
     if (!producerCode) { toast.error("Code producteur indisponible."); return; }
     try {
-      const { jsPDF } = await import("jspdf");
+
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const coopName = cooperatives.find(c => c.id === cooperativeId)?.name ?? "—";
       const today = new Date().toLocaleDateString("fr-FR");
@@ -1753,7 +1754,7 @@ function DataRestitutionSection() {
   };
 
   const exportGlobalPdf = async () => {
-    const { jsPDF } = await import("jspdf");
+
     const pdf = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
     const surface=parcelles.reduce((s,p)=>s+(Number(p.surfaceHaCalculated??p.surfaceHa)||0),0);
     pdf.setFont("helvetica","bold"); pdf.setFontSize(17); pdf.text("AURUM — Carte générale des parcelles",18,20);
@@ -1767,7 +1768,7 @@ function DataRestitutionSection() {
   };
 
   const exportProducerReportsPdf = async () => {
-    const { jsPDF } = await import("jspdf");
+
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const list = producers.filter((p) =>
       parcelles.some((q) => q.producerCode === p.producerCode || q.producerId === p.id),
