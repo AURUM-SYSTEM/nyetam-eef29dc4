@@ -1133,8 +1133,8 @@ function ProducerDetailRow({
         ctx.fillStyle="#1d382b";ctx.font="bold 20px Arial";ctx.textAlign="center";ctx.fillText("N",cw-49,43);
         ctx.beginPath();ctx.moveTo(cw-49,50);ctx.lineTo(cw-62,78);ctx.lineTo(cw-49,70);ctx.lineTo(cw-36,78);ctx.closePath();ctx.fill();
         ctx.textAlign="left";
-        const scaleMeters=111320*Math.cos(centerLat*Math.PI/180)*(cw/(n*256))*1000;
-        const barPx=Math.max(35,Math.min(150,scaleMeters/100));
+        const metersPerPixel=40075016.686*Math.cos(centerLat*Math.PI/180)/(n*256);
+        const barPx=Math.max(35,Math.min(150,100/Math.max(metersPerPixel,0.0001)));
         ctx.strokeStyle="#203b2c";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(35,ch-35);ctx.lineTo(35+barPx,ch-35);ctx.stroke();
         ctx.beginPath();ctx.moveTo(35,ch-43);ctx.lineTo(35,ch-27);ctx.moveTo(35+barPx,ch-43);ctx.lineTo(35+barPx,ch-27);ctx.stroke();
         ctx.fillStyle="#203b2c";ctx.font="bold 17px Arial";ctx.fillText(barPx>90?"100 m":"50 m",35,ch-49);
@@ -1142,6 +1142,9 @@ function ProducerDetailRow({
         ctx.fillStyle="rgba(255,255,255,0.94)";ctx.fillRect(20,ch-105,420,42);
         ctx.fillStyle=allHaveBoundary?"#087443":"#a24b20";ctx.font="bold 17px Arial";
         ctx.fillText(allHaveBoundary?"PÉRIMÈTRE GPS RELEVÉ":"POINT GPS UNIQUEMENT — CONTOUR NON RELEVÉ",30,ch-78);
+        ctx.fillStyle="rgba(255,255,255,0.94)";ctx.fillRect(cw-430,ch-64,405,38);
+        ctx.fillStyle="#34483a";ctx.font="16px Arial";
+        ctx.fillText("Centre : "+centerLat.toFixed(6)+"°, "+centerLng.toFixed(6)+"°",cw-415,ch-39);
 
         const dataUrl=canvas.toDataURL("image/jpeg",0.9);
         pdf.addImage(dataUrl,"JPEG",innerX,innerY,innerW,innerH,undefined,"FAST");
@@ -1150,12 +1153,7 @@ function ProducerDetailRow({
         pdf.text(mode==="satellite"?"VUE SATELLITE":"VUE DE RUE",x+7,y+8.5);
         pdf.setFont("helvetica","normal");pdf.setFontSize(5.5);pdf.setTextColor(55,65,58);
         pdf.text((tileCount===0?"Fond indisponible · ":"")+(mode==="satellite"?"Esri World Imagery":"© OpenStreetMap"),x+w-5,y+h-4,{align:"right"});
-        pdf.setFont("helvetica","normal");pdf.setFontSize(6);pdf.setTextColor(70,78,72);
-        pdf.text("Centre : "+centerLat.toFixed(6)+"°, "+centerLng.toFixed(6)+"°",x+4,y+h+4);
-        if(!normalized.every((v:any)=>v.boundary.length>=3)){
-          pdf.setTextColor(155,75,32);pdf.setFont("helvetica","bold");
-          pdf.text("Attention : un point GPS ne constitue pas un périmètre parcellaire.",x+4,y+h+8);
-        }
+
       };
 
       addHeader("Fiche producteur — traçabilité",today);
