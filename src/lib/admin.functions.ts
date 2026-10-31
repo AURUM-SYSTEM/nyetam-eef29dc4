@@ -1014,3 +1014,67 @@ export const markCommissionPaid = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { success: true as const };
   });
+
+
+// Gestion des rattachements union/cooperatives — réservée au centre AURUM.
+async function assertPlatformAdminForMembership(context: any): Promise<void> {
+  const { data, error } = await context.supabase.rpc("has_role", { _user: context.userId, _role: "platform_admin" });
+  if (error) throw new Error("Vérification du rôle impossible : " + error.message);
+  if (!data) throw new Error("Action réservée à l equipe centrale AURUM.");
+}
+
+export const listUnionCooperativeMemberships = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { unionOrganizationId: string }) => z.object({ unionOrganizationId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertPlatformAdminForMembership(context);
+    const { data: union, error: unionErr } = await supabaseAdmin.from("organizations").select("id, name, organization_kind").eq("id", data.unionOrganizationId).single();
+    if (unionErr || !union || (union as any).organization_kind !== "union") throw new Error("Organisation non enregistrée comme union.");
+    const { data: links, error } = await supabaseAdmin.from("union_cooperatives").select("id, cooperative_id, created_at").eq("union_organization_id", data.unionOrganizationId).order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    const ids = ((links ?? []) as any[]).map(x => x.cooperative_id);
+    const { data: coops, error: coopErr } = ids.length ? await supabaseAdmin.from("cooperatives").select("id, name, organization_id").in("id", ids) : { data: [], error: null };
+    if (coopErr) throw new Error(coopErr.message);
+    const orgIds = Array.from(new Set(((coops ?? []) as any[]).map(x => x.organization_id)));
+    const { data: orgs, error: orgErr } = orgIds.length ? await supabaseAdmin.from("organizations").select("id, name").in("id", orgIds) : { data: [], error: null };
+    if (orgErr) throw new Error(orgErr.message);
+    const orgNames = new Map(((orgs ?? []) as any[]).map(x => [x.id, x.name]));
+    const coopById = new Map(((coops ?? []) as any[]).map(x => [x.id, x]));
+    return { union: { id: (union as any).id, name: (union as any).name }, cooperatives: ((links ?? []) as any[]).flatMap(link => {
+      const coop = coopById.get(link.cooperative_id);
+      return coop ? [{ membershipId: link.id, cooperativeId: coop.id, cooperativeName: coop.name, owningOrganizationId: coop.organization_id, owningOrganizationName: orgNames.get(coop.organization_id) ?? "Organisation" }] : [];
+    }) };
+  });
+
+export const addCooperativeToUnion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { unionOrganizationId: string; cooperativeId: string }) => z.object({ unionOrganizationId: z.string().uuid(), cooperativeId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertPlatformAdminForMembership(context);
+    const { data: union, error: unionErr } = await supabaseAdmin.from("organizations").select("id, organization_kind").eq("id", data.unionOrganizationId).single();
+    if (unionErr || !union || (union as any).organization_kind !== "union") throw new Error("Organisation cible non reconnue comme union.");
+    const { data: coop, error: coopErr } = await supabaseAdmin.from("cooperatives").select("id, organization_id, name").eq("id", data.cooperativeId).single();
+    if (coopErr || !coop) throw new Error("Coopérative introuvable.");
+    if ((coop as any).organization_id === data.unionOrganizationId) throw new Error("Une union ne peut pas etre membre d elle-meme.");
+    const { data: existing, error: existingErr } = await supabaseAdmin.from("union_cooperatives").select("id").eq("union_organization_id", data.unionOrganizationId).eq("cooperative_id", data.cooperativeId).maybeSingle();
+    if (existingErr) throw new Error(existingErr.message);
+    if (existing) return { success: true as const, alreadyLinked: true as const };
+    const { error } = await supabaseAdmin.from("union_cooperatives").insert({ union_organization_id: data.unionOrganizationId, cooperative_id: data.cooperativeId, created_by: context.userId } as any);
+    if (error) throw new Error(error.message);
+    try { await supabaseAdmin.from("audit_log").insert({ organization_id: data.unionOrganizationId, actor_id: context.userId, action: "creation", entity_type: "union_cooperative_membership", entity_id: data.cooperativeId, new_value: { cooperative_id: data.cooperativeId, cooperative_name: (coop as any).name, cooperative_organization_id: (coop as any).organization_id } as any } as any); }
+    catch (e) { console.warn("membership audit failed (non bloquant)", e); }
+    return { success: true as const, alreadyLinked: false as const };
+  });
+
+export const removeCooperativeFromUnion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { unionOrganizationId: string; cooperativeId: string }) => z.object({ unionOrganizationId: z.string().uuid(), cooperativeId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertPlatformAdminForMembership(context);
+    const { error, count } = await supabaseAdmin.from("union_cooperatives").delete({ count: "exact" }).eq("union_organization_id", data.unionOrganizationId).eq("cooperative_id", data.cooperativeId);
+    if (error) throw new Error(error.message);
+    if (!count) throw new Error("Aucun rattachement correspondant trouve.");
+    try { await supabaseAdmin.from("audit_log").insert({ organization_id: data.unionOrganizationId, actor_id: context.userId, action: "suppression", entity_type: "union_cooperative_membership", entity_id: data.cooperativeId, old_value: { cooperative_id: data.cooperativeId } as any } as any); }
+    catch (e) { console.warn("membership removal audit failed (non bloquant)", e); }
+    return { success: true as const };
+  });
