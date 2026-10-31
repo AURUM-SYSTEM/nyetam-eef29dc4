@@ -1162,11 +1162,15 @@ function ProducerDetailRow({
         }
       } catch { /* QR facultatif */ }
 
-      await drawMap(parcelles,"Carte des parcelles — Street Map",99,91,"street");
-      await drawMap(parcelles,"Vue satellite des parcelles",196,91,"satellite");
+      // Les deux cartes occupent une zone dédiée sur la couverture.
+      // Le registre est placé sur une page distincte pour éviter tout chevauchement.
+      await drawMap(parcelles,"Carte des parcelles — vue de rue",99,77,"street");
+      await drawMap(parcelles,"Vue satellite des parcelles",184,77,"satellite");
 
-      let y=198;
-      pdf.setFont("helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(32,48,42);pdf.text("Registre des parcelles",18,y);y+=7;
+      pdf.addPage();
+      addHeader("Registre des parcelles",today);
+      let y=43;
+      pdf.setFont("helvetica","bold");pdf.setFontSize(13);pdf.setTextColor(32,48,42);pdf.text("Registre des parcelles",18,y);y+=9;
       pdf.setFillColor(32,48,42);pdf.rect(18,y-4,174,7,"F");pdf.setTextColor(255,255,255);pdf.setFontSize(6.5);
       pdf.text("PARCELLE",22,y);pdf.text("CULTURE",62,y);pdf.text("SURFACE",105,y);pdf.text("GPS",135,y);pdf.text("CONFORMITÉ",158,y);
       y+=8;pdf.setTextColor(45,52,48);pdf.setFont("helvetica","normal");
@@ -1185,15 +1189,22 @@ function ProducerDetailRow({
         const lines=[
           ["Producteur",fullName||"—"],["Culture",p.culture||"—"],["Surface",String(p.surfaceHaCalculated??p.surfaceHa??"—")+" ha"],
           ["Coordonnées",Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lng))?String(p.lat)+", "+String(p.lng):"Non disponibles"],
-          ["Espèces",p.species.length?p.species.join(", "):"—"],["Variétés",p.varieties.length?p.varieties.join(", "):"—"],
+          ["Espèces",Array.isArray(p.species)&&p.species.length?p.species.join(", "):"—"],["Variétés",Array.isArray(p.varieties)&&p.varieties.length?p.varieties.join(", "):"—"],
           ["Plantation",String(p.plantingYear??"—")],["Agroforesterie",p.agroforestry==null?"—":p.agroforestry?"Oui":"Non"],
           ["Occupation",String(p.landTenure??"—")],["Certification",String(p.certification??"—")],
           ["Rendement estimé",String(p.estimatedYieldTonnes??"—")+" t"],["Conformité",String(p.complianceStatus??"—")]
         ];
-        let dy=50;for(const [label,value] of lines){pdf.setFont("helvetica","bold");pdf.text(label,18,dy);pdf.setFont("helvetica","normal");pdf.text(String(value).slice(0,105),55,dy);dy+=6;}
-        await drawMap([p],"Carte Street Map de la parcelle",dy+5,92,"street");
-        await drawMap([p],"Vue satellite de la parcelle",dy+102,92,"satellite");
-        pdf.setFont("helvetica","normal");pdf.setFontSize(6);pdf.setTextColor(130,135,132);pdf.text("AURUM AGRO · Document de traçabilité · Page "+(i+2),18,291);
+        let dy=48;
+        for(const [label,value] of lines){
+          pdf.setFont("helvetica","bold");pdf.setFontSize(7);pdf.text(label,18,dy);
+          pdf.setFont("helvetica","normal");pdf.text(String(value).slice(0,105),55,dy);
+          dy+=4.5;
+        }
+        // Deux cartes compactes, entièrement contenues dans la page A4.
+        await drawMap([p],"Carte de la parcelle — vue de rue",dy+5,70,"street");
+        await drawMap([p],"Vue satellite de la parcelle",dy+82,70,"satellite");
+        pdf.setFont("helvetica","normal");pdf.setFontSize(6);pdf.setTextColor(130,135,132);
+        pdf.text("AURUM AGRO · Fiche technique de parcelle · Page "+(i+3),18,288);
       }
 
       pdf.save("AURUM_producteur-"+producerCode+"-"+new Date().toISOString().slice(0,10)+".pdf");
