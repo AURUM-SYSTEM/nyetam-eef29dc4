@@ -17,7 +17,7 @@
  *   - Everything else (Supabase, APIs, cross-origin): passthrough
  * Cache name is versioned so we can purge old shells on update.
  */
-const CACHE = "aurum-cache-v3";
+const CACHE = "aurum-cache-v4";
 const OFFLINE_URL = "/offline.html";
 const ASSET_MANIFEST_URL = "/asset-manifest.json";
 const STATIC_PRECACHE = [OFFLINE_URL, "/manifest.json", "/icon-192.png", "/icon-512.png"];
