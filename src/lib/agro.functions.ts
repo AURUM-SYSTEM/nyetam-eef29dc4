@@ -26,6 +26,19 @@ const DUPLICATE_RADIUS_M = 50;
 // selon la latitude ; largement suffisant pour ne rater aucun candidat.
 const BBOX_DEGREES = 0.001;
 
+
+async function assertCooperativeInOrganization(cooperativeId: string | null | undefined, orgId: string): Promise<void> {
+  if (!cooperativeId) return;
+  const { data, error } = await supabaseAdmin
+    .from("cooperatives")
+    .select("id")
+    .eq("id", cooperativeId)
+    .eq("organization_id", orgId)
+    .maybeSingle();
+  if (error) throw new Error("Vérification de la coopérative impossible : " + error.message);
+  if (!data) throw new Error("La coopérative sélectionnée n'appartient pas à votre organisation.");
+}
+
 async function getCallerOrg(userId: string): Promise<string> {
   const { data, error } = await supabaseAdmin
     .from("profiles")
@@ -277,6 +290,7 @@ export const createProducer = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const orgId = await assertPermission(context.userId, "producers.create");
+    await assertCooperativeInOrganization(data.cooperativeId, orgId);
 
     // Idempotence : une reprise après coupure ne doit jamais créer un second
     // producteur. La clé est locale à l'organisation et provient de la file
@@ -359,6 +373,7 @@ export const getProducerDetails = createServerFn({ method: "POST" })
       .from("parcelles")
       .select("id, culture, surface_ha, surface_ha_calculated, lat, lng, boundary_points, species, varieties, planting_year, land_tenure, agroforestry, certification, estimated_yield_tonnes, compliance_status, created_at")
       .eq("producer_id", data.producerId)
+      .eq("organization_id", orgId)
       .order("created_at", { ascending: false });
     if (parcErr) throw new Error(parcErr.message);
     const parcelles = (parcelleRows ?? []).map((pc: any) => {
@@ -469,6 +484,7 @@ export const updateProducer = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const orgId = await assertPermission(context.userId, "producers.edit");
+    if (data.cooperativeId !== undefined) await assertCooperativeInOrganization(data.cooperativeId, orgId);
 
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("producers")
