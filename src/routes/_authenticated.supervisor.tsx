@@ -1034,106 +1034,128 @@ function ProducerDetailRow({
       };
 
       const drawMap = async (items: typeof parcelles, title: string, y: number, h: number, mode: "street" | "satellite" = "street") => {
-        const x=18,w=174;
-        const points=items.flatMap((p:any)=>{
-          const boundary=(Array.isArray(p.boundaryPoints)?p.boundaryPoints:[])
+        const x=18,w=174,innerX=x+1,innerY=y+1,innerW=w-2,innerH=h-2;
+        const normalized=items.map((p:any)=>({
+          parcel:p,
+          boundary:(Array.isArray(p.boundaryPoints)?p.boundaryPoints:[])
             .map((q:any)=>({lat:Number(q?.lat??q?.latitude),lng:Number(q?.lng??q?.longitude)}))
-            .filter((q:any)=>Number.isFinite(q.lat)&&Number.isFinite(q.lng));
-          const lat=Number(p.lat),lng=Number(p.lng);
-          return boundary.length>=3?boundary:(Number.isFinite(lat)&&Number.isFinite(lng)?[{lat,lng}]:[]);
-        });
+            .filter((q:any)=>Number.isFinite(q.lat)&&Number.isFinite(q.lng)&&Math.abs(q.lat)<=90&&Math.abs(q.lng)<=180),
+          point:p.lat!=null&&p.lng!=null?{lat:Number(p.lat),lng:Number(p.lng)}:null
+        })).map((v:any)=>({...v,point:v.point&&Number.isFinite(v.point.lat)&&Number.isFinite(v.point.lng)&&Math.abs(v.point.lat)<=90&&Math.abs(v.point.lng)<=180?v.point:null}));
+        const geo=normalized.flatMap((v:any)=>v.boundary.length>=3?v.boundary:(v.point?[v.point]:[]));
 
-        pdf.setFont("helvetica","bold"); pdf.setFontSize(9); pdf.setTextColor(35,45,55);
+        pdf.setFont("helvetica","bold");pdf.setFontSize(9);pdf.setTextColor(35,45,55);
         pdf.text(title,x,y-4);
-        pdf.setFillColor(248,250,247); pdf.setDrawColor(205,212,205); pdf.setLineWidth(0.35);
+        pdf.setFillColor(255,255,255);pdf.setDrawColor(190,199,191);pdf.setLineWidth(0.45);
         pdf.roundedRect(x,y,w,h,2,2,"FD");
-
-        if(!points.length){
-          pdf.setFont("helvetica","normal"); pdf.setFontSize(8); pdf.setTextColor(100,108,105);
-          pdf.text("Aucune coordonnée GPS disponible pour cette parcelle.",x+8,y+h/2);
+        if(!geo.length){
+          pdf.setFont("helvetica","bold");pdf.setFontSize(8);pdf.setTextColor(90,98,92);
+          pdf.text("LOCALISATION NON RENSEIGNÉE",x+8,y+h/2-2);
+          pdf.setFont("helvetica","normal");pdf.setFontSize(7);
+          pdf.text("Aucune coordonnée GPS exploitable pour cette parcelle.",x+8,y+h/2+4);
           return;
         }
 
-        const canvas=document.createElement("canvas");
-        const cw=1100,ch=600;
+        const canvas=document.createElement("canvas"),cw=1100,ch=560;
         canvas.width=cw;canvas.height=ch;
         const ctx=canvas.getContext("2d");
         if(!ctx) throw new Error("Canvas cartographique indisponible.");
-
-        const minLat=Math.min(...points.map(q=>q.lat)),maxLat=Math.max(...points.map(q=>q.lat));
-        const minLng=Math.min(...points.map(q=>q.lng)),maxLng=Math.max(...points.map(q=>q.lng));
-        const latSpan=Math.max(maxLat-minLat,0.00005),lngSpan=Math.max(maxLng-minLng,0.00005);
+        const minLat=Math.min(...geo.map((q:any)=>q.lat)),maxLat=Math.max(...geo.map((q:any)=>q.lat));
+        const minLng=Math.min(...geo.map((q:any)=>q.lng)),maxLng=Math.max(...geo.map((q:any)=>q.lng));
         const centerLat=(minLat+maxLat)/2,centerLng=(minLng+maxLng)/2;
+        const latSpan=Math.max(maxLat-minLat,0.00012),lngSpan=Math.max(maxLng-minLng,0.00012);
         const zoom=Math.max(12,Math.min(18,Math.floor(Math.log2(Math.min(cw/lngSpan,ch/latSpan)/256*360))-1));
         const n=2**zoom;
         const lon2x=(lng:number)=>((lng+180)/360)*n;
-        const lat2y=(lat:number)=>{
-          const r=lat*Math.PI/180;
-          return (1-Math.asinh(Math.tan(r))/Math.PI)/2*n;
-        };
+        const lat2y=(lat:number)=>{const r=lat*Math.PI/180;return (1-Math.asinh(Math.tan(r))/Math.PI)/2*n;};
         const cx=lon2x(centerLng),cy=lat2y(centerLat);
-        const tileX=Math.floor(cx),tileY=Math.floor(cy);
         const originX=cx*256-cw/2,originY=cy*256-ch/2;
-        const tileUrl=(tx:number,ty:number)=>{
-          const xmod=((tx%n)+n)%n;
-          if(ty<0||ty>=n) return null;
-          if(mode==="satellite")
-            return "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"+ty+"/"+xmod;
-          return "https://tile.openstreetmap.org/"+zoom+"/"+xmod+"/"+ty+".png";
-        };
-
-        ctx.fillStyle=mode==="satellite"?"#d8d8d8":"#eef2ed";ctx.fillRect(0,0,cw,ch);
-        const minTX=Math.floor(originX/256)-1,maxTX=Math.floor((originX+cw)/256)+1;
-        const minTY=Math.floor(originY/256)-1,maxTY=Math.floor((originY+ch)/256)+1;
-        const tileTasks:Array<Promise<void>>=[];
-        for(let ty=minTY;ty<=maxTY;ty++){
-          for(let tx=minTX;tx<=maxTX;tx++){
-            const url=tileUrl(tx,ty);if(!url)continue;
-            tileTasks.push((async()=>{
-              try{
-                const res=await fetch(url,{mode:"cors"});
-                if(!res.ok) throw new Error("tile");
-                const blob=await res.blob();
-                const src=URL.createObjectURL(blob);
-                try{
-                  const img=new Image();
-                  await new Promise<void>((resolve,reject)=>{img.onload=()=>resolve();img.onerror=()=>reject(new Error("image"));img.src=src;});
-                  ctx.drawImage(img,tx*256-originX,ty*256-originY,256,256);
-                }finally{URL.revokeObjectURL(src);}
-              }catch{/* une tuile indisponible ne bloque pas le PDF */}
-            })());
-          }
-        }
-        await Promise.all(tileTasks);
-
         const px=(q:{lat:number;lng:number})=>({x:lon2x(q.lng)*256-originX,y:lat2y(q.lat)*256-originY});
-        items.forEach((p:any,idx:number)=>{
-          const boundary=(Array.isArray(p.boundaryPoints)?p.boundaryPoints:[])
-            .map((q:any)=>({lat:Number(q?.lat??q?.latitude),lng:Number(q?.lng??q?.longitude)}))
-            .filter((q:any)=>Number.isFinite(q.lat)&&Number.isFinite(q.lng));
-          const lat=Number(p.lat),lng=Number(p.lng);
-          if(boundary.length>=3){
-            const poly=boundary.map(px);
+        // Fond de secours cartographique : il conserve le tracé GPS sans simuler une imagerie.
+        ctx.fillStyle=mode==="satellite"?"#f1f0e9":"#edf2ec";ctx.fillRect(0,0,cw,ch);
+        let tileCount=0;
+        const minTX=Math.floor(originX/256),maxTX=Math.floor((originX+cw)/256);
+        const minTY=Math.floor(originY/256),maxTY=Math.floor((originY+ch)/256);
+        const tasks:Array<Promise<void>>=[];
+        for(let ty=minTY;ty<=maxTY;ty++)for(let tx=minTX;tx<=maxTX;tx++){
+          if(ty<0||ty>=n)continue;
+          const txm=((tx%n)+n)%n;
+          const url=mode==="satellite"
+            ?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"+ty+"/"+txm
+            :"https://tile.openstreetmap.org/"+zoom+"/"+txm+"/"+ty+".png";
+          tasks.push((async()=>{
+            try{
+              const response=await fetch(url,{mode:"cors"});
+              if(!response.ok)throw new Error("tile");
+              const blob=await response.blob(),src=URL.createObjectURL(blob);
+              try{
+                const img=new Image();
+                await new Promise<void>((resolve,reject)=>{img.onload=()=>resolve();img.onerror=()=>reject(new Error("image"));img.src=src;});
+                ctx.drawImage(img,tx*256-originX,ty*256-originY,256,256);tileCount++;
+              }finally{URL.revokeObjectURL(src);}
+            }catch{/* fond de secours conservé */}
+          })());
+        }
+        await Promise.all(tasks);
+        if(tileCount===0){
+          ctx.strokeStyle="#d5ddd4";ctx.lineWidth=1;
+          for(let gx=0;gx<cw;gx+=80){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,ch);ctx.stroke();}
+          for(let gy=0;gy<ch;gy+=80){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(cw,gy);ctx.stroke();}
+          ctx.fillStyle="#526458";ctx.font="bold 21px Arial";
+          ctx.fillText(mode==="satellite"?"IMAGERIE SATELLITE INDISPONIBLE":"FOND CARTOGRAPHIQUE INDISPONIBLE",28,42);
+          ctx.font="17px Arial";ctx.fillText("Représentation basée sur les coordonnées GPS enregistrées",28,70);
+        }
+
+        normalized.forEach((v:any,idx:number)=>{
+          if(v.boundary.length>=3){
+            const poly=v.boundary.map(px);
             ctx.beginPath();poly.forEach((q:any,i:number)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();
-            ctx.fillStyle="rgba(35,145,65,0.24)";ctx.fill();
-            ctx.strokeStyle="#159447";ctx.lineWidth=4;ctx.stroke();
-            const c=poly.reduce((a:any,q:any)=>({x:a.x+q.x/poly.length,y:a.y+q.y/poly.length}),{x:0,y:0});
-            ctx.fillStyle="#ffffff";ctx.strokeStyle="#0b6b32";ctx.lineWidth=3;ctx.beginPath();ctx.arc(c.x,c.y,7,0,Math.PI*2);ctx.fill();ctx.stroke();
-          }else if(Number.isFinite(lat)&&Number.isFinite(lng)){
-            const q=px({lat,lng});ctx.fillStyle="#e53935";ctx.strokeStyle="#ffffff";ctx.lineWidth=4;ctx.beginPath();ctx.arc(q.x,q.y,9,0,Math.PI*2);ctx.fill();ctx.stroke();
+            ctx.fillStyle="rgba(20,125,72,0.22)";ctx.fill();
+            ctx.strokeStyle="#087443";ctx.lineWidth=5;ctx.stroke();
+            const center=poly.reduce((a:any,q:any)=>({x:a.x+q.x/poly.length,y:a.y+q.y/poly.length}),{x:0,y:0});
+            ctx.fillStyle="#ffffff";ctx.strokeStyle="#075b35";ctx.lineWidth=4;
+            ctx.beginPath();ctx.arc(center.x,center.y,9,0,Math.PI*2);ctx.fill();ctx.stroke();
+          }else if(v.point){
+            const q=px(v.point);
+            ctx.beginPath();ctx.arc(q.x,q.y,22,0,Math.PI*2);ctx.fillStyle="rgba(220,75,55,0.18)";ctx.fill();
+            ctx.beginPath();ctx.arc(q.x,q.y,10,0,Math.PI*2);ctx.fillStyle="#d94836";ctx.fill();
+            ctx.strokeStyle="#ffffff";ctx.lineWidth=5;ctx.stroke();
           }
-          const label=String(p.id||("PAR-"+(idx+1))).slice(0,14);
-          const anchor=boundary.length>=3?px(boundary[0]):px({lat,lng});
-          ctx.font="bold 22px Arial";ctx.lineWidth=5;ctx.strokeStyle="rgba(255,255,255,0.9)";ctx.strokeText(label,anchor.x+12,anchor.y-10);ctx.fillStyle="#173b2b";ctx.fillText(label,anchor.x+12,anchor.y-10);
+          const anchor=v.boundary.length>=3?px(v.boundary[0]):(v.point?px(v.point):{x:40,y:40});
+          const code=String(v.parcel.id||("PAR-"+(idx+1)));
+          const label=code.length>16?code.slice(0,7)+"…"+code.slice(-5):code;
+          ctx.font="bold 22px Arial";ctx.lineWidth=6;ctx.strokeStyle="rgba(255,255,255,0.95)";
+          ctx.strokeText(label,anchor.x+16,anchor.y-14);ctx.fillStyle="#173b2b";ctx.fillText(label,anchor.x+16,anchor.y-14);
         });
 
-        const dataUrl=canvas.toDataURL("image/jpeg",0.88);
-        pdf.addImage(dataUrl,"JPEG",x+1,y+1,w-2,h-2,undefined,"FAST");
-        pdf.setFillColor(255,255,255);pdf.setDrawColor(210,215,210);pdf.roundedRect(x+4,y+4,39,7,1,1,"FD");
+        // Habillage cartographique : nord, échelle indicative et statut du relevé.
+        ctx.fillStyle="rgba(255,255,255,0.94)";ctx.fillRect(cw-78,18,58,76);
+        ctx.fillStyle="#1d382b";ctx.font="bold 20px Arial";ctx.textAlign="center";ctx.fillText("N",cw-49,43);
+        ctx.beginPath();ctx.moveTo(cw-49,50);ctx.lineTo(cw-62,78);ctx.lineTo(cw-49,70);ctx.lineTo(cw-36,78);ctx.closePath();ctx.fill();
+        ctx.textAlign="left";
+        const scaleMeters=111320*Math.cos(centerLat*Math.PI/180)*(cw/(n*256))*1000;
+        const barPx=Math.max(35,Math.min(150,scaleMeters/100));
+        ctx.strokeStyle="#203b2c";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(35,ch-35);ctx.lineTo(35+barPx,ch-35);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(35,ch-43);ctx.lineTo(35,ch-27);ctx.moveTo(35+barPx,ch-43);ctx.lineTo(35+barPx,ch-27);ctx.stroke();
+        ctx.fillStyle="#203b2c";ctx.font="bold 17px Arial";ctx.fillText(barPx>90?"100 m":"50 m",35,ch-49);
+        const allHaveBoundary=normalized.every((v:any)=>v.boundary.length>=3);
+        ctx.fillStyle="rgba(255,255,255,0.94)";ctx.fillRect(20,ch-105,420,42);
+        ctx.fillStyle=allHaveBoundary?"#087443":"#a24b20";ctx.font="bold 17px Arial";
+        ctx.fillText(allHaveBoundary?"PÉRIMÈTRE GPS RELEVÉ":"POINT GPS UNIQUEMENT — CONTOUR NON RELEVÉ",30,ch-78);
+
+        const dataUrl=canvas.toDataURL("image/jpeg",0.9);
+        pdf.addImage(dataUrl,"JPEG",innerX,innerY,innerW,innerH,undefined,"FAST");
+        pdf.setFillColor(255,255,255);pdf.setDrawColor(210,215,210);pdf.roundedRect(x+4,y+4,43,7,1,1,"FD");
         pdf.setFont("helvetica","bold");pdf.setFontSize(5.5);pdf.setTextColor(35,45,55);
-        pdf.text(mode==="satellite"?"VUE SATELLITE":"STREET MAP",x+7,y+8.5);
-        pdf.setFont("helvetica","normal");pdf.setFontSize(5);pdf.setTextColor(245,245,245);
-        pdf.text(mode==="satellite"?"Esri World Imagery":"© OpenStreetMap contributors",x+w-5,y+h-4,{align:"right"});
+        pdf.text(mode==="satellite"?"VUE SATELLITE":"VUE DE RUE",x+7,y+8.5);
+        pdf.setFont("helvetica","normal");pdf.setFontSize(5.5);pdf.setTextColor(55,65,58);
+        pdf.text((tileCount===0?"Fond indisponible · ":"")+(mode==="satellite"?"Esri World Imagery":"© OpenStreetMap"),x+w-5,y+h-4,{align:"right"});
+        pdf.setFont("helvetica","normal");pdf.setFontSize(6);pdf.setTextColor(70,78,72);
+        pdf.text("Centre : "+centerLat.toFixed(6)+"°, "+centerLng.toFixed(6)+"°",x+4,y+h+4);
+        if(!normalized.every((v:any)=>v.boundary.length>=3)){
+          pdf.setTextColor(155,75,32);pdf.setFont("helvetica","bold");
+          pdf.text("Attention : un point GPS ne constitue pas un périmètre parcellaire.",x+4,y+h+8);
+        }
       };
 
       addHeader("Fiche producteur — traçabilité",today);
