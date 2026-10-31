@@ -750,6 +750,21 @@ export const createParcelle = createServerFn({ method: "POST" })
       }
     }
 
+    if (producerId) {
+      const { data: finalProducer, error: finalProducerErr } = await supabaseAdmin
+        .from("producers")
+        .select("id, cooperative_id")
+        .eq("id", producerId)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      if (finalProducerErr) throw new Error(finalProducerErr.message);
+      if (!finalProducer) throw new Error("Le producteur sélectionné n'appartient pas à votre organisation.");
+      if (cooperativeId && (finalProducer as any).cooperative_id && (finalProducer as any).cooperative_id !== cooperativeId) {
+        throw new Error("Le producteur est déjà rattaché à une autre coopérative.");
+      }
+      if (!cooperativeId && (finalProducer as any).cooperative_id) cooperativeId = (finalProducer as any).cooperative_id;
+    }
+
     const { data: parcelle, error: parcErr } = await supabaseAdmin
       .from("parcelles")
       .insert({
