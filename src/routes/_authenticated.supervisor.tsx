@@ -1082,7 +1082,7 @@ function ProducerDetailRow({
           if(ty<0||ty>=n)continue;
           const txm=((tx%n)+n)%n;
           const url=mode==="satellite"
-            ?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"+ty+"/"+txm
+            ?"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"+zoom+"/"+ty+"/"+txm
             :"https://tile.openstreetmap.org/"+zoom+"/"+txm+"/"+ty+".png";
           tasks.push((async()=>{
             try{
