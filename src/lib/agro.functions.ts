@@ -148,7 +148,7 @@ export const listParcelles = createServerFn({ method: "POST" })
     const ids = ((parcelles ?? []) as Array<{ id: string }>).map(p => p.id);
     const visitCount = new Map<string, number>();
     if (ids.length > 0) {
-      const { data: docs } = await supabaseAdmin.from("documents").select("parcelle_id").in("parcelle_id", ids);
+      const { data: docs } = await supabaseAdmin.from("documents").select("parcelle_id").in("parcelle_id", ids).eq("organization_id", orgId);
       for (const d of (docs ?? []) as Array<{ parcelle_id: string | null }>) {
         if (d.parcelle_id) visitCount.set(d.parcelle_id, (visitCount.get(d.parcelle_id) ?? 0) + 1);
       }
@@ -232,7 +232,8 @@ export const listProducers = createServerFn({ method: "POST" })
       const { data: parcelleRows } = await supabaseAdmin
         .from("parcelles")
         .select("producer_id")
-        .in("producer_id", producerIds);
+        .in("producer_id", producerIds)
+        .eq("organization_id", orgId);
       for (const p of (parcelleRows ?? []) as Array<{ producer_id: string | null }>) {
         if (p.producer_id) parcelleCountByProducer.set(p.producer_id, (parcelleCountByProducer.get(p.producer_id) ?? 0) + 1);
       }
@@ -409,7 +410,8 @@ export const getProducerDetails = createServerFn({ method: "POST" })
       const { data: docs } = await supabaseAdmin
         .from("documents")
         .select("parcelle_id")
-        .in("parcelle_id", parcelleIds);
+        .in("parcelle_id", parcelleIds)
+        .eq("organization_id", orgId);
       visitCount = ((docs ?? []) as Array<{ parcelle_id: string | null }>).filter(d => d.parcelle_id).length;
     }
 
@@ -695,6 +697,20 @@ export const createParcelle = createServerFn({ method: "POST" })
     // Producteur : lien direct par id, ou création/réutilisation par nom libre
     // (même pattern que la coopérative ci-dessus)
     let producerId: string | null = data.producerId ?? null;
+    if (producerId) {
+      const { data: linkedProducer, error: linkedProducerErr } = await supabaseAdmin
+        .from("producers")
+        .select("id, organization_id, cooperative_id")
+        .eq("id", producerId)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      if (linkedProducerErr) throw new Error(linkedProducerErr.message);
+      if (!linkedProducer) throw new Error("Le producteur sélectionné n'appartient pas à votre organisation.");
+      if (cooperativeId && (linkedProducer as any).cooperative_id && (linkedProducer as any).cooperative_id !== cooperativeId) {
+        throw new Error("Le producteur est déjà rattaché à une autre coopérative.");
+      }
+      if (!cooperativeId && (linkedProducer as any).cooperative_id) cooperativeId = (linkedProducer as any).cooperative_id;
+    }
     if (!producerId && data.producerName) {
       const wanted = data.producerName.trim();
       const { data: existingProducers, error: prodErr } = await supabaseAdmin
@@ -889,7 +905,7 @@ export const listDuplicateAlerts = createServerFn({ method: "POST" })
         ? supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds)
         : Promise.resolve({ data: [] as any[] }),
       parcelleIds.length > 0
-        ? supabaseAdmin.from("parcelles").select("id, culture, cooperative_id").in("id", parcelleIds)
+        ? supabaseAdmin.from("parcelles").select("id, culture, cooperative_id").in("id", parcelleIds).eq("organization_id", orgId)
         : Promise.resolve({ data: [] as any[] }),
       supabaseAdmin.from("cooperatives").select("id, name").eq("organization_id", orgId),
     ]);
@@ -1082,6 +1098,7 @@ export const getDocumentDetails = createServerFn({ method: "POST" })
       .from("documents")
       .select("id, user_id, title, transcript, field_data, photo_urls, video_urls, parcelle_id, location, location_data, status, validated_at, created_at, agent_name")
       .eq("id", data.documentId)
+      .eq("organization_id", orgId)
       .single();
     if (docErr || !doc) throw new Error("Document introuvable.");
     const d = doc as any;
@@ -1106,6 +1123,7 @@ export const getDocumentDetails = createServerFn({ method: "POST" })
         .from("parcelles")
         .select("culture, surface_ha, producer_id")
         .eq("id", d.parcelle_id)
+        .eq("organization_id", orgId)
         .single();
       if (pc) {
         const pcRow = pc as any;
@@ -1115,6 +1133,7 @@ export const getDocumentDetails = createServerFn({ method: "POST" })
             .from("producers")
             .select("full_name")
             .eq("id", pcRow.producer_id)
+            .eq("organization_id", orgId)
             .single();
           producerName = (prod as any)?.full_name ?? null;
         }
@@ -1298,6 +1317,7 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
       .from("documents")
       .select("id, title, mission_type, field_data, user_id, created_at, photo_urls, video_urls, status, validated_at")
       .eq("parcelle_id", data.parcelleId)
+      .eq("organization_id", orgId)
       .order("created_at", { ascending: false });
     if (docsErr) throw new Error(docsErr.message);
     const docRows = (docs ?? []) as Array<{
@@ -1485,8 +1505,8 @@ export const getParcelleMapInfo = createServerFn({ method: "POST" })
     const producerIds = Array.from(new Set(parcelles.map((p) => p.producer_id).filter((x): x is string => !!x)));
 
     const [{ data: coops }, { data: producers }] = await Promise.all([
-      coopIds.length > 0 ? supabaseAdmin.from("cooperatives").select("id, name").in("id", coopIds) : Promise.resolve({ data: [] as any[] }),
-      producerIds.length > 0 ? supabaseAdmin.from("producers").select("id, full_name").in("id", producerIds) : Promise.resolve({ data: [] as any[] }),
+      coopIds.length > 0 ? supabaseAdmin.from("cooperatives").select("id, name").in("id", coopIds).eq("organization_id", orgId) : Promise.resolve({ data: [] as any[] }),
+      producerIds.length > 0 ? supabaseAdmin.from("producers").select("id, full_name").in("id", producerIds).eq("organization_id", orgId) : Promise.resolve({ data: [] as any[] }),
     ]);
     const coopNameById = new Map(((coops ?? []) as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]));
     const producerNameById = new Map(((producers ?? []) as Array<{ id: string; full_name: string }>).map((p) => [p.id, p.full_name]));
