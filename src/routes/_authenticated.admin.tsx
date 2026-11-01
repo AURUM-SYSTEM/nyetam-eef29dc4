@@ -109,6 +109,7 @@ function AdminDashboard() {
   const [assignmentInstructions, setAssignmentInstructions] = useState("");
   const [assignmentModule, setAssignmentModule] = useState("agro");
   const [assignmentDueAt, setAssignmentDueAt] = useState("");
+  const [expandedAssignmentId, setExpandedAssignmentId] = useState<string | null>(null);
   const listRequests = useServerFn(listPendingModificationRequests);
   const decideRequest = useServerFn(decideModificationRequest);
   const fetchOrgSettings = useServerFn(getOrgSettings);
@@ -1104,11 +1105,33 @@ function AdminDashboard() {
                     {a.status === "active" ? "Active" : a.status === "completed" ? "Terminée" : "Annulée"}
                   </span>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => setExpandedAssignmentId(expandedAssignmentId === a.id ? null : a.id)} className="rounded-lg border border-border px-2.5 py-1.5 text-[10px] text-foreground">
+                    {expandedAssignmentId === a.id ? "Masquer" : "Voir les collectes"} · {(a.documents ?? []).length}
+                  </button>
                   {a.status !== "completed" && <button type="button" onClick={() => void changeAssignmentStatus(a.id, "completed")} className="rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-[10px] text-emerald-400">Clôturer</button>}
                   {a.status !== "cancelled" && <button type="button" onClick={() => void changeAssignmentStatus(a.id, "cancelled")} className="rounded-lg border border-destructive/30 px-2.5 py-1.5 text-[10px] text-destructive">Annuler</button>}
                   {a.status !== "active" && <button type="button" onClick={() => void changeAssignmentStatus(a.id, "active")} className="rounded-lg border border-gold/30 px-2.5 py-1.5 text-[10px] text-gold">Réactiver</button>}
                 </div>
+                {expandedAssignmentId === a.id && (
+                  <div className="mt-3 rounded-lg border border-border/70 bg-background/50 p-3">
+                    {(a.documents ?? []).length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Aucune collecte synchronisée pour cette mission.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {(a.documents as any[]).map((doc: any) => (
+                          <div key={doc.id} className="flex items-start justify-between gap-2 border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-medium">{doc.title || "Collecte sans titre"}</p>
+                              <p className="text-[10px] text-muted-foreground">{doc.agentName} · {doc.type} · {doc.createdAt ? new Date(doc.createdAt).toLocaleString("fr-FR") : "Date inconnue"}</p>
+                            </div>
+                            <span className={doc.validatedAt ? "shrink-0 text-[10px] text-emerald-400" : "shrink-0 text-[10px] text-amber-400"}>{doc.validatedAt ? "Validée" : "À vérifier"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
