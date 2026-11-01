@@ -351,7 +351,7 @@ export const listAdvisorReports = createServerFn({ method: "POST" })
     const userIds = Array.from(new Set(rows.flatMap((r) => [r.generated_by, r.treated_by]).filter((v): v is string => !!v)));
     const nameById = new Map<string, string>();
     if (userIds.length > 0) {
-      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", userIds);
+      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", userIds).eq("organization_id", orgId);
       for (const p of (profiles ?? []) as Array<{ id: string; full_name: string | null }>) {
         nameById.set(p.id, p.full_name || "Agent");
       }
