@@ -119,7 +119,7 @@ function LoginPage() {
             </form>
 
             <p className="mt-4 text-center text-xs leading-5 text-gray-500">
-              Accès sur invitation uniquement. Contactez l’administrateur de votre organisation pour obtenir un compte.
+              Vous découvrez AURUM ? <Link to="/register" className="font-semibold text-[#1B5E20]">Créer un espace organisationnel</Link>.
             </p>
           </div>
 
