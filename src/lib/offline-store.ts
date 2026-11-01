@@ -142,6 +142,7 @@ type ParcellesCacheRecord = {
 // après une coupure réseau) ne réinitialise plus la mission choisie.
 export type RecordDraft = {
   missionKey: string;
+  assignmentId?: string;
   fieldValues: Record<string, string>;
   agentName: string;
   location: string;
@@ -229,6 +230,8 @@ export type QueueMeta = {
   // AGRO : parcelle choisie ou créée avant la saisie — liée au document
   // à la synchronisation (colonne documents.parcelle_id)
   parcelleId?: string;
+  // Identifiant de mission opérationnelle, conservé dans la file hors-ligne.
+  assignmentId?: string;
   // Recensement-specific
   subjectName?: string;
   subjectStatus?: string;
