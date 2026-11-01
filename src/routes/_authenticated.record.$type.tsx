@@ -104,6 +104,9 @@ function pickVideoMimeType(): string {
 }
 
 export const Route = createFileRoute("/_authenticated/record/$type")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    assignmentId: typeof search.assignmentId === "string" ? search.assignmentId : undefined,
+  }),
   component: RecordPage,
   head: () => ({ meta: [{ title: "Enregistrement — AURUM" }] }),
 });
