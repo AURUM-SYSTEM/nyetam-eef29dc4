@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, Trash2, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin, updateOrganizationModules, updateOrganizationFeatures, listRoleDefinitions, listPermissionCatalog, createOrganizationRole, updateOrganizationRolePermissions, assignRoleToOrganizationUser, listUnionCooperativeMemberships, addCooperativeToUnion, removeCooperativeFromUnion, listUnionEligibleCooperatives } from "@/lib/admin.functions";
+import { listOrgUsers, inviteAgent, updateAgentAssignment, listAgentAssignments, createAgentAssignment, updateAgentAssignmentStatus, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin, updateOrganizationModules, updateOrganizationFeatures, listRoleDefinitions, listPermissionCatalog, createOrganizationRole, updateOrganizationRolePermissions, assignRoleToOrganizationUser, listUnionCooperativeMemberships, addCooperativeToUnion, removeCooperativeFromUnion, listUnionEligibleCooperatives } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { BackofficeShell } from "@/components/BackofficeShell";
@@ -98,6 +98,17 @@ function AdminDashboard() {
   const listUsers = useServerFn(listOrgUsers);
   const invite = useServerFn(inviteAgent);
   const updateAssignment = useServerFn(updateAgentAssignment);
+  const fetchAssignments = useServerFn(listAgentAssignments);
+  const createAssignmentFn = useServerFn(createAgentAssignment);
+  const updateAssignmentStatusFn = useServerFn(updateAgentAssignmentStatus);
+  const [agentAssignments, setAgentAssignments] = useState<any[]>([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [savingAssignment, setSavingAssignment] = useState(false);
+  const [assignmentAgentId, setAssignmentAgentId] = useState("");
+  const [assignmentTitle, setAssignmentTitle] = useState("");
+  const [assignmentInstructions, setAssignmentInstructions] = useState("");
+  const [assignmentModule, setAssignmentModule] = useState("agro");
+  const [assignmentDueAt, setAssignmentDueAt] = useState("");
   const listRequests = useServerFn(listPendingModificationRequests);
   const decideRequest = useServerFn(decideModificationRequest);
   const fetchOrgSettings = useServerFn(getOrgSettings);
@@ -214,6 +225,57 @@ function AdminDashboard() {
       toast.error(err?.message ?? "Échec de la mise à jour");
     } finally {
       setSavingOrg(false);
+    }
+  }
+
+  async function loadAgentAssignments() {
+    setLoadingAssignments(true);
+    try {
+      const res = await fetchAssignments({ data: undefined as any });
+      setAgentAssignments(res.assignments as any[]);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Impossible de charger les missions");
+    } finally {
+      setLoadingAssignments(false);
+    }
+  }
+
+  async function submitAgentAssignment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!assignmentAgentId || !assignmentTitle.trim()) {
+      toast.error("Choisis un agent et donne un titre à la mission.");
+      return;
+    }
+    setSavingAssignment(true);
+    try {
+      await createAssignmentFn({
+        data: {
+          agentUserId: assignmentAgentId,
+          title: assignmentTitle.trim(),
+          instructions: assignmentInstructions.trim() || undefined,
+          moduleType: assignmentModule,
+          dueAt: assignmentDueAt ? new Date(assignmentDueAt).toISOString() : undefined,
+        },
+      });
+      toast.success("Mission affectée à l'agent.");
+      setAssignmentTitle("");
+      setAssignmentInstructions("");
+      setAssignmentDueAt("");
+      await loadAgentAssignments();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de l'affectation");
+    } finally {
+      setSavingAssignment(false);
+    }
+  }
+
+  async function changeAssignmentStatus(id: string, status: "active" | "completed" | "cancelled") {
+    try {
+      await updateAssignmentStatusFn({ data: { assignmentId: id, status } });
+      toast.success(status === "completed" ? "Mission clôturée." : status === "cancelled" ? "Mission annulée." : "Mission réactivée.");
+      await loadAgentAssignments();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Impossible de modifier cette mission");
     }
   }
 
@@ -447,6 +509,7 @@ function AdminDashboard() {
   useEffect(() => {
     if (!session?.user) return;
     void loadUsers();
+    void loadAgentAssignments();
     void loadRequests();
     void loadOrgSettings();
     void loadPlatformAdminStatus();
@@ -977,6 +1040,78 @@ function AdminDashboard() {
               Enregistrer
             </button>
           </form>
+        )}
+      </section>
+
+      <section className="glass-card mb-6 rounded-2xl p-4">
+        <h2 className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft">
+          <ShieldCheck className="h-3.5 w-3.5" /> Missions & affectations terrain
+        </h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Affecte une mission à un agent de cette organisation. Les affectations sont distinctes des rôles et ne donnent aucun accès aux données d'une autre organisation.
+        </p>
+        <form onSubmit={submitAgentAssignment} className="mb-4 space-y-3 rounded-xl border border-border bg-card/40 p-3">
+          <label className="block">
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Agent</span>
+            <select required value={assignmentAgentId} onChange={e => {
+              const id = e.target.value;
+              setAssignmentAgentId(id);
+              const agent = users.find(u => u.id === id);
+              if (agent?.moduleType) setAssignmentModule(agent.moduleType);
+            }} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+              <option value="">Choisir un agent…</option>
+              {users.filter(u => u.roles.includes("agent")).map(u => <option key={u.id} value={u.id}>{u.fullName} · {MODULE_LABELS[u.moduleType] ?? u.moduleType}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Intitulé de la mission</span>
+            <input required minLength={3} maxLength={160} value={assignmentTitle} onChange={e => setAssignmentTitle(e.target.value)} placeholder="Ex. Recensement de 30 producteurs à Loum" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Consignes (facultatif)</span>
+            <textarea maxLength={2000} rows={3} value={assignmentInstructions} onChange={e => setAssignmentInstructions(e.target.value)} placeholder="Zone, objectifs, documents à collecter…" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Module</span>
+              <select value={assignmentModule} onChange={e => setAssignmentModule(e.target.value)} className="w-full rounded-lg border border-border bg-background px-2 py-2 text-sm">
+                {MODULES.filter(m => availableModules.includes(m)).map(m => <option key={m} value={m}>{MODULE_LABELS[m]}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Échéance</span>
+              <input type="date" value={assignmentDueAt} onChange={e => setAssignmentDueAt(e.target.value)} className="w-full rounded-lg border border-border bg-background px-2 py-2 text-sm" />
+            </label>
+          </div>
+          <button type="submit" disabled={savingAssignment || !users.some(u => u.id === assignmentAgentId && u.roles.includes("agent"))} className="flex w-full items-center justify-center gap-2 rounded-xl btn-gold px-4 py-2.5 text-sm disabled:opacity-40">
+            {savingAssignment ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Affecter la mission
+          </button>
+        </form>
+        {loadingAssignments ? <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gold" /></div> : agentAssignments.length === 0 ? (
+          <p className="py-3 text-center text-xs text-muted-foreground">Aucune mission affectée pour le moment.</p>
+        ) : (
+          <div className="space-y-2">
+            {agentAssignments.map((a: any) => (
+              <div key={a.id} className="rounded-xl border border-border bg-card/40 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{a.title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{a.agentName} · {MODULE_LABELS[a.module_type] ?? a.module_type}</p>
+                    {a.due_at && <p className="mt-1 text-[10px] text-muted-foreground">Échéance : {new Date(a.due_at).toLocaleDateString("fr-FR")}</p>}
+                    {a.instructions && <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">{a.instructions}</p>}
+                  </div>
+                  <span className={a.status === "active" ? "shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-400" : "shrink-0 rounded-full bg-muted px-2 py-1 text-[10px] text-muted-foreground"}>
+                    {a.status === "active" ? "Active" : a.status === "completed" ? "Terminée" : "Annulée"}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {a.status !== "completed" && <button type="button" onClick={() => void changeAssignmentStatus(a.id, "completed")} className="rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-[10px] text-emerald-400">Clôturer</button>}
+                  {a.status !== "cancelled" && <button type="button" onClick={() => void changeAssignmentStatus(a.id, "cancelled")} className="rounded-lg border border-destructive/30 px-2.5 py-1.5 text-[10px] text-destructive">Annuler</button>}
+                  {a.status !== "active" && <button type="button" onClick={() => void changeAssignmentStatus(a.id, "active")} className="rounded-lg border border-gold/30 px-2.5 py-1.5 text-[10px] text-gold">Réactiver</button>}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
