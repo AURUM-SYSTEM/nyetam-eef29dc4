@@ -160,6 +160,14 @@ export const getPublicProducerCard = createServerFn({ method: "POST" })
       cooperativeName = (coop as any)?.name ?? null;
     }
 
+    const { data: parcels, error: parcelsError } = await supabaseAdmin
+      .from("parcelles")
+      .select("id, culture, surface_ha_calculated, surface_ha, lat, lng, boundary_points, species, varieties, planting_year, agroforestry, certification, estimated_yield_tonnes, compliance_status")
+      .eq("producer_id", (card as any).producer_id)
+      .eq("organization_id", (card as any).organization_id)
+      .order("created_at", { ascending: false });
+    if (parcelsError) throw new Error("Impossible de charger les parcelles publiques.");
+
     try {
       await supabaseAdmin.from("data_access_events").insert({
         producer_id: (card as any).producer_id,
@@ -168,15 +176,30 @@ export const getPublicProducerCard = createServerFn({ method: "POST" })
         accessor_user_id: null,
         event_type: "PROFILE_VIEW",
         access_scope: "PUBLIC",
-        data_categories: ["identity", "cooperative", "location"],
+        data_categories: ["identity", "cooperative", "location", "parcel_summary", "traceability"],
         source: "producer_card_qr",
-        metadata: { card_id: (card as any).id },
+        metadata: { card_id: (card as any).id, parcel_count: parcels?.length ?? 0 },
       } as any);
     } catch (e) {
       console.warn("producer card access event failed (non bloquant)", e);
     }
 
     return {
+      parcels: (parcels ?? []).map((parcel: any) => ({
+        id: parcel.id,
+        culture: parcel.culture,
+        surfaceHa: parcel.surface_ha_calculated ?? parcel.surface_ha ?? null,
+        latitude: parcel.lat ?? null,
+        longitude: parcel.lng ?? null,
+        boundaryPoints: Array.isArray(parcel.boundary_points) ? parcel.boundary_points : [],
+        species: parcel.species ?? [],
+        varieties: parcel.varieties ?? [],
+        plantingYear: parcel.planting_year ?? null,
+        agroforestry: parcel.agroforestry ?? null,
+        certification: parcel.certification ?? null,
+        estimatedYieldTonnes: parcel.estimated_yield_tonnes ?? null,
+        complianceStatus: parcel.compliance_status ?? null,
+      })),
       producer: {
         producerCode: (producer as any).producer_code,
         photoUrl: (producer as any).photo_url ?? null,
