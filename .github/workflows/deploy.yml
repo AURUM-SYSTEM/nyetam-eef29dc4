@@ -34,7 +34,7 @@ jobs:
             v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
             case "$v" in
               '"'*'"') v="${v#\"}"; v="${v%\"}" ;;
-              "'"*"'") v="${v#\'}"; v="${v%\'}" ;;
+              "'"*"'" ) v="${v#\'}"; v="${v%\'}" ;;
             esac
             printf '%s' "$v"
           }
@@ -45,9 +45,6 @@ jobs:
               https://*|http://*) ;;
               *.supabase.co) u="https://$u" ;;
               *)
-                # L'URL du projet est publique et constante : un secret GitHub
-                # invalide ne doit pas casser le déploiement — on avertit et
-                # on utilise la valeur connue.
                 echo "::warning::Le secret GitHub $1 contient une valeur qui n'est pas une URL — utilisation de l'URL publique du projet à la place. Corrigez ou supprimez ce secret."
                 u="https://drmcdgfifmemytrvgvqb.supabase.co" ;;
             esac
@@ -82,8 +79,6 @@ jobs:
             AIza*) ;;
             *) echo "::warning::GEMINI_API_KEY n'a pas le préfixe habituel AIza… — la validation en direct ci-dessous fait foi." ;;
           esac
-          # Validation en direct auprès de l'API Google : une clé invalide
-          # doit bloquer le déploiement ici, pas casser en production.
           code=$(curl -sS -o /tmp/gemini-check.json -w "%{http_code}" --max-time 20 \
             -H "x-goog-api-key: $gem" \
             "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1" || echo "000")
@@ -125,13 +120,16 @@ jobs:
           fi
 
           echo "Connexion au projet Supabase de production: ${SUPABASE_PROJECT_ID}"
-          supabase link             --project-ref "${SUPABASE_PROJECT_ID}"             --password "${SUPABASE_DB_PASSWORD}"
+          supabase link --project-ref "${SUPABASE_PROJECT_ID}" --password "${SUPABASE_DB_PASSWORD}"
+
+          # Une ancienne version de cette migration a été enregistrée deux fois
+          # dans l'historique distant. Le schéma correspondant est déjà présent;
+          # on retire uniquement l'entrée fantôme, sans rejouer ni supprimer SQL.
+          supabase migration repair 20261031235729 --status reverted --linked
 
           # La production contient un schéma historique créé en partie directement
-          # dans Supabase/Lovable. Les anciennes migrations ci-dessous décrivent des
-          # changements déjà présents en production mais absents de l'historique
-          # Supabase. On répare UNIQUEMENT l'historique : aucune requête SQL de ces
-          # migrations n'est rejouée et aucune donnée/table n'est supprimée.
+          # dans Supabase/Lovable. Ces versions décrivent des changements déjà
+          # présents en production mais absents de l'historique local.
           historical_versions=(
             20260519214513
             20260519214525
@@ -168,8 +166,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Valeurs nettoyées et validées ci-dessus, intégrées au bundle client
-          # par Vite pendant le build (npm run deploy = vite build + deploy).
           VITE_SUPABASE_URL: ${{ env.CLEAN_VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ env.CLEAN_VITE_SUPABASE_PUBLISHABLE_KEY }}
 
@@ -185,17 +181,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: List secrets actually present on the Worker
-        # Preuve indépendante de l'étape ci-dessus : ce que Cloudflare dit
-        # avoir réellement, pas ce que le script a essayé de pousser.
         run: npx wrangler secret list --name tanstack-start-app
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Confirm live deployment timestamp on Cloudflare
-        # Preuve indépendante du wrangler deploy ci-dessus : interroge
-        # directement l'historique des déploiements Cloudflare (horodatage
-        # serveur, pas une inférence depuis les logs CI).
         run: npx wrangler deployments list --name tanstack-start-app | head -20
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
