@@ -588,6 +588,7 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
         name: string;
         type: string;
         module_type: string;
+        organization_kind: string | null;
         enabled_modules: string[] | null;
         enabled_compliance_modules: string[] | null;
         enabled_features: string[] | null;
@@ -597,6 +598,7 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
         name: o.name,
         type: o.type,
         moduleType: o.module_type,
+        organizationKind: (o.organization_kind ?? "independent") as string,
         enabledModules: (o.enabled_modules ?? [o.module_type]) as string[],
         enabledComplianceModules: (o.enabled_compliance_modules ?? []) as string[],
         enabledFeatures: (o.enabled_features ?? []) as string[],
