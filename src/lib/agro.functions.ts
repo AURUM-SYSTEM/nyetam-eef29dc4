@@ -917,7 +917,7 @@ export const listDuplicateAlerts = createServerFn({ method: "POST" })
 
     const [{ data: agentProfiles }, { data: parcelleRows }, { data: coopRows }] = await Promise.all([
       agentIds.length > 0
-        ? supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds)
+        ? supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds).eq("organization_id", orgId).eq("organization_id", orgId).eq("organization_id", orgId)
         : Promise.resolve({ data: [] as any[] }),
       parcelleIds.length > 0
         ? supabaseAdmin.from("parcelles").select("id, culture, cooperative_id").in("id", parcelleIds).eq("organization_id", orgId)
@@ -1006,7 +1006,7 @@ export const getAgentQualityScores = createServerFn({ method: "POST" })
 
     const agentIds = Array.from(new Set(rows.map(r => r.agent_id)));
     const { data: profiles } = agentIds.length > 0
-      ? await supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds)
+      ? await supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds).eq("organization_id", orgId).eq("organization_id", orgId).eq("organization_id", orgId)
       : { data: [] as any[] };
     const nameById = new Map(((profiles ?? []) as any[]).map(p => [p.id, p.full_name || "Agent"]));
 
@@ -1069,7 +1069,7 @@ export const listAuditLog = createServerFn({ method: "POST" })
 
     const actorIds = Array.from(new Set((rows ?? []).map((r: any) => r.actor_id).filter(Boolean)));
     const { data: actorProfiles } = actorIds.length > 0
-      ? await supabaseAdmin.from("profiles").select("id, full_name").in("id", actorIds)
+      ? await supabaseAdmin.from("profiles").select("id, full_name").in("id", actorIds).eq("organization_id", orgId)
       : { data: [] as any[] };
     const actorNameById = new Map(((actorProfiles ?? []) as any[]).map((p) => [p.id, p.full_name || "Utilisateur"]));
 
@@ -1318,13 +1318,13 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
 
     const [{ data: coop }, { data: producer }, { data: attester }] = await Promise.all([
       pc.cooperative_id
-        ? supabaseAdmin.from("cooperatives").select("name").eq("id", pc.cooperative_id).single()
+        ? supabaseAdmin.from("cooperatives").select("name").eq("id", pc.cooperative_id).eq("organization_id", orgId).maybeSingle()
         : Promise.resolve({ data: null as any }),
       pc.producer_id
-        ? supabaseAdmin.from("producers").select("full_name").eq("id", pc.producer_id).single()
+        ? supabaseAdmin.from("producers").select("full_name").eq("id", pc.producer_id).eq("organization_id", orgId).maybeSingle()
         : Promise.resolve({ data: null as any }),
       pc.eudr_attested_by
-        ? supabaseAdmin.from("profiles").select("full_name").eq("id", pc.eudr_attested_by).single()
+        ? supabaseAdmin.from("profiles").select("full_name").eq("id", pc.eudr_attested_by).eq("organization_id", orgId).maybeSingle()
         : Promise.resolve({ data: null as any }),
     ]);
 
@@ -1344,7 +1344,7 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
     const agentIds = Array.from(new Set(docRows.map((d) => d.user_id)));
     const agentNameById = new Map<string, string>();
     if (agentIds.length > 0) {
-      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds);
+      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds).eq("organization_id", orgId).eq("organization_id", orgId).eq("organization_id", orgId);
       for (const p of (profiles ?? []) as Array<{ id: string; full_name: string | null }>) {
         agentNameById.set(p.id, p.full_name || "Agent");
       }
