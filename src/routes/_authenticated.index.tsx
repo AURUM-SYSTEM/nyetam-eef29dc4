@@ -12,6 +12,7 @@ import { useOnline } from "@/hooks/use-online";
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { listParcelles, listProducers } from "@/lib/agro.functions";
+import { listMyAgentAssignments } from "@/lib/agent.functions";
 
 type DocRow = {
   id: string;
@@ -62,6 +63,14 @@ function HomePage() {
   const { session, profile } = useAuth();
   const queryClient = useQueryClient();
   const isAgro = profile?.module_type === "agro";
+  const fetchMyAssignments = useServerFn(listMyAgentAssignments);
+  const { data: myAssignments } = useQuery({
+    queryKey: ["my-agent-assignments", session?.user?.id],
+    queryFn: () => fetchMyAssignments({ data: undefined as any }),
+    enabled: online && Boolean(session?.user?.id),
+    staleTime: 30_000,
+    retry: false,
+  });
 
   // Accès rapide dashboards — réservé platform_admin (un seul appel has_role).
   // admin/supervisor classiques n'atterrissent jamais ici : ils sont déjà
@@ -176,6 +185,28 @@ function HomePage() {
             <p className="mt-1 text-muted-foreground">{t("home.offline_sub")}</p>
           </div>
         </div>
+      )}
+
+      {myAssignments?.assignments && myAssignments.assignments.length > 0 && (
+        <section className="mb-5 rounded-2xl border border-gold/30 bg-card/70 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-lg">Mes missions terrain</h2>
+            <span className="rounded-full bg-gold/15 px-2 py-1 text-xs text-gold">{myAssignments.assignments.filter((a: any) => a.status === "active").length} active(s)</span>
+          </div>
+          <div className="space-y-3">
+            {myAssignments.assignments.map((mission: any) => (
+              <div key={mission.id} className="rounded-xl border border-border bg-background/60 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-medium">{mission.title}</p>
+                  <span className={`shrink-0 rounded px-2 py-1 text-[10px] uppercase ${mission.status === "active" ? "bg-emerald-500/10 text-emerald-400" : "bg-muted text-muted-foreground"}`}>{mission.status === "active" ? "En cours" : mission.status === "completed" ? "Terminée" : "Annulée"}</span>
+                </div>
+                {mission.instructions && <p className="mt-2 text-sm text-muted-foreground">{mission.instructions}</p>}
+                {mission.due_at && <p className="mt-2 text-xs text-muted-foreground">Échéance : {new Date(mission.due_at).toLocaleDateString(lang === "en" ? "en-GB" : "fr-FR")}</p>}
+                {mission.status === "active" && <button onClick={() => navigate({ to: "/record/$type", params: { type: "field_entry" } })} className="mt-3 w-full rounded-lg btn-gold px-3 py-2 text-sm">Commencer une collecte</button>}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       <InstallGuide />
