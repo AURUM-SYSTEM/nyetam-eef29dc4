@@ -46,6 +46,23 @@ export const requestModification = createServerFn({ method: "POST" })
     if (orgErr || !(roleRow as any)?.organization_id) throw new Error("Aucune organisation associée.");
     const orgId = (roleRow as any).organization_id as string;
 
+    // Le service_role contourne la RLS : vérifier explicitement que le
+    // document ciblé appartient à un utilisateur de la même organisation.
+    const { data: targetDoc, error: targetDocErr } = await supabaseAdmin
+      .from("documents")
+      .select("id, user_id")
+      .eq("id", data.documentId)
+      .maybeSingle();
+    if (targetDocErr || !targetDoc) throw new Error("Document introuvable.");
+    const { data: targetOwner, error: targetOwnerErr } = await supabaseAdmin
+      .from("profiles")
+      .select("organization_id")
+      .eq("id", (targetDoc as any).user_id)
+      .maybeSingle();
+    if (targetOwnerErr || (targetOwner as any)?.organization_id !== orgId) {
+      throw new Error("Ce document n'appartient pas à votre organisation.");
+    }
+
     const { data: org, error: orgRowErr } = await supabaseAdmin
       .from("organizations")
       .select("modification_request_delay_hours")
@@ -114,12 +131,24 @@ export const listPendingModificationRequests = createServerFn({ method: "POST" }
         ? supabaseAdmin.from("profiles").select("id, full_name").in("id", requesterIds)
         : Promise.resolve({ data: [] as any[] }),
       documentIds.length > 0
-        ? supabaseAdmin.from("documents").select("id, title").in("id", documentIds)
+        ? supabaseAdmin.from("documents").select("id, title, user_id").in("id", documentIds)
         : Promise.resolve({ data: [] as any[] }),
     ]);
 
+    // Ne jamais afficher les métadonnées d'un document hors organisation,
+    // même si une ancienne demande mal formée existe en base.
+    const docOwnerIds = Array.from(new Set((docs ?? []).map((d: any) => d.user_id).filter(Boolean)));
+    const { data: docOwners } = docOwnerIds.length
+      ? await supabaseAdmin.from("profiles").select("id, organization_id").in("id", docOwnerIds)
+      : { data: [] as any[] };
+    const validOwnerIds = new Set((docOwners ?? [])
+      .filter((p: any) => p.organization_id === orgId)
+      .map((p: any) => p.id));
+    const titleById = new Map((docs ?? [])
+      .filter((d: any) => validOwnerIds.has(d.user_id))
+      .map((d: any) => [d.id, d.title]));
+
     const nameById = new Map((profiles ?? []).map((p: any) => [p.id, p.full_name]));
-    const titleById = new Map((docs ?? []).map((d: any) => [d.id, d.title]));
 
     return {
       requests: (requests ?? []).map((r: any) => ({
