@@ -895,6 +895,109 @@ export const updateAgentAssignment = createServerFn({ method: "POST" })
 
 
 // ============================================================
+// AFFECTATIONS TERRAIN — missions confiées aux agents de l'organisation
+// Les affectations restent administratives : elles ne donnent aucun droit
+// implicite sur les documents ou données d'une autre organisation.
+// ============================================================
+
+export const listAgentAssignments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await assertAdminAndGetOrg(context.supabase, context.userId);
+    const { data, error } = await supabaseAdmin
+      .from("agent_assignments")
+      .select("id, agent_user_id, title, instructions, module_type, status, starts_at, due_at, created_at, updated_at")
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw new Error(error.message);
+    const ids = Array.from(new Set((data ?? []).map((x: any) => x.agent_user_id)));
+    const { data: profiles, error: profileErr } = ids.length
+      ? await supabaseAdmin.from("profiles").select("id, full_name, email").eq("organization_id", orgId).in("id", ids)
+      : { data: [], error: null };
+    if (profileErr) throw new Error(profileErr.message);
+    const byId = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    return {
+      assignments: (data ?? []).map((x: any) => ({
+        ...x,
+        agentName: (byId.get(x.agent_user_id) as any)?.full_name ?? "Agent",
+        agentEmail: (byId.get(x.agent_user_id) as any)?.email ?? "",
+      })),
+    };
+  });
+
+export const createAgentAssignment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    agentUserId: string; title: string; instructions?: string;
+    moduleType: string; startsAt?: string; dueAt?: string;
+  }) => z.object({
+    agentUserId: z.string().uuid(),
+    title: z.string().trim().min(3).max(160),
+    instructions: z.string().max(2000).optional(),
+    moduleType: z.enum(MODULE_TYPES),
+    startsAt: z.string().datetime().optional(),
+    dueAt: z.string().datetime().optional(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const orgId = await assertAdminAndGetOrg(context.supabase, context.userId);
+    const { data: target, error: targetErr } = await supabaseAdmin
+      .from("profiles").select("id, organization_id, module_type")
+      .eq("id", data.agentUserId).maybeSingle();
+    if (targetErr || !target || (target as any).organization_id !== orgId) {
+      throw new Error("Cet agent n'appartient pas à votre organisation.");
+    }
+    const { data: roleRows, error: roleErr } = await supabaseAdmin
+      .from("user_roles").select("role")
+      .eq("user_id", data.agentUserId).eq("organization_id", orgId);
+    if (roleErr) throw new Error(roleErr.message);
+    if (!(roleRows ?? []).some((r: any) => r.role === "agent")) {
+      throw new Error("Seuls les comptes ayant le rôle Agent peuvent recevoir une mission.");
+    }
+    if ((target as any).module_type && (target as any).module_type !== data.moduleType) {
+      throw new Error("Le module de la mission doit correspondre au module attribué à cet agent.");
+    }
+    const { data: inserted, error } = await supabaseAdmin
+      .from("agent_assignments")
+      .insert({
+        organization_id: orgId,
+        agent_user_id: data.agentUserId,
+        assigned_by: context.userId,
+        title: data.title,
+        instructions: data.instructions?.trim() || null,
+        module_type: data.moduleType,
+        starts_at: data.startsAt ?? null,
+        due_at: data.dueAt ?? null,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { success: true, assignmentId: inserted.id };
+  });
+
+export const updateAgentAssignmentStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { assignmentId: string; status: string }) =>
+    z.object({
+      assignmentId: z.string().uuid(),
+      status: z.enum(["active", "completed", "cancelled"]),
+    }).parse(d))
+  .handler(async ({ data, context }) => {
+    const orgId = await assertAdminAndGetOrg(context.supabase, context.userId);
+    const { data: updated, error } = await supabaseAdmin
+      .from("agent_assignments")
+      .update({ status: data.status })
+      .eq("id", data.assignmentId)
+      .eq("organization_id", orgId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!updated) throw new Error("Mission introuvable dans votre organisation.");
+    return { success: true };
+  });
+
+
+// ============================================================
 // COMMISSIONS — transparence coopérative et saisie manuelle
 // Le prix payé par l'acheteur reste interne à AURUM.
 // La commission due à la coopérative est explicitement visible.
