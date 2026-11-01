@@ -118,12 +118,9 @@ function LoginPage() {
               </button>
             </form>
 
-            <Link
-              to="/register"
-              className="mt-3 flex w-full items-center justify-center rounded-xl border border-[#D4A017]/50 bg-[#D4A017]/5 px-4 py-3 text-sm font-semibold text-[#8a6a0e] transition-colors hover:bg-[#D4A017]/10"
-            >
-              Create an Account
-            </Link>
+            <p className="mt-4 text-center text-xs leading-5 text-gray-500">
+              Accès sur invitation uniquement. Contactez l’administrateur de votre organisation pour obtenir un compte.
+            </p>
           </div>
 
           <p className="mt-5 text-center text-xs text-gray-500">
