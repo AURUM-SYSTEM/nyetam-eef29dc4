@@ -217,6 +217,10 @@ function RecordPage() {
 
   const { forms: missionForms, loading: missionFormsLoading, offlineNoCache: missionFormsOfflineNoCache } = useMissionForms(moduleFromProfile);
   const [missionKey, setMissionKey] = useState<string>("");
+  // L’identifiant est transmis depuis la carte de mission et persiste hors-ligne.
+  const [assignmentId, setAssignmentId] = useState<string>(() =>
+    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("assignmentId") || "" : ""
+  );
 
   // Brouillon persistant (mission active, champs saisis, métadonnées) — tenté
   // une seule fois au montage, avant toute sélection par défaut. Corrige un
@@ -231,6 +235,7 @@ function RecordPage() {
         const draft = await getRecordDraft();
         if (draft) {
           if (draft.missionKey) setMissionKey(draft.missionKey);
+          if (draft.assignmentId) setAssignmentId(draft.assignmentId);
           if (draft.fieldValues) setFieldValues(draft.fieldValues);
           if (draft.agentName) setAgentName(draft.agentName);
           if (draft.location) setLocation(draft.location);
@@ -329,7 +334,7 @@ function RecordPage() {
   useEffect(() => {
     if (!draftCheckDone) return;
     void saveRecordDraft({
-      missionKey, fieldValues, agentName, location, docDate, docTime,
+      missionKey, assignmentId: assignmentId || undefined, fieldValues, agentName, location, docDate, docTime,
       gps: gps ?? undefined,
       // Persisté aussi : sans ça, un rechargement pendant une création de
       // parcelle hors-ligne perdrait le lien vers `pendingParcelles` côté
@@ -337,7 +342,7 @@ function RecordPage() {
       // saurait qu'elle est liée à cette saisie en cours).
       createdParcelleId: createdParcelleId ?? undefined,
     });
-  }, [draftCheckDone, missionKey, fieldValues, agentName, location, docDate, docTime, gps, createdParcelleId]);
+  }, [draftCheckDone, missionKey, assignmentId, fieldValues, agentName, location, docDate, docTime, gps, createdParcelleId]);
 
   // ── AGRO : liaison parcelle (recensement_plantations / visite_parcelle / suivi_parcelle) ──
   // Comportement fixe et exclusif par mission — jamais de bascule manuelle :
@@ -884,6 +889,7 @@ function RecordPage() {
       gps: gps ?? undefined,
       autoDetect: docType === "auto",
       moduleType: moduleFromProfile,
+      assignmentId: assignmentId || undefined,
       fieldData: (hasFieldValues || missionKey)
         ? { ...(missionKey ? { _mission_key: missionKey } : {}), ...fieldValues }
         : undefined,
