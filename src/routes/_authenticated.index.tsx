@@ -202,7 +202,7 @@ function HomePage() {
                 </div>
                 {mission.instructions && <p className="mt-2 text-sm text-muted-foreground">{mission.instructions}</p>}
                 {mission.due_at && <p className="mt-2 text-xs text-muted-foreground">Échéance : {new Date(mission.due_at).toLocaleDateString(lang === "en" ? "en-GB" : "fr-FR")}</p>}
-                {mission.status === "active" && <button onClick={() => navigate({ to: "/record/$type", params: { type: "field_entry" } })} className="mt-3 w-full rounded-lg btn-gold px-3 py-2 text-sm">Commencer une collecte</button>}
+                {mission.status === "active" && <button onClick={() => navigate({ to: "/record/$type", params: { type: "field_entry" }, search: { assignmentId: mission.id } as any })} className="mt-3 w-full rounded-lg btn-gold px-3 py-2 text-sm">Commencer cette mission</button>}
               </div>
             ))}
           </div>
