@@ -567,7 +567,7 @@ export const listAllOrganizations = createServerFn({ method: "POST" })
 
     const { data: orgs, error: orgsErr } = await supabaseAdmin
       .from("organizations")
-      .select("id, name, type, module_type, enabled_modules, enabled_compliance_modules, enabled_features, created_at")
+      .select("id, name, type, module_type, organization_kind, enabled_modules, enabled_compliance_modules, enabled_features, created_at")
       .order("created_at", { ascending: false });
     if (orgsErr) throw new Error(orgsErr.message);
 
@@ -1077,4 +1077,26 @@ export const removeCooperativeFromUnion = createServerFn({ method: "POST" })
     try { await supabaseAdmin.from("audit_log").insert({ organization_id: data.unionOrganizationId, actor_id: context.userId, action: "suppression", entity_type: "union_cooperative_membership", entity_id: data.cooperativeId, old_value: { cooperative_id: data.cooperativeId } as any } as any); }
     catch (e) { console.warn("membership removal audit failed (non bloquant)", e); }
     return { success: true as const };
+  });
+
+
+// Options de coopératives pour le centre d'administration AURUM.
+export const listUnionEligibleCooperatives = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertPlatformAdminForMembership(context);
+    const { data, error } = await supabaseAdmin.from("cooperatives")
+      .select("id, name, organization_id").order("name", { ascending: true });
+    if (error) throw new Error(error.message);
+    const orgIds = Array.from(new Set(((data ?? []) as any[]).map(x => x.organization_id).filter(Boolean)));
+    const { data: orgs, error: orgErr } = orgIds.length
+      ? await supabaseAdmin.from("organizations").select("id, name, organization_kind").in("id", orgIds)
+      : { data: [], error: null };
+    if (orgErr) throw new Error(orgErr.message);
+    const owners = new Map(((orgs ?? []) as any[]).map(x => [x.id, x]));
+    return { cooperatives: ((data ?? []) as any[]).flatMap(coop => {
+      const owner = owners.get(coop.organization_id);
+      if (!owner || owner.organization_kind === "union") return [];
+      return [{ id: coop.id, name: coop.name, organizationId: coop.organization_id, organizationName: owner.name }];
+    }) };
   });
