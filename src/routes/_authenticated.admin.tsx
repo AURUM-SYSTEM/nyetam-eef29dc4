@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, CheckCircle2, Loader2, Lock, Mail, Save, ShieldCheck, Trash2, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin, updateOrganizationModules, updateOrganizationFeatures, listRoleDefinitions, listPermissionCatalog, createOrganizationRole, updateOrganizationRolePermissions, assignRoleToOrganizationUser } from "@/lib/admin.functions";
+import { listOrgUsers, inviteAgent, updateAgentAssignment, getOrgSettings, updateOrgSettings, createOrganizationWithAdmin, checkPlatformAdmin, listAllOrganizations, deleteOrganization, listOrganizationAdmins, updateOrganizationAdmin, updateOrganizationModules, updateOrganizationFeatures, listRoleDefinitions, listPermissionCatalog, createOrganizationRole, updateOrganizationRolePermissions, assignRoleToOrganizationUser, listUnionCooperativeMemberships, addCooperativeToUnion, removeCooperativeFromUnion, listUnionEligibleCooperatives } from "@/lib/admin.functions";
 import { listPendingModificationRequests, decideModificationRequest } from "@/lib/moderation.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { BackofficeShell } from "@/components/BackofficeShell";
@@ -84,6 +84,7 @@ type OrgSummary = {
   userCount: number;
   enabledModules: string[];
   enabledFeatures: string[];
+  organizationKind: "independent" | "cooperative" | "union";
 };
 
 type AdminState =
@@ -130,6 +131,7 @@ function AdminDashboard() {
   const [newOrgName, setNewOrgName] = useState("");
   const [newOrgType, setNewOrgType] = useState("generic");
   const [newOrgModule, setNewOrgModule] = useState("generic");
+  const [newOrgKind, setNewOrgKind] = useState<"independent" | "cooperative" | "union">("independent");
   const [newOrgAdminEmail, setNewOrgAdminEmail] = useState("");
   const [newOrgAdminName, setNewOrgAdminName] = useState("");
   const [creatingOrg, setCreatingOrg] = useState(false);
@@ -155,6 +157,14 @@ function AdminDashboard() {
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleCode, setNewRoleCode] = useState("");
   const [creatingRole, setCreatingRole] = useState(false);
+  const listUnionLinksFn = useServerFn(listUnionCooperativeMemberships);
+  const addUnionLinkFn = useServerFn(addCooperativeToUnion);
+  const removeUnionLinkFn = useServerFn(removeCooperativeFromUnion);
+  const listEligibleCoopsFn = useServerFn(listUnionEligibleCooperatives);
+  const [eligibleCoops, setEligibleCoops] = useState<Array<{id:string;name:string;organizationId:string;organizationName:string}>>([]);
+  const [unionLinks, setUnionLinks] = useState<Record<string, Array<{cooperativeId:string;cooperativeName:string;owningOrganizationName:string}>>>({});
+  const [selectedCoopByUnion, setSelectedCoopByUnion] = useState<Record<string,string>>({});
+  const [savingUnionId, setSavingUnionId] = useState<string|null>(null);
 
   // ── Paramètres de l'organisation ──
   const [orgLoaded, setOrgLoaded] = useState(false);
@@ -362,11 +372,50 @@ function AdminDashboard() {
     try {
       const res = await listOrgsFn({ data: undefined as any });
       setAllOrgs(res.organizations);
+      await loadUnionManagement(res.organizations);
     } catch (e: any) {
       toast.error(e?.message ?? "Échec du chargement des organisations");
     } finally {
       setLoadingOrgs(false);
     }
+  }
+
+  async function loadUnionManagement(orgs: OrgSummary[]) {
+    const unions = orgs.filter(o => o.organizationKind === "union");
+    if (!unions.length) { setEligibleCoops([]); setUnionLinks({}); return; }
+    try {
+      const [eligible, ...links] = await Promise.all([
+        listEligibleCoopsFn({ data: undefined as any }),
+        ...unions.map(u => listUnionLinksFn({ data: { unionOrganizationId: u.id } })),
+      ]);
+      setEligibleCoops(eligible.cooperatives);
+      const mapped: typeof unionLinks = {};
+      unions.forEach((u, i) => { mapped[u.id] = links[i].cooperatives; });
+      setUnionLinks(mapped);
+    } catch (e:any) { toast.error(e?.message ?? "Chargement des rattachements impossible"); }
+  }
+  async function addUnionCooperative(unionId: string) {
+    const cooperativeId = selectedCoopByUnion[unionId];
+    if (!cooperativeId) return;
+    setSavingUnionId(unionId);
+    try {
+      await addUnionLinkFn({ data: { unionOrganizationId: unionId, cooperativeId } });
+      const result = await listUnionLinksFn({ data: { unionOrganizationId: unionId } });
+      setUnionLinks(prev => ({...prev, [unionId]: result.cooperatives}));
+      setSelectedCoopByUnion(prev => ({...prev, [unionId]: ""}));
+      toast.success("Coopérative rattachée. Aucun accès aux données terrain n'est ouvert.");
+    } catch(e:any) { toast.error(e?.message ?? "Rattachement impossible"); }
+    finally { setSavingUnionId(null); }
+  }
+  async function removeUnionCooperative(unionId: string, cooperativeId: string) {
+    if (!window.confirm("Retirer cette coopérative de l'union ?")) return;
+    setSavingUnionId(unionId);
+    try {
+      await removeUnionLinkFn({ data: { unionOrganizationId: unionId, cooperativeId } });
+      setUnionLinks(prev => ({...prev, [unionId]: (prev[unionId] ?? []).filter(x => x.cooperativeId !== cooperativeId)}));
+      toast.success("Rattachement retiré.");
+    } catch(e:any) { toast.error(e?.message ?? "Retrait impossible"); }
+    finally { setSavingUnionId(null); }
   }
 
   async function handleDeleteOrg(org: OrgSummary) {
@@ -446,10 +495,11 @@ function AdminDashboard() {
           moduleType: newOrgModule,
           adminEmail: newOrgAdminEmail.trim(),
           adminFullName: newOrgAdminName.trim(),
+          organizationKind: newOrgKind,
         },
       });
       toast.success(`Organisation créée — un email d'invitation a été envoyé à ${res.adminEmail} pour qu'il devienne administrateur de ${res.orgName}.`);
-      setNewOrgName(""); setNewOrgType("generic"); setNewOrgModule("generic");
+      setNewOrgName(""); setNewOrgType("generic"); setNewOrgModule("generic"); setNewOrgKind("independent");
       setNewOrgAdminEmail(""); setNewOrgAdminName("");
       setShowCreateOrg(false);
       void loadAllOrgs();
@@ -624,6 +674,15 @@ function AdminDashboard() {
             </label>
           </div>
           <label className="block">
+            <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Nature de l'organisation</span>
+            <select value={newOrgKind} onChange={e => setNewOrgKind(e.target.value as any)} className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold">
+              <option value="independent">Organisation indépendante</option>
+              <option value="cooperative">Coopérative</option>
+              <option value="union">Union / faitière</option>
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">Une coopérative peut rester indépendante et être rattachée à une union ultérieurement.</p>
+          </label>
+          <label className="block">
             <span className="mb-1 block text-[10px] uppercase tracking-widest text-muted-foreground">Email de l'administrateur</span>
             <input type="email" required value={newOrgAdminEmail} onChange={e => setNewOrgAdminEmail(e.target.value)}
               className="w-full rounded-lg border border-border bg-input/50 px-3 py-2 text-sm outline-none focus:border-gold" />
@@ -695,7 +754,7 @@ function AdminDashboard() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{o.name}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {ORG_TYPE_LABELS[o.type] ?? o.type} · {o.userCount} utilisateur(s)
+                      {ORG_TYPE_LABELS[o.type] ?? o.type} · {o.organizationKind === "union" ? "Union" : o.organizationKind === "cooperative" ? "Coopérative" : "Indépendante"} · {o.userCount} utilisateur(s)
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {MODULES.map(m => {
@@ -746,6 +805,35 @@ function AdminDashboard() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {isPlatformAdmin && allOrgs.some(o => o.organizationKind === "union") && (
+        <section className="glass-card mb-6 rounded-2xl p-4">
+          <h2 className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-gold-soft"><Building2 className="h-3.5 w-3.5" /> Unions & coopératives membres</h2>
+          <p className="mb-4 text-xs text-muted-foreground">Rattache les coopératives aux unions. Chaque coopérative conserve son organisation et ses données privées. Le rattachement administratif n'ouvre pas l'accès aux données terrain.</p>
+          <div className="space-y-4">
+            {allOrgs.filter(o => o.organizationKind === "union").map(union => (
+              <div key={union.id} className="rounded-xl border border-border bg-card/40 p-3">
+                <p className="text-sm font-semibold">{union.name}</p>
+                <div className="mt-2 flex gap-2">
+                  <select value={selectedCoopByUnion[union.id] ?? ""} onChange={e => setSelectedCoopByUnion(prev => ({...prev,[union.id]:e.target.value}))} className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-2 text-xs">
+                    <option value="">Choisir une coopérative…</option>
+                    {eligibleCoops.filter(x => !(unionLinks[union.id] ?? []).some(y => y.cooperativeId === x.id)).map(x => <option key={x.id} value={x.id}>{x.name} — {x.organizationName}</option>)}
+                  </select>
+                  <button type="button" onClick={() => void addUnionCooperative(union.id)} disabled={savingUnionId === union.id || !selectedCoopByUnion[union.id]} className="rounded-lg border border-gold/40 px-3 py-2 text-xs text-gold disabled:opacity-40">{savingUnionId === union.id ? "…" : "Rattacher"}</button>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {(unionLinks[union.id] ?? []).length === 0 ? <p className="text-xs text-muted-foreground">Aucune coopérative rattachée.</p> : (unionLinks[union.id] ?? []).map(link => (
+                    <div key={link.cooperativeId} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
+                      <div className="min-w-0"><p className="truncate text-xs font-medium">{link.cooperativeName}</p><p className="truncate text-[10px] text-muted-foreground">{link.owningOrganizationName}</p></div>
+                      <button type="button" onClick={() => void removeUnionCooperative(union.id, link.cooperativeId)} disabled={savingUnionId === union.id} className="shrink-0 rounded-md border border-destructive/30 px-2 py-1 text-[10px] text-destructive">Retirer</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 
