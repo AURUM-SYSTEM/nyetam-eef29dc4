@@ -534,7 +534,8 @@ export const updateProducer = createServerFn({ method: "POST" })
     const { error: updateErr } = await supabaseAdmin
       .from("producers")
       .update(updatePayload as any)
-      .eq("id", data.producerId);
+      .eq("id", data.producerId)
+      .eq("organization_id", orgId);
     if (updateErr) throw new Error(updateErr.message);
 
     try {
@@ -917,7 +918,7 @@ export const listDuplicateAlerts = createServerFn({ method: "POST" })
 
     const [{ data: agentProfiles }, { data: parcelleRows }, { data: coopRows }] = await Promise.all([
       agentIds.length > 0
-        ? supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds).eq("organization_id", orgId).eq("organization_id", orgId).eq("organization_id", orgId)
+        ? supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds).eq("organization_id", orgId)
         : Promise.resolve({ data: [] as any[] }),
       parcelleIds.length > 0
         ? supabaseAdmin.from("parcelles").select("id, culture, cooperative_id").in("id", parcelleIds).eq("organization_id", orgId)
@@ -986,7 +987,8 @@ export const reviewDuplicateAlert = createServerFn({ method: "POST" })
         reviewed_at: new Date().toISOString(),
         review_notes: data.reviewNotes?.trim() || null,
       } as any)
-      .eq("id", data.alertId);
+      .eq("id", data.alertId)
+      .eq("organization_id", orgId);
     if (error) throw new Error(error.message);
 
     return { success: true as const };
@@ -1006,7 +1008,7 @@ export const getAgentQualityScores = createServerFn({ method: "POST" })
 
     const agentIds = Array.from(new Set(rows.map(r => r.agent_id)));
     const { data: profiles } = agentIds.length > 0
-      ? await supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds).eq("organization_id", orgId).eq("organization_id", orgId).eq("organization_id", orgId)
+      ? await supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds).eq("organization_id", orgId)
       : { data: [] as any[] };
     const nameById = new Map(((profiles ?? []) as any[]).map(p => [p.id, p.full_name || "Agent"]));
 
@@ -1344,7 +1346,7 @@ export const getParcelleTimeline = createServerFn({ method: "POST" })
     const agentIds = Array.from(new Set(docRows.map((d) => d.user_id)));
     const agentNameById = new Map<string, string>();
     if (agentIds.length > 0) {
-      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds).eq("organization_id", orgId).eq("organization_id", orgId).eq("organization_id", orgId);
+      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, full_name").in("id", agentIds).eq("organization_id", orgId);
       for (const p of (profiles ?? []) as Array<{ id: string; full_name: string | null }>) {
         agentNameById.set(p.id, p.full_name || "Agent");
       }
@@ -1470,7 +1472,8 @@ export const attestEudrCompliance = createServerFn({ method: "POST" })
         eudr_attested_at: new Date().toISOString(),
         eudr_notes: notes,
       } as any)
-      .eq("id", data.parcelleId);
+      .eq("id", data.parcelleId)
+      .eq("organization_id", orgId);
     if (error) throw new Error(error.message);
 
     // Journalisation — jamais bloquante. Réutilise action "modification" /
