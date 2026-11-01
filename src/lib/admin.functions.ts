@@ -917,11 +917,36 @@ export const listAgentAssignments = createServerFn({ method: "POST" })
       : { data: [], error: null };
     if (profileErr) throw new Error(profileErr.message);
     const byId = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    const assignmentIds = (data ?? []).map((x: any) => x.id);
+    const { data: docs, error: docsErr } = assignmentIds.length
+      ? await supabaseAdmin.from("documents")
+          .select("id, assignment_id, user_id, title, type, created_at, validated_at")
+          .in("assignment_id", assignmentIds)
+          .order("created_at", { ascending: false })
+      : { data: [], error: null };
+    if (docsErr) throw new Error(docsErr.message);
+    const documentUserIds = Array.from(new Set((docs ?? []).map((d: any) => d.user_id)));
+    const { data: documentOwners, error: ownersErr } = documentUserIds.length
+      ? await supabaseAdmin.from("profiles").select("id, full_name").eq("organization_id", orgId).in("id", documentUserIds)
+      : { data: [], error: null };
+    if (ownersErr) throw new Error(ownersErr.message);
+    const ownerNames = new Map((documentOwners ?? []).map((p: any) => [p.id, p.full_name]));
+    const docsByAssignment = new Map<string, any[]>();
+    for (const doc of (docs ?? [])) {
+      // Défense supplémentaire : ne joindre que les documents dont le propriétaire
+      // est confirmé dans la même organisation que l'administrateur.
+      const ownerName = ownerNames.get(doc.user_id);
+      if (!ownerName) continue;
+      const list = docsByAssignment.get(doc.assignment_id) ?? [];
+      list.push({ id: doc.id, title: doc.title, type: doc.type, createdAt: doc.created_at, validatedAt: doc.validated_at, agentName: ownerName });
+      docsByAssignment.set(doc.assignment_id, list);
+    }
     return {
       assignments: (data ?? []).map((x: any) => ({
         ...x,
         agentName: (byId.get(x.agent_user_id) as any)?.full_name ?? "Agent",
         agentEmail: (byId.get(x.agent_user_id) as any)?.email ?? "",
+        documents: docsByAssignment.get(x.id) ?? [],
       })),
     };
   });
