@@ -148,6 +148,25 @@ function PublicProducerCardPage() {
         </div>
       </section>
 
+      <section className="mx-auto mt-6 max-w-xl space-y-3">
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div><p className="text-xs uppercase tracking-widest text-muted-foreground">Traçabilité agricole</p><h2 className="mt-1 text-lg font-semibold">Parcelles référencées</h2></div>
+            <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">{(data.parcels ?? []).length} parcelle(s)</span>
+          </div>
+          {(data.parcels ?? []).length === 0 ? <p className="mt-3 text-sm text-muted-foreground">Aucune parcelle n'est encore associée à cette fiche.</p> : <div className="mt-4 space-y-3">
+            {(data.parcels ?? []).map((parcel: any, index: number) => <article key={parcel.id} className="rounded-xl border border-border p-4">
+              <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">Parcelle {index + 1} · {parcel.culture || "Culture non renseignée"}</p><p className="mt-1 text-xs text-muted-foreground">{parcel.surfaceHa != null ? `${Number(parcel.surfaceHa).toFixed(2)} ha` : "Surface non renseignée"}{parcel.plantingYear ? ` · Plantation ${parcel.plantingYear}` : ""}</p></div><span className="rounded-full bg-muted px-2 py-1 text-[10px]">{parcel.complianceStatus || "Statut non évalué"}</span></div>
+              {(parcel.species?.length || parcel.varieties?.length) ? <p className="mt-2 text-xs text-muted-foreground">{[...(parcel.species ?? []), ...(parcel.varieties ?? [])].join(" · ")}</p> : null}
+              {parcel.certification ? <p className="mt-2 text-xs">Certification : {parcel.certification}</p> : null}
+              {parcel.estimatedYieldTonnes != null ? <p className="mt-1 text-xs">Rendement estimé : {parcel.estimatedYieldTonnes} tonnes</p> : null}
+              {parcel.boundaryPoints?.length > 0 ? <details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-primary">Voir le contour GPS ({parcel.boundaryPoints.length} points)</summary><p className="mt-2 text-[11px] text-muted-foreground">Coordonnées du contour enregistrées sur le terrain.</p><ol className="mt-2 max-h-36 space-y-1 overflow-auto text-[10px] text-muted-foreground">{parcel.boundaryPoints.map((point: any, i: number) => <li key={i}>{i + 1}. {Array.isArray(point) ? point.join(", ") : JSON.stringify(point)}</li>)}</ol></details> : parcel.latitude != null && parcel.longitude != null ? <p className="mt-2 text-xs text-muted-foreground">GPS : {Number(parcel.latitude).toFixed(6)}, {Number(parcel.longitude).toFixed(6)}</p> : <p className="mt-2 text-xs text-muted-foreground">Coordonnées GPS non disponibles.</p>}
+            </article>)}
+          </div>}
+          <p className="mt-4 border-t border-border pt-3 text-[11px] text-muted-foreground">Ces informations reflètent les données enregistrées dans AURUM AGRO au moment de la consultation. Elles ne constituent pas une certification indépendante.</p>
+        </div>
+      </section>
+
       <div className="no-print mx-auto mt-5 flex max-w-xl flex-col items-center gap-2">
         <button onClick={() => window.print()} className="rounded-xl btn-gold px-6 py-3 text-sm font-semibold">Imprimer la carte au format identité</button>
         <p className="text-center text-xs text-muted-foreground">Dans la fenêtre d'impression, choisissez « Taille réelle » ou 100 % si l'option est disponible.</p>
