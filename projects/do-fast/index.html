@@ -15,7 +15,7 @@
   <div id="app">
     <header class="topbar">
       <a class="brand" href="#" aria-label="DO Fast accueil"><span class="brand-do">DO</span><span class="brand-fast">Fast</span><span class="bolt">ϟ</span></a>
-      <div class="top-actions"><span class="location-pill">⌖ Douala, Cameroun</span><button class="avatar" id="profileButton" aria-label="Profil">M</button></div>
+      <div class="top-actions"><span class="location-pill">⌖ Douala, Cameroun</span><span class="location-pill" id="backendStatus">Base : connexion…</span><button class="avatar" id="profileButton" aria-label="Profil">M</button></div>
     </header>
     <main id="mainContent"></main>
     <nav class="bottom-nav" aria-label="Navigation principale">
@@ -26,6 +26,8 @@
     </nav>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
+  <script src="./supabase-config.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
