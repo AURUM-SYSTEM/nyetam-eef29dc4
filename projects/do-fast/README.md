@@ -26,6 +26,13 @@ Ouvrir `index.html` dans un navigateur moderne ou servir le dossier avec un serv
 - Depuis **Compte**, passer à l'espace prestataire ou au tableau de bord admin.
 - Les profils et demandes de démonstration sont locaux au navigateur.
 
+## Connexion Supabase — première étape réalisée
+- Projet Supabase indépendant : `DO Fast` (région `eu-west-1`).
+- Client JavaScript `@supabase/supabase-js` épinglé à `2.119.0` et clé publishable dédiée au projet (aucune clé secrète dans le navigateur).
+- Le catalogue des services et des quartiers est maintenant chargé depuis la base DO Fast.
+- Schéma initial créé avec profils, prestataires, services, zones, demandes, paiements déclarés, preuves, avis et messages. RLS activé sur toutes les tables.
+- Les parcours de création/suivi de mission, paiement et administration restent encore en démonstration locale : ils ne sont pas encore persistés ni exécutés côté serveur.
+
 ## Architecture et sécurité — prochaine étape
 Ce dossier est volontairement isolé de l'application AURUM existante. Le prototype ne doit pas être considéré comme prêt pour des transactions réelles : il n'intègre pas encore l'authentification SMS/email, la base de données distante, le stockage privé des CNI, les notifications push, le chat temps réel, ni la confirmation de paiement côté serveur.
 
