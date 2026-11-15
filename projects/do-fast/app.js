@@ -56,3 +56,36 @@ document.querySelectorAll(".nav-item").forEach(b=>b.addEventListener("click",()=
 document.getElementById("profileButton").addEventListener("click",()=>{view="account";state.role="client";render()});
 window.addEventListener("storage",()=>{state=loadState();render()});
 render();
+
+
+// Connexion au backend DO Fast : le catalogue est lu depuis Supabase.
+// Les parcours de mission restent en mode démonstration locale à ce stade.
+async function initBackend(){
+  const badge=document.getElementById("backendStatus");
+  const client=window.doFastSupabase;
+  if(!client){if(badge)badge.textContent="Base : indisponible";return}
+  try{
+    const [servicesResult,areasResult]=await Promise.all([
+      client.from("service_categories").select("id,name,slug,sort_order").eq("active",true).order("sort_order"),
+      client.from("neighborhoods").select("id,name,sort_order").eq("active",true).order("sort_order")
+    ]);
+    if(servicesResult.error)throw servicesResult.error;
+    if(areasResult.error)throw areasResult.error;
+    const iconByName={"Payer une facture":"🧾","Faire la queue":"⏳","Démarche administrative":"🏛️","Courses":"🛍️","Retrait de colis":"📦","Autre":"✨"};
+    if(servicesResult.data?.length){
+      SERVICES.splice(0,SERVICES.length,...servicesResult.data.map(s=>[iconByName[s.name]||"✨",s.name]));
+      window.DOFAST_SERVICE_CATALOG=servicesResult.data;
+    }
+    if(areasResult.data?.length){
+      state.neighborhoods=areasResult.data.map(n=>n.name);
+      window.DOFAST_NEIGHBORHOODS=areasResult.data;
+    }
+    window.DOFAST_BACKEND_READY=true;
+    if(badge){badge.textContent="Base : connectée";badge.style.background="#e4f5ec";badge.style.color="#0B6B4B"}
+    render();
+  }catch(error){
+    console.error("DO Fast Supabase:",error);
+    if(badge){badge.textContent="Base : erreur";badge.title=error.message||"Erreur de connexion"}
+  }
+}
+initBackend();
