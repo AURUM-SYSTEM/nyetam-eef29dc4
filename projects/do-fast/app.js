@@ -1,5 +1,52 @@
 const SERVICE_ICONS={"Payer une facture":"🧾","Faire la queue":"⏳","Démarche administrative":"🏛️","Courses":"🛍️","Retrait de colis":"📦","Autre":"✨"};
 const state={services:[],neighborhoods:[],results:[],loading:false};
+
+let notificationUserId=null,notificationBusy=false;
+function notificationDate(value){
+ const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"});
+}
+function updateNotificationBadge(rows){
+ const unread=(rows||[]).filter(n=>!n.read_at).length, badge=$("notificationCount");
+ badge.textContent=unread>9?"9+":String(unread);badge.classList.toggle("hidden",unread===0);
+}
+async function loadNotifications(){
+ const client=window.doFastSupabase;if(!client||!notificationUserId||notificationBusy)return;
+ notificationBusy=true;
+ try{
+  const {data,error}=await client.from("user_notifications").select("id,notification_type,title,message,created_at,read_at").eq("user_id",notificationUserId).order("created_at",{ascending:false}).limit(30);
+  if(error)throw error;const rows=data||[];updateNotificationBadge(rows);
+  if($("notificationOverlay").classList.contains("show"))renderNotifications(rows);
+ }catch(e){console.warn("Notifications:",e.message);$("notificationList").innerHTML='<p class="notification-empty">Tes notifications ne sont pas disponibles pour le moment.</p>'}
+ finally{notificationBusy=false}
+}
+function renderNotifications(rows){
+ const root=$("notificationList");
+ if(!rows.length){root.innerHTML='<div class="notification-empty">Tu n’as pas encore de notification.<br>Les informations importantes de ton compte apparaîtront ici.</div>';return}
+ const unread=rows.some(n=>!n.read_at);
+ root.innerHTML=(unread?'<div class="notification-actions"><button id="markAllNotificationsRead" type="button">Tout marquer comme lu</button></div>':"")+rows.map(n=>'<article class="notification-item '+(!n.read_at?"unread":"")+'"><h3>'+esc(n.title)+'</h3><p>'+esc(n.message)+'</p><small>'+esc(notificationDate(n.created_at))+' · '+(n.read_at?"Lu":"Non lu")+'</small></article>').join("");
+ const all=$("markAllNotificationsRead");
+ if(all)all.onclick=async()=>{
+  const {error}=await window.doFastSupabase.from("user_notifications").update({read_at:new Date().toISOString()}).eq("user_id",notificationUserId).is("read_at",null);
+  if(error){console.warn(error);return}await loadNotifications();
+ };
+}
+async function openNotifications(){
+ if(!notificationUserId){
+  $("notificationList").innerHTML='<div class="notification-empty">Connecte-toi à ton compte DO Fast pour consulter tes notifications.<br><a href="./prestataire.html">Accéder à mon compte</a></div>';
+ }else{await loadNotifications();const {data,error}=await window.doFastSupabase.from("user_notifications").select("id,notification_type,title,message,created_at,read_at").eq("user_id",notificationUserId).order("created_at",{ascending:false}).limit(30);if(!error)renderNotifications(data||[])}
+ $("notificationOverlay").classList.add("show");
+}
+$("notificationButton").addEventListener("click",openNotifications);
+$("closeNotifications").addEventListener("click",()=>$("notificationOverlay").classList.remove("show"));
+$("notificationOverlay").addEventListener("click",e=>{if(e.target===$("notificationOverlay"))$("notificationOverlay").classList.remove("show")});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadNotifications()});
+window.addEventListener("focus",loadNotifications);
+const notificationClient=window.doFastSupabase;
+if(notificationClient){
+ notificationClient.auth.getSession().then(({data})=>{notificationUserId=data.session?.user?.id||null;loadNotifications()});
+ notificationClient.auth.onAuthStateChange((_event,session)=>{notificationUserId=session?.user?.id||null;updateNotificationBadge([]);loadNotifications()});
+}
+
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=value=>Number(value||0).toLocaleString("fr-FR")+" FCFA";
