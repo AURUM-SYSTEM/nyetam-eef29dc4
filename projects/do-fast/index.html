@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B6B4B" />
+  <meta name="description" content="DO Fast — Tes démarches, faites vite. Trouve un prestataire vérifié près de toi à Douala." />
+  <title>DO Fast — Tes démarches, faites vite.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+  <style>.provider-link{text-decoration:none;white-space:nowrap}.top-actions{gap:6px}</style>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="DO Fast accueil"><span class="brand-do">DO</span><span class="brand-fast">Fast</span><span class="bolt">ϟ</span></a>
+      <div class="top-actions"><span class="location-pill">⌖ Douala</span><button class="location-pill notification-trigger" id="notificationButton" type="button" aria-label="Notifications">🔔 <span id="notificationCount" class="notification-count hidden">0</span></button><a class="location-pill provider-link" href="./prestataire.html">Mon compte</a><span class="location-pill" id="backendStatus">Connexion…</span></div>
+    </header>
+    <main id="mainContent">
+      <div class="page">
+        <section class="hero"><div class="eyebrow">DO Fast • Douala</div><h1>Tes démarches,<br>faites vite.</h1><p>Besoin d'un service ? Trouve un prestataire vérifié dans ton quartier.</section>
+        <section class="search-panel">
+          <div class="section-head"><h2>Trouver un prestataire</h2></div>
+          <div class="field"><label for="serviceSelect">Quel service recherches-tu ?</label><select id="serviceSelect"><option value="">Chargement des services…</option></select></div>
+          <div class="field"><label for="districtSelect">Dans quel quartier ?</label><select id="districtSelect"><option value="">Chargement des quartiers…</option></select></div>
+          <div class="field"><label for="nameSearch">Nom du prestataire (facultatif)</label><input id="nameSearch" type="search" placeholder="Rechercher un nom…"></div>
+          <button class="btn full" id="searchButton">Rechercher des prestataires</button>
+        </section>
+        <div class="section-head results-heading"><h2>Prestataires disponibles</h2><span class="eyebrow" id="resultCount"></span></div>
+        <div id="results"><div class="loading">Chargement du répertoire…</div></div>
+        <p class="footer-note">DO Fast — Tes démarches, faites vite.</p>
+      </div>
+    </main>
+  </div>
+  <div class="profile-modal" id="profileModal"><section class="profile-modal-card" id="profileModalContent"></section></div>
+  <div class="notification-overlay" id="notificationOverlay"><section class="notification-panel"><div class="notification-heading"><div><span class="eyebrow">DO Fast</span><h2>Mes notifications</h2></div><button type="button" class="notification-close" id="closeNotifications" aria-label="Fermer">×</button></div><div id="notificationList"><p class="loading">Chargement…</p></div></section></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
+  <script src="./supabase-config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
