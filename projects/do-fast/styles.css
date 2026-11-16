@@ -12,3 +12,22 @@
 .directory-services{display:grid;gap:7px;margin:13px 0}.service-price{display:flex;justify-content:space-between;gap:8px;padding:9px 10px;border-radius:10px;background:#f5f8f5;font-size:11px}.service-price b{color:var(--green);white-space:nowrap}
 .profile-modal{display:none;position:fixed;inset:0;background:#10251bb0;z-index:80;align-items:flex-end;justify-content:center}.profile-modal.show{display:flex}.profile-modal-card{background:#fff;width:min(520px,100%);max-height:85dvh;overflow:auto;padding:24px 20px calc(24px + env(safe-area-inset-bottom));border-radius:24px 24px 0 0}
 @media(min-width:600px){.profile-modal{align-items:center}.profile-modal-card{border-radius:24px}}
+
+/* Notifications in-app */
+.notification-trigger{border:0;cursor:pointer;position:relative;font:700 12px "DM Sans";min-height:34px}
+.notification-count{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 4px;border-radius:20px;background:#d94b42;color:#fff;font-size:9px;font-weight:800}
+.notification-overlay{display:none;position:fixed;inset:0;background:#10251bb0;z-index:110;align-items:flex-end;justify-content:center}
+.notification-overlay.show{display:flex}
+.notification-panel{width:min(520px,100%);max-height:86dvh;overflow:auto;background:#fff;border-radius:23px 23px 0 0;padding:20px 18px calc(22px + env(safe-area-inset-bottom))}
+.notification-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.notification-heading h2{font:800 20px Manrope;margin:4px 0}
+.notification-close{border:0;border-radius:50%;width:36px;height:36px;background:#edf5ef;color:#0B6B4B;font-size:24px}
+.notification-item{border:1px solid var(--line);border-radius:15px;padding:13px;margin:9px 0;background:#fff}
+.notification-item.unread{background:#f0f8f3;border-color:#cfe5d5}
+.notification-item h3{font-size:13px;margin:0 0 6px}
+.notification-item p{font-size:12px;line-height:1.55;color:var(--muted);margin:0}
+.notification-item small{display:block;margin-top:9px;color:#8b978f;font-size:10px}
+.notification-empty{text-align:center;padding:28px 12px;color:var(--muted);font-size:12px;line-height:1.5}
+.notification-actions{display:flex;justify-content:flex-end;margin:5px 0 10px}
+.notification-actions button{border:0;background:#edf5ef;color:#0B6B4B;border-radius:10px;padding:9px 12px;font-size:11px;font-weight:800}
+@media(min-width:600px){.notification-overlay{align-items:center}.notification-panel{border-radius:23px}}
