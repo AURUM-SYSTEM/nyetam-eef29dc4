@@ -50,6 +50,7 @@ if(notificationClient){
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=value=>Number(value||0).toLocaleString("fr-FR")+" FCFA";
+
 function initials(name){return String(name||"DO").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase()}
 function setStatus(text,ok=false){const el=$("backendStatus");el.textContent=text;el.classList.toggle("connected",ok)}
 function renderFilters(){
