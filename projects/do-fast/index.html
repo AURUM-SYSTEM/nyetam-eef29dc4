@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0B6B4B" />
-  <meta name="description" content="DO Fast — Tes démarches, faites vite. Trouve un prestataire vérifié près de toi à Douala." />
-  <title>DO Fast — Tes démarches, faites vite.</title>
+  <meta name="description" content="DO Fast met en relation les habitants de Douala qui recherchent un service et les personnes qui proposent leurs compétences." />
+  <title>DO Fast — Trouvez un service ou faites connaître vos compétences</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
@@ -16,21 +16,57 @@
   <div id="app">
     <header class="topbar">
       <a class="brand" href="#" aria-label="DO Fast accueil"><span class="brand-do">DO</span><span class="brand-fast">Fast</span><span class="bolt">ϟ</span></a>
-      <div class="top-actions"><span class="location-pill">⌖ Douala</span><button class="location-pill notification-trigger" id="notificationButton" type="button" aria-label="Notifications">🔔 <span id="notificationCount" class="notification-count hidden">0</span></button><a class="location-pill provider-link" href="./prestataire.html">Mon compte</a><span class="location-pill" id="backendStatus">Connexion…</span></div>
+      <nav class="top-actions" aria-label="Navigation principale">
+        <span class="location-pill">⌖ Douala</span>
+        <a class="location-pill provider-link" href="#searchPanel">Trouver un prestataire</a>
+        <a class="location-pill provider-link" href="./prestataire.html">Devenir prestataire</a>
+        <button class="location-pill notification-trigger" id="notificationButton" type="button" aria-label="Notifications">🔔 <span id="notificationCount" class="notification-count hidden">0</span></button>
+        <a class="location-pill provider-link" href="./prestataire.html">Mon compte</a>
+        <span class="location-pill" id="backendStatus">Connexion…</span>
+      </nav>
     </header>
     <main id="mainContent">
       <div class="page">
-        <section class="hero"><div class="eyebrow">DO Fast • Douala</div><h1>Tes démarches,<br>faites vite.</h1><p>Besoin d'un service ? Trouve un prestataire vérifié dans ton quartier.</section>
-        <section class="search-panel">
-          <div class="section-head"><h2>Trouver un prestataire</h2></div>
-          <div class="field"><label for="serviceSelect">Quel service recherches-tu ?</label><select id="serviceSelect"><option value="">Chargement des services…</option></select></div>
+        <section class="hero">
+          <div class="eyebrow">DO Fast • Douala</div>
+          <h1>Un service à trouver ?<br>Un savoir-faire à partager ?</h1>
+          <p>DO Fast rapproche les personnes qui recherchent un service et celles qui proposent leurs compétences, dans les quartiers de Douala.</p>
+        </section>
+
+        <section class="audience-section" aria-label="Choisir votre parcours">
+          <div class="audience-intro">
+            <h2>Que souhaitez-vous faire ?</h2>
+            <p>Que vous ayez besoin d’un service ou que vous souhaitiez faire connaître votre activité, votre place est ici.</p>
+          </div>
+          <div class="audience-grid">
+            <article class="audience-card audience-client">
+              <div class="audience-icon" aria-hidden="true">🔎</div>
+              <span class="audience-label">Vous avez un besoin ?</span>
+              <h3>Je cherche un prestataire</h3>
+              <p>Parcourez les services disponibles et découvrez les profils de prestataires vérifiés dans les quartiers de Douala.</p>
+              <a class="btn full" href="#searchPanel">Trouver un prestataire <span aria-hidden="true">→</span></a>
+            </article>
+            <article class="audience-card audience-provider">
+              <div class="audience-icon" aria-hidden="true">🧰</div>
+              <span class="audience-label">Vous avez une compétence ?</span>
+              <h3>Je propose un service</h3>
+              <p>Présentez votre activité, choisissez vos services et les quartiers où vous intervenez. Votre profil sera vérifié avant publication.</p>
+              <a class="btn full secondary" href="./prestataire.html">Devenir prestataire <span aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </section>
+
+        <section class="search-panel" id="searchPanel">
+          <div class="section-head"><h2>Explorez les prestataires</h2></div>
+          <p class="directory-intro">Choisissez un service et un quartier pour consulter les profils disponibles.</p>
+          <div class="field"><label for="serviceSelect">Quel service recherchez-vous ?</label><select id="serviceSelect"><option value="">Chargement des services…</option></select></div>
           <div class="field"><label for="districtSelect">Dans quel quartier ?</label><select id="districtSelect"><option value="">Chargement des quartiers…</option></select></div>
           <div class="field"><label for="nameSearch">Nom du prestataire (facultatif)</label><input id="nameSearch" type="search" placeholder="Rechercher un nom…"></div>
           <button class="btn full" id="searchButton">Rechercher des prestataires</button>
         </section>
         <div class="section-head results-heading"><h2>Prestataires disponibles</h2><span class="eyebrow" id="resultCount"></span></div>
         <div id="results"><div class="loading">Chargement du répertoire…</div></div>
-        <p class="footer-note">DO Fast — Tes démarches, faites vite.</p>
+        <p class="footer-note">DO Fast — Des services et des compétences près de chez vous.</p>
       </div>
     </main>
   </div>

@@ -31,3 +31,25 @@
 .notification-actions{display:flex;justify-content:flex-end;margin:5px 0 10px}
 .notification-actions button{border:0;background:#edf5ef;color:#0B6B4B;border-radius:10px;padding:9px 12px;font-size:11px;font-weight:800}
 @media(min-width:600px){.notification-overlay{align-items:center}.notification-panel{border-radius:23px}}
+
+
+/* Accueil : deux parcours DO Fast */
+.audience-section{margin:20px 0 18px}
+.audience-intro{margin:0 2px 12px}
+.audience-intro h2{margin:0 0 6px;font-size:19px}
+.audience-intro p,.directory-intro{font-size:12px;line-height:1.55;color:var(--muted);margin:0}
+.audience-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.audience-card{min-width:0;background:#fff;border:1px solid var(--line);border-radius:19px;padding:15px 13px;box-shadow:0 5px 18px rgba(18,66,43,.035);display:flex;flex-direction:column;align-items:flex-start}
+.audience-client{border-top:4px solid var(--green)}
+.audience-provider{border-top:4px solid var(--yellow)}
+.audience-icon{width:39px;height:39px;border-radius:13px;background:#edf7f1;display:grid;place-items:center;font-size:20px;margin-bottom:10px}
+.audience-provider .audience-icon{background:#fff6dc}
+.audience-label{font-size:9px;letter-spacing:.7px;text-transform:uppercase;font-weight:800;color:var(--green);margin-bottom:5px}
+.audience-provider .audience-label{color:#8b6700}
+.audience-card h3{font:800 15px/1.25 Manrope;margin:0 0 8px}
+.audience-card p{font-size:11px;line-height:1.5;color:var(--muted);margin:0 0 14px;flex:1}
+.audience-card .btn{font-size:11px;min-height:44px;padding:11px 9px;white-space:normal;text-align:center}
+.audience-card .btn.secondary{background:#fff5d8;color:#6f5200;border:1px solid #f3e3b0}
+.search-panel .directory-intro{margin:0 0 8px}
+@media(max-width:370px){.audience-grid{grid-template-columns:1fr}.audience-card{padding:17px}.topbar{padding:0 12px}.top-actions{gap:5px}.top-actions .location-pill{padding:8px;font-size:10px}}
+@media(min-width:600px){.audience-grid{gap:13px}.audience-card{padding:18px}.audience-card h3{font-size:16px}.audience-card p{font-size:12px}}
