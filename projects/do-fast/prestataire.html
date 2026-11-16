@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B6B4B"><title>Devenir prestataire — DO Fast</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root{--g:#0B6B4B;--y:#F5B700;--ink:#17231e;--muted:#718078;--line:#e7eee9;--bg:#f5f8f5}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"DM Sans",sans-serif}#app{max-width:560px;min-height:100vh;margin:auto;background:var(--bg);padding-bottom:40px}.top{height:66px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 20px}.brand{font:800 24px Manrope;text-decoration:none;letter-spacing:-1px}.brand b{color:var(--g)}.brand span{color:var(--y)}.top a:last-child{font-size:12px;color:var(--g);font-weight:800;text-decoration:none}.page{padding:20px}.hero{background:var(--g);color:white;border-radius:22px;padding:22px;margin-bottom:18px}.hero small{color:#c5ead6;font-weight:800;letter-spacing:1px;text-transform:uppercase}.hero h1{font:800 26px/1.15 Manrope;margin:9px 0}.hero p{font-size:13px;line-height:1.5;color:#e0efe6;margin:0}.card{background:white;border:1px solid var(--line);border-radius:19px;padding:18px;margin:13px 0}.card h2{font:800 18px Manrope;margin:0 0 6px}.hint{font-size:12px;color:var(--muted);line-height:1.5;margin:0 0 14px}.field{margin:13px 0}.field label,.group-label{display:block;font-size:12px;font-weight:800;margin-bottom:7px}.field input,.field textarea{width:100%;border:1px solid #dfe8e1;border-radius:12px;padding:13px;background:#fbfdfb;font:14px "DM Sans";outline:none}.field textarea{min-height:82px;resize:vertical}.field input:focus,.field textarea:focus{border-color:var(--g)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.option{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;gap:8px;align-items:flex-start;font-size:12px}.option input{accent-color:var(--g);margin-top:2px}.service-option{display:grid;grid-template-columns:1fr 118px;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:9px;margin:8px 0}.service-option label{font-size:12px;font-weight:700;display:flex;gap:8px;align-items:center}.service-option input[type=number]{width:100%;min-width:0;border:1px solid #dfe8e1;border-radius:9px;padding:9px;font:12px "DM Sans"}.btn{border:0;border-radius:13px;padding:14px;background:var(--g);color:white;font-weight:800;font-size:13px;width:100%;min-height:48px}.btn.alt{background:#edf5ef;color:var(--g)}.btn:disabled{opacity:.55}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}.tabs button{border:1px solid var(--line);border-radius:12px;padding:11px;background:#fff;color:var(--muted);font-weight:800;font-size:12px}.tabs button.active{background:var(--g);color:white;border-color:var(--g)}.notice{display:none;padding:12px;border-radius:12px;font-size:12px;line-height:1.5;margin:12px 0;background:#fff6db;color:#765900}.notice.show{display:block}.notice.error{background:#fff0ef;color:#a33933}.status{text-align:center;padding:22px 10px}.status .big{font-size:36px}.status h2{font:800 19px Manrope}.status p{font-size:13px;line-height:1.5;color:var(--muted)}.back{text-align:center;margin:18px}.back a{color:var(--g);font-weight:800;font-size:12px;text-decoration:none}.small{font-size:10px;color:var(--muted);line-height:1.5}.hidden{display:none!important}
+</style>
+</head>
+<body><div id="app">
+<header class="top"><a class="brand" href="./"><b>DO</b><span>Fast ϟ</span></a><a href="./">Voir l'annuaire</a></header>
+<main class="page">
+<section class="hero"><small>Rejoindre DO Fast</small><h1>Fais connaître tes services.</h1><p>Crée ton profil gratuitement. Après vérification par l'équipe DO Fast, les clients pourront te trouver dans les quartiers que tu dessers.</p></section>
+<div class="tabs"><button id="tabApply" class="active" type="button">Créer un compte</button><button id="tabLogin" type="button">J'ai déjà un compte</button></div>
+<div id="notice" class="notice" role="status"></div>
+<form id="applicationForm">
+<section class="card"><h2>1. Tes informations</h2><p class="hint">Utilise une adresse e-mail à laquelle tu as accès.</p>
+<div class="field"><label for="fullName">Nom et prénom *</label><input id="fullName" autocomplete="name" required maxlength="100"></div>
+<div class="field"><label for="phone">Téléphone *</label><input id="phone" type="tel" autocomplete="tel" placeholder="+237 6…" required maxlength="24"></div>
+<div class="field"><label for="email">Adresse e-mail *</label><input id="email" type="email" autocomplete="email" required></div>
+<div class="field"><label for="password">Mot de passe *</label><input id="password" type="password" autocomplete="new-password" minlength="8" required placeholder="8 caractères minimum"></div>
+<div class="field"><label for="bio">Présente ton activité *</label><textarea id="bio" required maxlength="500" placeholder="Ton expérience, les services que tu proposes…"></textarea></div></section>
+<section class="card"><h2>2. Tes services et tarifs</h2><p class="hint">Sélectionne au moins un service et indique ton tarif indicatif en FCFA.</p><div id="services" class="hint">Chargement des services…</div></section>
+<section class="card"><h2>3. Tes quartiers</h2><p class="hint">Choisis les quartiers de Douala dans lesquels tu peux intervenir.</p><div id="areas" class="grid hint">Chargement des quartiers…</div></section>
+<button class="btn" id="submitButton" type="submit">Créer mon compte prestataire</button>
+<p class="small">Ton profil ne sera pas publié automatiquement. Il restera en attente jusqu'à la vérification de DO Fast. N'envoie aucun document d'identité sur cette page.</p>
+</form>
+<form id="loginForm" class="card hidden">
+<h2>Connexion</h2><p class="hint">Connecte-toi pour terminer ta demande ou consulter son statut.</p>
+<div class="field"><label for="loginEmail">Adresse e-mail</label><input id="loginEmail" type="email" autocomplete="email" required></div>
+<div class="field"><label for="loginPassword">Mot de passe</label><input id="loginPassword" type="password" autocomplete="current-password" required></div>
+<button class="btn" type="submit">Se connecter</button>
+</form>
+<section id="statusCard" class="card hidden"></section>
+<div class="back"><a href="./">← Retour à l'annuaire DO Fast</a></div>
+</main></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script><script src="./supabase-config.js"></script>
+<script>
+const $=id=>document.getElementById(id), client=window.doFastSupabase;
+let services=[],areas=[],mode="apply";
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function message(text,error=false){$("notice").textContent=text;$("notice").className="notice show"+(error?" error":"")}
+function clearMessage(){$("notice").className="notice"}
+function setMode(next){mode=next;$("tabApply").classList.toggle("active",next==="apply");$("tabLogin").classList.toggle("active",next==="login");$("applicationForm").classList.toggle("hidden",next!=="apply");$("loginForm").classList.toggle("hidden",next!=="login");$("statusCard").classList.add("hidden");clearMessage()}
+$("tabApply").onclick=()=>setMode("apply");$("tabLogin").onclick=()=>setMode("login");
+async function loadCatalogs(){
+ if(!client){message("Connexion à la base indisponible. Réessaie plus tard.",true);return}
+ const [s,n]=await Promise.all([client.from("service_categories").select("id,name").eq("active",true).order("sort_order"),client.from("neighborhoods").select("id,name").eq("active",true).order("sort_order")]);
+ if(s.error||n.error){message("Impossible de charger les services et quartiers.",true);return}
+ services=s.data||[];areas=n.data||[];
+ $("services").innerHTML=services.map(x=>'<div class="service-option"><label><input type="checkbox" class="service-check" value="'+esc(x.id)+'"> '+esc(x.name)+'</label><input type="number" class="service-price" data-id="'+esc(x.id)+'" min="0" step="100" placeholder="Tarif FCFA"></div>').join("");
+ $("areas").innerHTML=areas.map(x=>'<label class="option"><input type="checkbox" class="area-check" value="'+esc(x.id)+'"><span>'+esc(x.name)+'</span></label>').join("");
+}
+function draft(){return {fullName:$("fullName").value.trim(),phone:$("phone").value.trim(),bio:$("bio").value.trim(),serviceIds:[...document.querySelectorAll(".service-check:checked")].map(x=>x.value),prices:[...document.querySelectorAll(".service-price")].reduce((a,x)=>(a[x.dataset.id]=x.value,a),{}),areaIds:[...document.querySelectorAll(".area-check:checked")].map(x=>x.value)}}
+function restoreDraft(d){if(!d)return;$("fullName").value=d.fullName||"";$("phone").value=d.phone||"";$("bio").value=d.bio||"";(d.serviceIds||[]).forEach(id=>{const c=document.querySelector('.service-check[value="'+CSS.escape(id)+'"]');if(c)c.checked=true});Object.entries(d.prices||{}).forEach(([id,v])=>{const x=document.querySelector('.service-price[data-id="'+CSS.escape(id)+'"]');if(x)x.value=v});(d.areaIds||[]).forEach(id=>{const c=document.querySelector('.area-check[value="'+CSS.escape(id)+'"]');if(c)c.checked=true})}
+async function submitApplication(user,d){
+ const {data:existing,error:readErr}=await client.from("provider_profiles").select("user_id,verification_status,verified,available").eq("user_id",user.id).maybeSingle();
+ if(readErr)throw readErr;
+ if(!existing){const {error}=await client.from("provider_profiles").insert({user_id:user.id,bio:d.bio,verified:false,verification_status:"pending",available:false,rating:0,completed_missions:0});if(error)throw error}
+ else {const {error}=await client.from("provider_profiles").update({bio:d.bio}).eq("user_id",user.id);if(error)throw error}
+ const delS=await client.from("provider_services").delete().eq("provider_id",user.id);if(delS.error)throw delS.error;
+ const delA=await client.from("provider_service_areas").delete().eq("provider_id",user.id);if(delA.error)throw delA.error;
+ const serviceRows=d.serviceIds.map(id=>({provider_id:user.id,service_id:id,price_xaf:Number(d.prices[id]||0),active:true}));
+ if(serviceRows.length){const {error}=await client.from("provider_services").insert(serviceRows);if(error)throw error}
+ const areaRows=d.areaIds.map(id=>({provider_id:user.id,neighborhood_id:id}));
+ if(areaRows.length){const {error}=await client.from("provider_service_areas").insert(areaRows);if(error)throw error}
+ localStorage.removeItem("dofast_provider_draft");
+ await showStatus(user.id);
+}
+async function showStatus(userId){
+ const {data,error}=await client.from("provider_profiles").select("verification_status,verified,available,bio").eq("user_id",userId).maybeSingle();
+ if(error)throw error;
+ $("applicationForm").classList.add("hidden");$("loginForm").classList.add("hidden");$("statusCard").classList.remove("hidden");
+ if(!data){$("statusCard").innerHTML='<div class="status"><div class="big">👋</div><h2>Bienvenue sur DO Fast</h2><p>Ton compte est connecté. Termine ta demande de prestataire.</p><button class="btn" id="continueApply">Continuer ma demande</button></div>';$("continueApply").onclick=()=>{setMode("apply");restoreDraft(JSON.parse(localStorage.getItem("dofast_provider_draft")||"null"))};return}
+ const approved=data.verification_status==="approved"&&data.verified;
+ const labels={pending:"Demande reçue — en attente de vérification",approved:"Profil vérifié",rejected:"Demande à corriger",suspended:"Profil suspendu"};
+ $("statusCard").innerHTML='<div class="status"><div class="big">'+(approved?"✅":data.verification_status==="rejected"?"📝":"⏳")+'</div><h2>'+esc(labels[data.verification_status]||"Statut du profil")+'</h2><p>'+(approved?"Ton profil est vérifié. Tu peux activer ou désactiver ta disponibilité.":"Ton profil n'est pas encore visible dans l'annuaire. L'équipe DO Fast doit vérifier les informations avant publication.")+'</p>'+(approved?'<label class="option" style="justify-content:center"><input type="checkbox" id="availableToggle" '+(data.available?"checked":"")+'> Je suis disponible pour recevoir des demandes</label><button class="btn" id="saveAvailability" style="margin-top:12px">Enregistrer</button>':"")+'<button class="btn alt" id="logout" style="margin-top:10px">Se déconnecter</button></div>';
+ if(approved){$("saveAvailability").onclick=async()=>{const {error}=await client.from("provider_profiles").update({available:$("availableToggle").checked}).eq("user_id",userId);if(error)message(error.message,true);else message("Disponibilité mise à jour.")}}
+ $("logout").onclick=async()=>{await client.auth.signOut();setMode("login");$("statusCard").classList.add("hidden")};
+}
+$("applicationForm").addEventListener("submit",async e=>{
+ e.preventDefault();clearMessage();
+ const d=draft();if(!d.serviceIds.length||!d.areaIds.length){message("Sélectionne au moins un service et un quartier.",true);return}
+ if(d.serviceIds.some(id=>!d.prices[id]||Number(d.prices[id])<0)){message("Indique un tarif en FCFA pour chaque service sélectionné.",true);return}
+ localStorage.setItem("dofast_provider_draft",JSON.stringify(d));
+ const email=$("email").value.trim(),password=$("password").value;
+ $("submitButton").disabled=true;$("submitButton").textContent="Création du compte…";
+ try{
+  const {data,error}=await client.auth.signUp({email,password,options:{data:{full_name:d.fullName,phone:d.phone}}});
+  if(error)throw error;
+  if(data.session&&data.user){await submitApplication(data.user,d);message("Demande envoyée. Elle attend maintenant la vérification DO Fast.")}
+  else {message("Compte créé. Vérifie ta boîte e-mail, confirme ton adresse, puis reviens ici dans « J'ai déjà un compte » pour te connecter et envoyer ta demande.")}
+ }catch(err){message(err.message||"Impossible de créer le compte.",true)}
+ finally{$("submitButton").disabled=false;$("submitButton").textContent="Créer mon compte prestataire"}
+});
+$("loginForm").addEventListener("submit",async e=>{
+ e.preventDefault();clearMessage();const b=$("loginForm").querySelector("button");b.disabled=true;b.textContent="Connexion…";
+ try{const {data,error}=await client.auth.signInWithPassword({email:$("loginEmail").value.trim(),password:$("loginPassword").value});if(error)throw error;
+ const d=JSON.parse(localStorage.getItem("dofast_provider_draft")||"null");
+ if(d&&d.serviceIds?.length&&d.areaIds?.length){await submitApplication(data.user,d);message("Ta demande a été envoyée et attend la vérification.")}
+ else await showStatus(data.user.id);
+ }catch(err){message(err.message||"Connexion impossible.",true)}finally{b.disabled=false;b.textContent="Se connecter"}
+});
+(async()=>{await loadCatalogs();if(client){const {data}=await client.auth.getSession();if(data.session){try{await showStatus(data.session.user.id)}catch(e){console.error(e)}}}})();
+</script></body></html>
