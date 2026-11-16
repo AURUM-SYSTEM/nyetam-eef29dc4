@@ -1,5 +1,11 @@
 const SERVICE_ICONS={"Payer une facture":"🧾","Faire la queue":"⏳","Démarche administrative":"🏛️","Courses":"🛍️","Retrait de colis":"📦","Autre":"✨"};
 const state={services:[],neighborhoods:[],results:[],loading:false};
+const $=id=>document.getElementById(id);
+const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money=value=>Number(value||0).toLocaleString("fr-FR")+" FCFA";
+
+
+
 
 let notificationUserId=null,notificationBusy=false;
 function notificationDate(value){
@@ -46,10 +52,6 @@ if(notificationClient){
  notificationClient.auth.getSession().then(({data})=>{notificationUserId=data.session?.user?.id||null;loadNotifications()});
  notificationClient.auth.onAuthStateChange((_event,session)=>{notificationUserId=session?.user?.id||null;updateNotificationBadge([]);loadNotifications()});
 }
-
-const $=id=>document.getElementById(id);
-const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const money=value=>Number(value||0).toLocaleString("fr-FR")+" FCFA";
 
 function initials(name){return String(name||"DO").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase()}
 function setStatus(text,ok=false){const el=$("backendStatus");el.textContent=text;el.classList.toggle("connected",ok)}
