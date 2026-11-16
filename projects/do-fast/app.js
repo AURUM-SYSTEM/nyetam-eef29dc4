@@ -21,7 +21,7 @@ function renderResults(rows){
 }
 function showProfile(id){
  const p=(window.directoryProviders||[]).find(x=>x.provider_id===id);if(!p)return;
- $("profileModalContent").innerHTML='<div class="eyebrow">Prestataire vérifié</div><h2>'+esc(p.full_name)+'</h2><p class="sub">⭐ '+Number(p.rating||0).toFixed(1)+' · '+Number(p.completed_missions||0)+' mission(s) terminée(s)</p><p>'+esc(p.bio||"Aucune présentation renseignée.")+'</p><h3>Services proposés</h3>'+p.services.map(s=>'<div class="summary-line"><span>'+esc(s.service_name)+'</span><strong>'+money(s.price_xaf)+'</strong></div>').join("")+'<h3>Quartiers couverts</h3><p class="sub">'+esc(p.districts.join(", "))+'</p><button class="btn full" onclick="closeProfile()">Fermer</button>';
+ $("profileModalContent").innerHTML='<div class="eyebrow">Prestataire vérifié</div><h2>'+esc(p.full_name)+'</h2><p class="sub">⭐ '+Number(p.rating||0).toFixed(1)+' · '+Number(p.completed_missions||0)+' mission(s) terminée(s)</p><p>'+esc(p.bio||"Aucune présentation renseignée.")+'</p><h3>Services proposés</h3>'+p.services.map(s=>'<div class="summary-line"><span>'+esc(s.service_name)+'</span><strong>'+(Number(s.price_xaf)>0?money(s.price_xaf):"Tarif à discuter")+'</strong></div>').join("")+'<h3>Quartiers couverts</h3><p class="sub">'+esc(p.districts.join(", "))+'</p><button class="btn full" onclick="closeProfile()">Fermer</button>';
  $("profileModal").classList.add("show");
 }
 function closeProfile(){$("profileModal").classList.remove("show")}
