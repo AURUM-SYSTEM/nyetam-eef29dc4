@@ -16,7 +16,7 @@
   <div id="app">
     <header class="topbar">
       <a class="brand" href="#" aria-label="DO Fast accueil"><span class="brand-do">DO</span><span class="brand-fast">Fast</span><span class="bolt">ϟ</span></a>
-      <div class="top-actions"><span class="location-pill">⌖ Douala</span><a class="location-pill provider-link" href="./prestataire.html">Mon compte</a><span class="location-pill" id="backendStatus">Connexion…</span></div>
+      <div class="top-actions"><span class="location-pill">⌖ Douala</span><button class="location-pill notification-trigger" id="notificationButton" type="button" aria-label="Notifications">🔔 <span id="notificationCount" class="notification-count hidden">0</span></button><a class="location-pill provider-link" href="./prestataire.html">Mon compte</a><span class="location-pill" id="backendStatus">Connexion…</span></div>
     </header>
     <main id="mainContent">
       <div class="page">
@@ -35,6 +35,7 @@
     </main>
   </div>
   <div class="profile-modal" id="profileModal"><section class="profile-modal-card" id="profileModalContent"></section></div>
+  <div class="notification-overlay" id="notificationOverlay"><section class="notification-panel"><div class="notification-heading"><div><span class="eyebrow">DO Fast</span><h2>Mes notifications</h2></div><button type="button" class="notification-close" id="closeNotifications" aria-label="Fermer">×</button></div><div id="notificationList"><p class="loading">Chargement…</p></div></section></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
   <script src="./supabase-config.js"></script>
   <script src="./app.js"></script>
